@@ -1,0 +1,11 @@
+2025-09-03 16:53:01,692 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:53:45,418 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:53:46,051 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=True)
+2025-09-03 16:53:46,053 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-03 16:54:47,375 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:54:47,955 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=True)
+2025-09-03 16:54:47,957 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-03 16:54:47,966 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=True)
+2025-09-03 16:54:48,984 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-03 16:58:59,938 - WoodSortingEnhanced - INFO - Enhanced error handling system initialized
+2025-09-03 17:03:34,210 - WoodSortingEnhanced - INFO - Enhanced error handling system initialized

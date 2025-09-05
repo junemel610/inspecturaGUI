@@ -1,0 +1,49 @@
+# Wood Sorting Application Dependencies
+# Core GUI Framework
+PyQt5>=5.15.0
+
+# Computer Vision and Image Processing
+opencv-python>=4.5.0
+numpy>=1.20.0
+
+# Hardware Communication
+pyserial>=3.5
+
+# System Monitoring
+psutil>=5.8.0
+
+# DeGirum AI Inference (for Hailo model support)
+# degirum  # Install separately based on your platform
+# degirum-tools  # Install separately based on your platform
+
+# PDF Report Generation
+reportlab>=3.6.0
+
+# Testing Framework (included in Python standard library)
+# unittest - built-in
+# threading - built-in
+# queue - built-in
+
+# Configuration Management (included in Python standard library)
+# json - built-in
+# os - built-in
+# time - built-in
+# logging - built-in
+
+# Optional Dependencies for Enhanced Functionality
+# For advanced image processing (optional)
+# scikit-image>=0.18.0
+# Pillow>=8.0.0
+
+# For enhanced serial port detection (optional)  
+# pyserial-asyncio>=0.6
+
+# For advanced performance monitoring (optional)
+# matplotlib>=3.3.0  # For performance graphs
+# pandas>=1.3.0      # For data analysis
+
+# Development Dependencies (optional)
+# pytest>=6.0.0      # Alternative testing framework
+# coverage>=5.5       # Code coverage analysis
+# flake8>=3.9.0       # Code linting
+# black>=21.0.0       # Code formatting

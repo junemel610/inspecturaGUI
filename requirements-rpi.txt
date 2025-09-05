@@ -1,0 +1,37 @@
+# Wood Sorting Application Dependencies - Raspberry Pi Version
+# Note: PyQt5 should be installed via apt: sudo apt install python3-pyqt5 python3-pyqt5-dev
+
+# Computer Vision and Image Processing
+opencv-python>=4.5.0
+numpy>=1.20.0
+
+# Hardware Communication
+pyserial>=3.5
+
+# System Monitoring
+psutil>=5.8.0
+
+# PDF Report Generation
+reportlab>=3.6.0
+
+# DeGirum AI Inference (install separately if available for ARM)
+# degirum  # May not be available for ARM/Raspberry Pi
+# degirum-tools  # May not be available for ARM/Raspberry Pi
+
+# Optional Dependencies for Enhanced Functionality
+# For advanced image processing (optional)
+# scikit-image>=0.18.0
+# Pillow>=8.0.0
+
+# For enhanced serial port detection (optional)  
+# pyserial-asyncio>=0.6
+
+# For advanced performance monitoring (optional)
+# matplotlib>=3.3.0  # For performance graphs
+# pandas>=1.3.0      # For data analysis
+
+# Development Dependencies (optional)
+# pytest>=6.0.0      # Alternative testing framework
+# coverage>=5.5       # Code coverage analysis
+# flake8>=3.9.0       # Code linting
+# black>=21.0.0       # Code formatting

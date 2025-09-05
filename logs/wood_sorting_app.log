@@ -1,0 +1,106 @@
+2025-09-03 16:52:59,151 - __main__ - INFO - ============================================================
+2025-09-03 16:52:59,152 - __main__ - INFO - WOOD SORTING APPLICATION STARTING
+2025-09-03 16:52:59,153 - __main__ - INFO - ============================================================
+2025-09-03 16:52:59,153 - __main__ - INFO - Development Mode: True
+2025-09-03 16:52:59,153 - __main__ - INFO - Python Version: 3.11.6 (tags/v3.11.6:8b6ee5b, Oct  2 2023, 14:57:12) [MSC v.1935 64 bit (AMD64)]
+2025-09-03 16:52:59,154 - __main__ - INFO - Working Directory: C:\Users\Meljune\Desktop
+2025-09-03 16:53:01,692 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:53:02,306 - WoodSortingEnhanced - INFO - Enhanced error handling system initialized
+2025-09-03 16:53:02,426 - __main__ - ERROR - Failed to import required modules: cannot import name 'WoodSortingGUI' from 'gui_module' (c:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py)
+2025-09-03 16:53:02,426 - __main__ - ERROR - Please ensure all dependencies are installed:
+2025-09-03 16:53:02,427 - __main__ - ERROR - pip install -r requirements.txt
+2025-09-03 16:53:02,427 - __main__ - INFO - Wood Sorting Application shutdown complete
+2025-09-03 16:53:02,428 - __main__ - INFO - ============================================================
+2025-09-03 16:53:44,951 - __main__ - INFO - ============================================================
+2025-09-03 16:53:44,952 - __main__ - INFO - WOOD SORTING APPLICATION STARTING
+2025-09-03 16:53:44,952 - __main__ - INFO - ============================================================
+2025-09-03 16:53:44,953 - __main__ - INFO - Development Mode: True
+2025-09-03 16:53:44,953 - __main__ - INFO - Python Version: 3.11.6 (tags/v3.11.6:8b6ee5b, Oct  2 2023, 14:57:12) [MSC v.1935 64 bit (AMD64)]
+2025-09-03 16:53:44,953 - __main__ - INFO - Working Directory: C:\Users\Meljune\Desktop
+2025-09-03 16:53:45,418 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:53:45,668 - WoodSortingEnhanced - INFO - Enhanced error handling system initialized
+2025-09-03 16:53:45,724 - __main__ - INFO - Creating main application window...
+2025-09-03 16:53:46,051 - root - INFO - Performance monitoring started
+2025-09-03 16:53:46,051 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=True)
+2025-09-03 16:53:46,053 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-03 16:53:46,107 - __main__ - ERROR - Unexpected error during startup: 'WoodSortingApp' object has no attribute 'logger'
+2025-09-03 16:53:46,107 - __main__ - ERROR - Full traceback:
+Traceback (most recent call last):
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 1164, in init_testing_control_panel
+    self.logger.info("Testing control panel initialized successfully")
+    ^^^^^^^^^^^
+AttributeError: 'WoodSortingApp' object has no attribute 'logger'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\main_app.py", line 108, in main
+    main_window = WoodSortingApp(dev_mode=args.dev_mode, config=config)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 83, in __init__
+    self.init_testing_control_panel()
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 1167, in init_testing_control_panel
+    self.logger.error(f"Failed to initialize testing control panel: {str(e)}")
+    ^^^^^^^^^^^
+AttributeError: 'WoodSortingApp' object has no attribute 'logger'
+2025-09-03 16:53:46,114 - __main__ - INFO - Wood Sorting Application shutdown complete
+2025-09-03 16:53:46,115 - __main__ - INFO - ============================================================
+2025-09-03 16:54:46,892 - __main__ - INFO - ============================================================
+2025-09-03 16:54:46,893 - __main__ - INFO - WOOD SORTING APPLICATION STARTING
+2025-09-03 16:54:46,893 - __main__ - INFO - ============================================================
+2025-09-03 16:54:46,894 - __main__ - INFO - Development Mode: True
+2025-09-03 16:54:46,894 - __main__ - INFO - Python Version: 3.11.6 (tags/v3.11.6:8b6ee5b, Oct  2 2023, 14:57:12) [MSC v.1935 64 bit (AMD64)]
+2025-09-03 16:54:46,894 - __main__ - INFO - Working Directory: C:\Users\Meljune\Desktop
+2025-09-03 16:54:47,375 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:54:47,628 - WoodSortingEnhanced - INFO - Enhanced error handling system initialized
+2025-09-03 16:54:47,674 - __main__ - INFO - Creating main application window...
+2025-09-03 16:54:47,955 - root - INFO - Performance monitoring started
+2025-09-03 16:54:47,955 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=True)
+2025-09-03 16:54:47,957 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-03 16:54:47,964 - gui_module - INFO - Testing control panel initialized successfully
+2025-09-03 16:54:47,966 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=True)
+2025-09-03 16:54:48,984 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-03 16:54:48,995 - __main__ - ERROR - Unexpected error during startup: 'bool' object has no attribute 'connect'
+2025-09-03 16:54:48,996 - __main__ - ERROR - Full traceback:
+Traceback (most recent call last):
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\main_app.py", line 108, in main
+    main_window = WoodSortingApp(dev_mode=args.dev_mode, config=config)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 134, in __init__
+    self.setup_enhanced_error_handling()
+  File "c:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 145, in setup_enhanced_error_handling
+    enhanced_error_handler.system_paused.connect(self.on_system_paused)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'bool' object has no attribute 'connect'
+2025-09-03 16:54:49,000 - __main__ - INFO - Wood Sorting Application shutdown complete
+2025-09-03 16:54:49,000 - __main__ - INFO - ============================================================
+2025-09-03 16:58:59,194 - __main__ - INFO - ============================================================
+2025-09-03 16:58:59,195 - __main__ - INFO - WOOD SORTING APPLICATION STARTING
+2025-09-03 16:58:59,195 - __main__ - INFO - ============================================================
+2025-09-03 16:58:59,196 - __main__ - INFO - Development Mode: True
+2025-09-03 16:58:59,196 - __main__ - INFO - Python Version: 3.11.6 (tags/v3.11.6:8b6ee5b, Oct  2 2023, 14:57:12) [MSC v.1935 64 bit (AMD64)]
+2025-09-03 16:58:59,197 - __main__ - INFO - Working Directory: C:\Users\Meljune\Desktop\wood_sorting_app
+2025-09-03 16:58:59,672 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-03 16:58:59,938 - WoodSortingEnhanced - INFO - Enhanced error handling system initialized
+2025-09-03 16:58:59,985 - __main__ - INFO - Creating main application window...
+2025-09-03 16:59:00,271 - root - INFO - Performance monitoring started
+2025-09-03 16:59:00,271 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=True)
+2025-09-03 16:59:00,274 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-03 16:59:00,279 - gui_module - INFO - Testing control panel initialized successfully
+2025-09-03 16:59:00,280 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=True)
+2025-09-03 16:59:01,249 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-03 16:59:01,253 - __main__ - ERROR - Unexpected error during startup: 'bool' object has no attribute 'connect'
+2025-09-03 16:59:01,253 - __main__ - ERROR - Full traceback:
+Traceback (most recent call last):
+  File "C:\Users\Meljune\Desktop\wood_sorting_app\main_app.py", line 108, in main
+    main_window = WoodSortingApp(dev_mode=args.dev_mode, config=config)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 134, in __init__
+    self.setup_enhanced_error_handling()
+  File "C:\Users\Meljune\Desktop\wood_sorting_app\modules\gui_module.py", line 145, in setup_enhanced_error_handling
+    eeh.system_paused.connect(self.on_system_paused)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'bool' object has no attribute 'connect'
+2025-09-03 16:59:01,257 - __main__ - INFO - Wood Sorting Application shutdown complete
+2025-09-03 16:59:01,258 - __main__ - INFO - ============================================================
+2025-09-03 16:59:01,282 - WoodSortingSystem - ERROR - [GUI] Error updating performance display: wrapped C/C++ object of type QTextEdit has been deleted (Exception: wrapped C/C++ object of type QTextEdit has been deleted)
