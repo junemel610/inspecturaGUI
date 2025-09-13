@@ -70,18 +70,30 @@ def calibrate_with_wood_pallet(wood_pallet_width_px_top, wood_pallet_width_px_bo
 
 def map_model_output_to_standard(model_label):
     """Map your model's output labels to standardized defect types"""
-    # Mapping from your model's labels to standard categories
+    # Mapping from UpdatedDefects model labels to standard categories
     label_mapping = {
-        # Your model outputs
+        # UpdatedDefects model outputs
+        "Dead Knots": "Unsound_Knot",
+        "Knots with Crack": "Unsound_Knot", 
+        "Live Knots": "Sound_Knot",
+        "Missing Knots": "Unsound_Knot",
+        
+        # Variations and fallbacks
+        "dead knots": "Unsound_Knot",
+        "knots with crack": "Unsound_Knot",
+        "live knots": "Sound_Knot", 
+        "missing knots": "Unsound_Knot",
+        
+        # Legacy mappings
         "sound_knots": "Sound_Knot",
         "unsound_knots": "Unsound_Knot",
-        # Add variations of your model's actual output labels here
         "sound knots": "Sound_Knot",
         "unsound knots": "Unsound_Knot",
         "live_knot": "Sound_Knot",
         "dead_knot": "Unsound_Knot",
         "missing_knot": "Unsound_Knot",
         "crack_knot": "Unsound_Knot",
+        
         # Generic fallback
         "knot": "Unsound_Knot"
     }
@@ -90,7 +102,9 @@ def map_model_output_to_standard(model_label):
     normalized_label = model_label.lower().strip().replace('_', ' ')
     
     # Return mapped label or default to unsound knot
-    return label_mapping.get(normalized_label, "Unsound_Knot")
+    mapped_label = label_mapping.get(normalized_label, "Unsound_Knot")
+    print(f"DEBUG: Mapped defect '{model_label}' → '{mapped_label}'")
+    return mapped_label
 
 def calculate_defect_size(detection_box, camera_name="top"):
     """Calculate defect size in mm and percentage from detection bounding box"""

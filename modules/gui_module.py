@@ -17,16 +17,24 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter, QFont, QColor
 from PyQt5.QtCore import Qt, QTimer, QDateTime, QThread, pyqtSignal
 import queue
 import time
+import threading
+
+try:
+    import degirum_tools
+    DEGIRUM_TOOLS_AVAILABLE = True
+except ImportError:
+    DEGIRUM_TOOLS_AVAILABLE = False
+    print("Warning: degirum_tools not available - predict_stream functionality will be disabled")
 
 from modules.camera_module import CameraModule
 from modules.detection_module import DetectionModule
 from modules.arduino_module import ArduinoModule
 from modules.reporting_module import ReportingModule
 from modules.grading_module import calculate_grade, determine_final_grade, get_grade_color
-from modules.utils_module import TOP_CAMERA_PIXEL_TO_MM, BOTTOM_CAMERA_PIXEL_TO_MM, WOOD_PALLET_WIDTH_MM
+from modules.utils_module import TOP_CAMERA_PIXEL_TO_MM, BOTTOM_CAMERA_PIXEL_TO_MM, WOOD_PALLET_WIDTH_MM, map_model_output_to_standard, calculate_defect_size
 from modules.error_handler import (
     log_info, log_warning, log_error, SystemComponent, 
-    get_error_summary, error_handler
+    get_error_summary, error_handler, log_arduino_error
 )
 from modules.performance_monitor import get_performance_monitor, start_performance_monitoring
 from config.settings import get_config
@@ -69,6 +77,15 @@ class WoodSortingApp(QMainWindow):
         self.camera_module.initialize_cameras()  # Initialize cameras
         self.detection_module = DetectionModule(dev_mode=self.dev_mode)
         self.arduino_module = ArduinoModule(message_queue=self.message_queue)
+        
+        # Setup Arduino connection (only in non-dev mode)
+        if not self.dev_mode:
+            success = self.arduino_module.setup_arduino()
+            if success:
+                log_info(SystemComponent.GUI, "Arduino connection established successfully")
+            else:
+                log_warning(SystemComponent.GUI, "Arduino connection failed - running in manual mode")
+        
         self.reporting_module = ReportingModule()
 
         # System state tracking
@@ -82,6 +99,12 @@ class WoodSortingApp(QMainWindow):
         self.wood_confirmed = False
         self.wood_detection_active = False
         self.current_detection_session = None
+
+        # Predict stream state
+        self.predict_stream_active = False
+        self.predict_stream_thread = None
+        self.predict_stream_results = []
+        self.latest_annotated_frame = None
 
         # Initialize variables for statistics and logging
         self.total_pieces_processed = 0
@@ -508,6 +531,7 @@ class WoodSortingApp(QMainWindow):
             # Update camera status
             self.update_camera_status("top", top_frame is not None)
             self.update_camera_status("bottom", bottom_frame is not None)
+            self.update_arduino_status()
 
             # Process frames if available
             if top_frame is not None:
@@ -516,8 +540,8 @@ class WoodSortingApp(QMainWindow):
                     self.display_message("Invalid frame data received from top camera", "warning")
                     top_frame = None
                 else:
-                    # Run detection if live detection is enabled
-                    if self.live_detection_var:
+                    # Run detection if live detection is enabled AND predict_stream is not active
+                    if self.live_detection_var and not self.predict_stream_active:
                         try:
                             print(f"DEBUG: GUI calling detection_module.analyze_frame for top camera")
                             annotated_frame, defects, defect_list, alignment_result = self.detection_module.analyze_frame(top_frame, "top")
@@ -533,60 +557,73 @@ class WoodSortingApp(QMainWindow):
                             import traceback
                             traceback.print_exc()
                             annotated_frame = top_frame
+                    elif self.predict_stream_active:
+                        # When predict_stream is active, use the latest annotated frame from predict_stream
+                        print(f"DEBUG: Predict stream active, using latest annotated frame for top camera")
+                        if self.latest_annotated_frame is not None:
+                            annotated_frame = self.latest_annotated_frame
+                        else:
+                            annotated_frame = top_frame
                     else:
                         annotated_frame = top_frame
 
-                    # Always apply alignment overlay for ROI visualization
-                    try:
-                        alignment_result = self.detection_module.alignment_module.check_wood_alignment(annotated_frame, None)
-                        annotated_frame = self.detection_module.alignment_module.draw_alignment_overlay(annotated_frame, alignment_result)
-                    except Exception as e:
-                        self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
+                    # COMMENTED OUT: Alignment overlay no longer needed for full-frame defect detection
+                    # try:
+                    #     alignment_result = self.detection_module.alignment_module.check_wood_alignment(annotated_frame, None)
+                    #     annotated_frame = self.detection_module.alignment_module.draw_alignment_overlay(annotated_frame, alignment_result)
+                    # except Exception as e:
+                    #     self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
 
-                    # Check for ROI intersection and add alerts regardless of live detection status
-                    try:
-                        # Always run wood detection for ROI alerts and bounding boxes
-                        wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
-
-                        if wood_detected and wood_bbox:
-                            # Check if wood bbox intersects with any ROI
-                            wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "top")
-
-                            # Add red border and text if wood intersects ROI
-                            if wood_intersects_roi:
-                                self._add_misalignment_indicators(annotated_frame)
-                                print(f"DEBUG: Added misalignment indicators for top camera - wood bbox: {wood_bbox}")
-
-                            # Draw bounding boxes regardless of live detection status
-                            if self.wood_detection_checkbox.isChecked():
-                                # Draw wood bounding box
-                                x1, y1, x2, y2 = wood_bbox
-                                if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
-                                    # Choose color based on ROI intersection
-                                    box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
-
-                                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
-
-                                    # Add corner markers
-                                    corner_size = 25
-                                    cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
-                                    cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
-                                    cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
-                                    cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
-
-                                    # Add label
-                                    status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
-                                    cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
-                                               (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
-
-                                    print(f"DEBUG: Drew bounding box for top camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
-                    except Exception as e:
-                        self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
-                        print(f"DEBUG: Exception in top camera ROI system: {str(e)}")
+                    # REMOVED: Wood detection logic - focusing on full-frame defect detection only
+                    # try:
+                    #     # Always run wood detection for ROI alerts and bounding boxes
+                    #     wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
+                    #
+                    #     if wood_detected and wood_bbox:
+                    #         # Check if wood bbox intersects with any ROI
+                    #         wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "top")
+                    #
+                    #         # Add red border and text if wood intersects ROI
+                    #         if wood_intersects_roi:
+                    #             self._add_misalignment_indicators(annotated_frame)
+                    #             print(f"DEBUG: Added misalignment indicators for top camera - wood bbox: {wood_bbox}")
+                    #
+                    #         # Set wood confirmation flag during IR-triggered detection
+                    #         if self.current_mode == "TRIGGER" and self.auto_detection_active and not self.wood_confirmed:
+                    #             self.wood_confirmed = True
+                    #             log_info(SystemComponent.GUI, "✅ Wood confirmed during IR trigger period")
+                    #             self.update_system_status("Status: Wood detected - collecting defect data...")
+                    #
+                    #         # Draw bounding boxes regardless of live detection status
+                    #         if self.wood_detection_checkbox.isChecked():
+                    #             # Draw wood bounding box
+                    #             x1, y1, x2, y2 = wood_bbox
+                    #             if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
+                    #                 # Choose color based on ROI intersection
+                    #                 box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
+                    #
+                    #                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
+                    #
+                    #                 # Add corner markers
+                    #                 corner_size = 25
+                    #                 cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
+                    #
+                    #                 # Add label
+                    #                 status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
+                    #                 cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
+                    #                            (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
+                    #
+                    #                 print(f"DEBUG: Drew bounding box for top camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
+                    # except Exception as e:
+                    #     self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
+                    #     print(f"DEBUG: Exception in top camera ROI system: {str(e)}")
 
                     # Convert and display
                     self.display_frame(annotated_frame, self.top_camera_label)
@@ -617,57 +654,63 @@ class WoodSortingApp(QMainWindow):
                     else:
                         annotated_frame = bottom_frame
 
-                    # Always apply alignment overlay for ROI visualization
-                    try:
-                        alignment_result = self.detection_module.alignment_module.check_wood_alignment(annotated_frame, None)
-                        annotated_frame = self.detection_module.alignment_module.draw_alignment_overlay(annotated_frame, alignment_result)
-                    except Exception as e:
-                        self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
+                    # COMMENTED OUT: Alignment overlay no longer needed for full-frame defect detection
+                    # try:
+                    #     alignment_result = self.detection_module.alignment_module.check_wood_alignment(annotated_frame, None)
+                    #     annotated_frame = self.detection_module.alignment_module.draw_alignment_overlay(annotated_frame, alignment_result)
+                    # except Exception as e:
+                    #     self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
 
-                    # Check for ROI intersection and add alerts regardless of live detection status
-                    try:
-                        # Always run wood detection for ROI alerts and bounding boxes
-                        wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
-
-                        if wood_detected and wood_bbox:
-                            # Check if wood bbox intersects with any ROI
-                            wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "bottom")
-
-                            # Add red border and text if wood intersects ROI
-                            if wood_intersects_roi:
-                                self._add_misalignment_indicators(annotated_frame)
-                                print(f"DEBUG: Added misalignment indicators for bottom camera - wood bbox: {wood_bbox}")
-
-                            # Draw bounding boxes regardless of live detection status
-                            if self.wood_detection_checkbox.isChecked():
-                                # Draw wood bounding box
-                                x1, y1, x2, y2 = wood_bbox
-                                if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
-                                    # Choose color based on ROI intersection
-                                    box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
-
-                                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
-
-                                    # Add corner markers
-                                    corner_size = 25
-                                    cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
-                                    cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
-                                    cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
-                                    cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
-                                    cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
-
-                                    # Add label
-                                    status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
-                                    cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
-                                               (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
-
-                                    print(f"DEBUG: Drew bounding box for bottom camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
-                    except Exception as e:
-                        self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
-                        print(f"DEBUG: Exception in bottom camera ROI system: {str(e)}")
+                    # REMOVED: Wood detection logic - focusing on full-frame defect detection only
+                    # try:
+                    #     # Always run wood detection for ROI alerts and bounding boxes
+                    #     wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
+                    #
+                    #     if wood_detected and wood_bbox:
+                    #         # Check if wood bbox intersects with any ROI
+                    #         wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "bottom")
+                    #
+                    #         # Add red border and text if wood intersects ROI
+                    #         if wood_intersects_roi:
+                    #             self._add_misalignment_indicators(annotated_frame)
+                    #             print(f"DEBUG: Added misalignment indicators for bottom camera - wood bbox: {wood_bbox}")
+                    #
+                    #         # Set wood confirmation flag during IR-triggered detection
+                    #         if self.current_mode == "TRIGGER" and self.auto_detection_active and not self.wood_confirmed:
+                    #             self.wood_confirmed = True
+                    #             log_info(SystemComponent.GUI, "✅ Wood confirmed during IR trigger period (bottom camera)")
+                    #             self.update_system_status("Status: Wood detected - collecting defect data...")
+                    #
+                    #         # Draw bounding boxes regardless of live detection status
+                    #         if self.wood_detection_checkbox.isChecked():
+                    #             # Draw wood bounding box
+                    #             x1, y1, x2, y2 = wood_bbox
+                    #             if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
+                    #                 # Choose color based on ROI intersection
+                    #                 box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
+                    #
+                    #                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
+                    #
+                    #                 # Add corner markers
+                    #                 corner_size = 25
+                    #                 cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
+                    #                 cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
+                    #
+                    #                 # Add label
+                    #                 status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
+                    #                 cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
+                    #                            (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
+                    #
+                    #                 print(f"DEBUG: Drew bounding box for bottom camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
+                    # except Exception as e:
+                    #     self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
+                    #     print(f"DEBUG: Exception in bottom camera ROI system: {str(e)}")
 
                     # Convert and display
                     self.display_frame(annotated_frame, self.bottom_camera_label)
@@ -807,9 +850,49 @@ class WoodSortingApp(QMainWindow):
             self.bottom_camera_status.setText(f"Bottom Camera: {status_text}")
             self.bottom_camera_status.setStyleSheet(f"font-size: 12px; color: {color};")
 
+    def update_arduino_status(self):
+        """Update Arduino connection status display"""
+        try:
+            if self.arduino_module:
+                status = self.arduino_module.get_connection_status()
+                is_connected = status.get("connected", False)
+                port = status.get("port", "None")
+
+                status_text = f"Arduino: {'Connected' if is_connected else 'Disconnected'}"
+                if port and port != "None":
+                    status_text += f" ({port})"
+
+                color = "green" if is_connected else "red"
+                self.arduino_status.setText(status_text)
+                self.arduino_status.setStyleSheet(f"font-size: 12px; color: {color};")
+
+                # Update system status if Arduino status changed
+                if is_connected:
+                    self.update_system_status("Arduino connected and ready")
+                else:
+                    self.update_system_status("Arduino disconnected - running in manual mode")
+            else:
+                self.arduino_status.setText("Arduino: Module not initialized")
+                self.arduino_status.setStyleSheet("font-size: 12px; color: orange;")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error updating Arduino status: {str(e)}", e)
+            self.arduino_status.setText("Arduino: Status error")
+            self.arduino_status.setStyleSheet("font-size: 12px; color: red;")
+
     def calculate_and_display_grade(self):
         """Calculate grade from current defects and display results"""
         try:
+            # Prevent recursion during predict_stream analysis
+            if hasattr(self, 'predict_stream_active') and self.predict_stream_active:
+                # Only grade every few frames to avoid overwhelming
+                if not hasattr(self, '_last_grade_frame'):
+                    self._last_grade_frame = 0
+                current_frame = len(self.predict_stream_results) if hasattr(self, 'predict_stream_results') else 0
+                if current_frame - self._last_grade_frame < 5:
+                    return  # Skip grading this frame
+                self._last_grade_frame = current_frame
+
             # Combine defects from both cameras
             all_defects = {}
             all_defect_lists = []
@@ -829,6 +912,10 @@ class WoodSortingApp(QMainWindow):
             # Calculate grade
             grade_info = calculate_grade(all_defects)
             final_grade = determine_final_grade(grade_info)
+            
+            print(f"DEBUG: Grading - all_defects: {all_defects}")
+            print(f"DEBUG: Grading - grade_info: {grade_info}")
+            print(f"DEBUG: Grading - final_grade: {final_grade}")
             
             # Store current grade info
             self.current_grade_info = {
@@ -855,7 +942,24 @@ class WoodSortingApp(QMainWindow):
 
             # Update detection state
             self.update_detection_state("Grading")
-            
+
+            # Send grade command to Arduino for automatic sorting
+            if self.arduino_module and self.arduino_module.is_connected():
+                try:
+                    success = self.arduino_module.send_grade_command(final_grade)
+                    if success:
+                        self.update_system_status(f"✅ Grade {final_grade} sent to Arduino for sorting")
+                        log_info(SystemComponent.GUI, f"Successfully sent grade {final_grade} to Arduino")
+                    else:
+                        self.update_system_status(f"❌ Failed to send grade {final_grade} to Arduino")
+                        log_arduino_error(f"Failed to send grade {final_grade} to Arduino")
+                except Exception as e:
+                    self.update_system_status(f"❌ Error sending grade to Arduino: {str(e)}")
+                    log_arduino_error(f"Error sending grade {final_grade} to Arduino: {str(e)}", e)
+            else:
+                self.update_system_status(f"⚠️ Arduino not connected - Grade {final_grade} calculated but not sent")
+                log_warning(SystemComponent.GUI, f"Arduino not connected - cannot send grade {final_grade}")
+
         except Exception as e:
             self.display_message(f"Error calculating grade: {str(e)}", "error")
 
@@ -918,38 +1022,52 @@ class WoodSortingApp(QMainWindow):
     def handle_arduino_message(self, message):
         """Handle messages received from Arduino"""
         try:
-            log_info(SystemComponent.GUI, f"Arduino message received: {message}")
+            # Handle both tuple format ('arduino_message', 'IR: 0') and string format ('IR: 0')
+            if isinstance(message, tuple) and len(message) >= 2:
+                actual_message = message[1]  # Extract the actual message from tuple
+                log_info(SystemComponent.GUI, f"Arduino message received: {message} -> extracted: {actual_message}")
+            else:
+                actual_message = str(message)
+                log_info(SystemComponent.GUI, f"Arduino message received: {actual_message}")
 
-            if message == "B":
+            if actual_message == "B":
+                # IR beam broken - start wood detection workflow (legacy support)
+                self.handle_ir_beam_broken()
+            elif actual_message == "IR: 0" or actual_message == "IR:0":
                 # IR beam broken - start wood detection workflow
                 self.handle_ir_beam_broken()
-            elif message.startswith("L:"):
-                # Length measurement received
+            elif actual_message == "IR: 1" or actual_message == "IR:1":
+                # IR beam cleared - stop detection and process grading
+                self.handle_ir_beam_cleared()
+            elif actual_message.startswith("L:"):
+                # Length measurement received (legacy support)
                 try:
-                    duration_ms = int(message.split(":")[1])
+                    duration_ms = int(actual_message.split(":")[1])
                     self.handle_length_measurement(duration_ms)
                 except (ValueError, IndexError) as e:
-                    log_error(SystemComponent.GUI, f"Invalid length message format: {message}", e)
+                    log_error(SystemComponent.GUI, f"Invalid length message format: {actual_message}", e)
             else:
                 # Other Arduino messages
-                self.update_system_status(f"Arduino: {message}")
+                self.update_system_status(f"Arduino: {actual_message}")
 
         except Exception as e:
             log_error(SystemComponent.GUI, f"Error handling Arduino message '{message}': {str(e)}", e)
 
     def handle_ir_beam_broken(self):
-        """Handle IR beam broken event - start wood detection workflow"""
+        """Handle IR beam broken event - start predict_stream continuous inference"""
         try:
-            log_info(SystemComponent.GUI, "IR beam broken - starting wood detection workflow")
+            log_info(SystemComponent.GUI, "IR beam broken - starting predict_stream continuous inference")
 
             # Only respond to IR triggers in TRIGGER mode
             if self.current_mode == "TRIGGER":
                 if not self.auto_detection_active:
-                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting detection...")
-                    self.live_detection_checkbox.setChecked(True)
-                    self.auto_grade_checkbox.setChecked(True)
+                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting predict_stream inference...")
+                    
+                    # Start predict_stream continuous inference
+                    self.start_predict_stream_inference()
 
-                    # Update internal state variables
+                    # Set the live detection checkbox and variables
+                    self.live_detection_checkbox.setChecked(True)
                     self.live_detection_var = True
                     self.auto_grade_var = True
 
@@ -958,7 +1076,7 @@ class WoodSortingApp(QMainWindow):
                     self.wood_confirmed = False
                     self.auto_detection_active = True
 
-                    self.update_system_status("Status: IR TRIGGERED - Motor should be running!")
+                    self.update_system_status("Status: IR TRIGGERED - Predict Stream Active!")
                     self.update_detection_state("Detecting")
 
                 else:
@@ -983,7 +1101,10 @@ class WoodSortingApp(QMainWindow):
 
             # In TRIGGER mode, stop detection when beam clears (length message received)
             if self.current_mode == "TRIGGER" and self.auto_detection_active:
-                log_info(SystemComponent.GUI, "IR beam cleared – stopping detection (TRIGGER MODE)")
+                log_info(SystemComponent.GUI, "IR beam cleared – stopping predict_stream inference (TRIGGER MODE)")
+
+                # Stop predict_stream inference
+                self.stop_predict_stream_inference()
 
                 # Deactivate the checkboxes
                 self.live_detection_checkbox.setChecked(False)
@@ -1025,6 +1146,374 @@ class WoodSortingApp(QMainWindow):
 
         except Exception as e:
             log_error(SystemComponent.GUI, f"Error handling length measurement: {str(e)}", e)
+
+    def start_predict_stream_inference(self):
+        """Start continuous inference using predict_stream when IR beam is broken"""
+        try:
+            if not DEGIRUM_TOOLS_AVAILABLE:
+                log_error(SystemComponent.GUI, "degirum_tools not available - cannot start predict_stream")
+                return
+
+            if self.predict_stream_active:
+                log_warning(SystemComponent.GUI, "Predict stream already active")
+                return
+
+            log_info(SystemComponent.GUI, "Starting predict_stream continuous inference")
+
+            # Reset results collection
+            self.predict_stream_results = []
+
+            # Pause the GUI camera feed to avoid conflicts
+            self._pause_gui_camera_feed()
+
+            # Start predict_stream in a separate thread
+            self.predict_stream_active = True
+            self.predict_stream_thread = threading.Thread(target=self._run_predict_stream_inference)
+            self.predict_stream_thread.daemon = True
+            self.predict_stream_thread.start()
+
+            log_info(SystemComponent.GUI, "Predict stream inference started successfully")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error starting predict_stream inference: {str(e)}", e)
+            self.predict_stream_active = False
+
+    def _run_predict_stream_inference(self):
+        """Run the predict_stream inference loop in a separate thread"""
+        try:
+            # Get the defect model from detection module
+            model = self.detection_module.defect_model
+            if model is None:
+                log_error(SystemComponent.GUI, "Defect model not available for predict_stream - using mock mode")
+                # For testing, create a mock analyzer that doesn't use a real model
+                self._run_mock_predict_stream()
+                return
+
+            log_info(SystemComponent.GUI, "Starting predict_stream inference loop")
+
+            # Create a proper analyzer class that inherits from ResultAnalyzerBase
+            class DefectAnalyzer(degirum_tools.ResultAnalyzerBase):
+                def __init__(self, gui_instance):
+                    self.gui = gui_instance
+                    self.frame_count = 0
+
+                def analyze(self, result):
+                    """Analyze the inference result and update GUI state"""
+                    try:
+                        self.frame_count += 1
+
+                        # Process the inference result similar to detect_defects_in_full_frame
+                        detections = result.results if hasattr(result, 'results') else []
+
+                        frame_defects = {}
+                        frame_defect_measurements = []
+
+                        # Simple processing to avoid recursion - similar to working tkinter code
+                        for det in detections:
+                            confidence = det.get('confidence', 0)
+                            if confidence < self.gui.detection_module.defect_confidence_threshold:
+                                continue
+
+                            model_label = det['label']
+                            # Simple defect counting
+                            if model_label in frame_defects:
+                                frame_defects[model_label] += 1
+                            else:
+                                frame_defects[model_label] = 1
+
+                        # Store frame results
+                        frame_result = {
+                            'frame_id': self.frame_count,
+                            'defects': frame_defects,
+                            'timestamp': time.time()
+                        }
+
+                        self.gui.predict_stream_results.append(frame_result)
+
+                        # Store the annotated frame for GUI display (most important part)
+                        if hasattr(result, 'image_overlay'):
+                            self.gui.latest_annotated_frame = result.image_overlay
+
+                        # Log progress without complex operations
+                        print(f"Processed frame {self.frame_count} - defects: {frame_defects}")
+
+                    except Exception as e:
+                        print(f"Error in DefectAnalyzer.analyze: {str(e)}")
+
+                def annotate(self, result, image):
+                    """Add annotations to the image - return the annotated image"""
+                    # For now, just return the original image overlay from the model
+                    return result.image_overlay if hasattr(result, 'image_overlay') else image
+
+            # Create analyzer instance
+            analyzer = DefectAnalyzer(self)
+
+            # Determine camera index based on dev mode
+            if self.dev_mode:
+                # In dev mode, use camera index 0 (laptop webcam)
+                camera_index = 0
+                log_info(SystemComponent.GUI, f"Using camera index {camera_index} for predict_stream (dev mode)")
+            else:
+                # In production mode, temporarily release camera from camera_module to avoid conflicts
+                if hasattr(self.camera_module, 'cap_top') and self.camera_module.cap_top is not None:
+                    log_info(SystemComponent.GUI, "Temporarily releasing camera from camera_module for predict_stream")
+                    self.camera_module.cap_top.release()
+                    self.camera_module.cap_top = None
+                    self.camera_module.camera_status["top"]["connected"] = False
+
+                # Use top camera index 0
+                camera_index = 0  # Top camera
+                log_info(SystemComponent.GUI, f"Using camera index {camera_index} for predict_stream (production mode)")
+
+            # Use predict_stream with camera index
+            log_info(SystemComponent.GUI, f"Starting predict_stream with camera index {camera_index}")
+
+            try:
+                for result in degirum_tools.predict_stream(
+                    model=model,
+                    video_source_id=camera_index,
+                    fps=15,  # Limit to 15 FPS for processing
+                    analyzers=[analyzer]
+                ):
+                    # Check if we should stop
+                    if not self.predict_stream_active:
+                        log_info(SystemComponent.GUI, "Predict stream stopping due to flag")
+                        break
+
+                    # Small delay to prevent overwhelming the system
+                    time.sleep(0.01)
+
+            except Exception as e:
+                log_error(SystemComponent.GUI, f"Error in predict_stream loop: {str(e)}", e)
+
+            log_info(SystemComponent.GUI, f"Predict stream stopped after {analyzer.frame_count} frames")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error in predict_stream thread: {str(e)}", e)
+        finally:
+            self.predict_stream_active = False
+            # Resume GUI camera feed
+            self._resume_gui_camera_feed()
+            # Reinitialize camera for GUI use
+            self._reinitialize_camera_after_predict_stream()
+
+    def _pause_gui_camera_feed(self):
+        """Pause the GUI camera feed timer to avoid conflicts with predict_stream"""
+        try:
+            if hasattr(self, 'timer') and self.timer.isActive():
+                log_info(SystemComponent.GUI, "Pausing GUI camera feed for predict_stream")
+                self.timer.stop()
+                self._gui_feed_paused = True
+        except Exception as e:
+            log_warning(SystemComponent.GUI, f"Error pausing GUI camera feed: {str(e)}")
+
+    def _resume_gui_camera_feed(self):
+        """Resume the GUI camera feed timer after predict_stream stops"""
+        try:
+            if hasattr(self, '_gui_feed_paused') and self._gui_feed_paused:
+                log_info(SystemComponent.GUI, "Resuming GUI camera feed after predict_stream")
+                self.timer.start(100)  # Resume with 100ms interval
+                self._gui_feed_paused = False
+        except Exception as e:
+            log_warning(SystemComponent.GUI, f"Error resuming GUI camera feed: {str(e)}")
+
+    def _reinitialize_camera_after_predict_stream(self):
+        """Reinitialize the camera after predict_stream stops so GUI can use it again"""
+        try:
+            if not self.dev_mode and hasattr(self.camera_module, 'cap_top') and self.camera_module.cap_top is None:
+                log_info(SystemComponent.GUI, "Reinitializing camera for GUI use after predict_stream")
+                # Give predict_stream time to fully release the camera
+                time.sleep(0.5)
+                # Reinitialize the camera
+                self.camera_module.initialize_cameras()
+        except Exception as e:
+            log_warning(SystemComponent.GUI, f"Error reinitializing camera: {str(e)}")
+
+    def _run_mock_predict_stream(self):
+        """Run a mock predict_stream for testing when model is not available"""
+        try:
+            log_info(SystemComponent.GUI, "Starting mock predict_stream for testing")
+
+            # Create a mock analyzer
+            class MockDefectAnalyzer:
+                def __init__(self, gui_instance):
+                    self.gui = gui_instance
+                    self.frame_count = 0
+
+                def analyze(self, result):
+                    """Mock analyze method"""
+                    try:
+                        self.frame_count += 1
+
+                        # Simulate some mock defects for testing
+                        mock_defects = {}
+                        if self.frame_count % 10 == 0:  # Every 10th frame has defects
+                            mock_defects = {"crack": 1, "knot": 2}
+
+                        frame_defect_measurements = []
+                        for defect_type, count in mock_defects.items():
+                            for i in range(count):
+                                frame_defect_measurements.append((defect_type, 50.0, 0.05))
+
+                        # Store frame results
+                        frame_result = {
+                            'frame_id': self.frame_count,
+                            'defects': mock_defects,
+                            'defect_measurements': frame_defect_measurements,
+                            'timestamp': time.time()
+                        }
+
+                        self.gui.predict_stream_results.append(frame_result)
+
+                        # Update current defects for grading
+                        self.gui.current_defects["top"] = {
+                            "defects": mock_defects,
+                            "defect_list": frame_defect_measurements
+                        }
+
+                        # Store a mock annotated frame
+                        if self.gui.dev_mode and self.gui.top_frame_original is not None:
+                            mock_frame = self.gui.top_frame_original.copy()
+                            # Add some mock annotations
+                            if mock_defects:
+                                cv2.putText(mock_frame, f"Mock defects: {mock_defects}", (50, 50),
+                                          cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                            self.gui.latest_annotated_frame = mock_frame
+
+                        # Auto grade if enabled
+                        if self.gui.auto_grade_var:
+                            self.gui.calculate_and_display_grade()
+
+                        log_info(SystemComponent.GUI, f"Mock processed frame {self.frame_count} - defects: {mock_defects}")
+
+                    except Exception as e:
+                        log_error(SystemComponent.GUI, f"Error in MockDefectAnalyzer.analyze: {str(e)}", e)
+
+                def annotate(self, result, image):
+                    """Mock annotate method"""
+                    return image
+
+            # Create mock analyzer instance
+            analyzer = MockDefectAnalyzer(self)
+
+            # Simulate predict_stream behavior
+            frame_count = 0
+            while self.predict_stream_active:
+                try:
+                    # Get frame from camera or mock
+                    if self.dev_mode:
+                        frame = self.top_frame_original.copy() if self.top_frame_original is not None else None
+                    else:
+                        frame = self.camera_module.get_top_frame()
+
+                    if frame is not None:
+                        frame_count += 1
+
+                        # Create a mock result object
+                        class MockResult:
+                            def __init__(self, frame_data):
+                                self.results = []  # Mock empty results
+                                self.image_overlay = frame_data
+
+                        mock_result = MockResult(frame)
+
+                        # Process result with analyzer
+                        analyzer.analyze(mock_result)
+
+                        # Small delay to prevent overwhelming the system
+                        time.sleep(0.1)
+
+                    else:
+                        time.sleep(0.5)  # Wait for frame if not available
+
+                except Exception as e:
+                    log_error(SystemComponent.GUI, f"Error in mock predict_stream: {str(e)}", e)
+                    time.sleep(1)  # Wait before retrying
+
+            log_info(SystemComponent.GUI, f"Mock predict stream stopped after {frame_count} frames")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error in mock predict_stream thread: {str(e)}", e)
+        finally:
+            self.predict_stream_active = False
+
+    def stop_predict_stream_inference(self):
+        """Stop the predict_stream inference"""
+        try:
+            if self.predict_stream_active:
+                log_info(SystemComponent.GUI, "Stopping predict_stream inference")
+                self.predict_stream_active = False
+
+                # Wait for thread to finish
+                if self.predict_stream_thread and self.predict_stream_thread.is_alive():
+                    self.predict_stream_thread.join(timeout=2.0)
+
+                self.predict_stream_thread = None
+                self.latest_annotated_frame = None  # Clear the latest frame
+
+                # Resume GUI camera feed
+                self._resume_gui_camera_feed()
+
+                log_info(SystemComponent.GUI, "Predict stream inference stopped")
+            else:
+                log_info(SystemComponent.GUI, "Predict stream was not active")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error stopping predict_stream: {str(e)}", e)
+
+    def handle_ir_beam_cleared(self):
+        """Handle IR beam cleared event (IR: 1) - stop detection and process grading"""
+        try:
+            log_info(SystemComponent.GUI, "IR beam cleared (IR: 1) - stopping detection and processing grade")
+
+            # Only respond to IR triggers in TRIGGER mode
+            if self.current_mode == "TRIGGER" and self.auto_detection_active:
+                log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Processing predict_stream results...")
+
+                # Stop predict_stream inference
+                self.stop_predict_stream_inference()
+
+                # Deactivate the checkboxes
+                self.live_detection_checkbox.setChecked(False)
+                self.auto_grade_checkbox.setChecked(False)
+
+                # Update internal state variables
+                self.live_detection_var = False
+                self.auto_grade_var = False
+
+                # Stop detection session
+                self.auto_detection_active = False
+                self.ir_triggered = False
+
+                if self.wood_confirmed:
+                    # Wood was detected, calculate grade from collected defects
+                    log_info(SystemComponent.GUI, "Wood confirmed - calculating grade from predict_stream defect data")
+                    self.wood_confirmed = False
+
+                    # Calculate and display grade based on current defect information
+                    self.calculate_and_display_grade()
+
+                    self.update_system_status("Status: Grade calculated and sent - Ready for next trigger")
+                    self.update_detection_state("Waiting")
+                else:
+                    # No wood detected - but we can still grade based on defects found
+                    log_info(SystemComponent.GUI, "IR beam cleared - grading based on predict_stream defects detected")
+                    
+                    # Calculate and display grade based on current defect information (even if no wood confirmed)
+                    if self.current_defects:  # Check if we have any defect data
+                        self.calculate_and_display_grade()
+                        self.update_system_status("Status: Grade calculated from predict_stream defects - Ready for next trigger")
+                    else:
+                        self.update_system_status("Status: No defects detected - Ready for next trigger")
+                    
+                    self.update_detection_state("Waiting")
+
+            else:
+                log_info(SystemComponent.GUI, f"IR beam cleared but system is in {self.current_mode} mode or no detection active")
+                self.update_system_status("Status: IR beam cleared")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error handling IR beam cleared: {str(e)}", e)
 
     def finalize_detection_session(self):
         """Finalize the detection session and perform grading if needed"""
@@ -1090,9 +1579,21 @@ class WoodSortingApp(QMainWindow):
         self.auto_detection_active = False
 
         # Send command to Arduino
-        success = self.arduino_module.send_arduino_command('C')
-        if not success:
-            log_warning(SystemComponent.GUI, "Failed to send continuous mode command to Arduino")
+        if self.arduino_module and self.arduino_module.is_connected():
+            try:
+                success = self.arduino_module.send_arduino_command('C')
+                if success:
+                    self.update_system_status("✅ Continuous mode command sent to Arduino")
+                    log_info(SystemComponent.GUI, "Successfully sent continuous mode command to Arduino")
+                else:
+                    self.update_system_status("❌ Failed to send continuous mode command to Arduino")
+                    log_arduino_error("Failed to send continuous mode command to Arduino")
+            except Exception as e:
+                self.update_system_status(f"❌ Error sending continuous mode to Arduino: {str(e)}")
+                log_arduino_error(f"Error sending continuous mode to Arduino: {str(e)}", e)
+        else:
+            self.update_system_status("⚠️ Arduino not connected - Continuous mode set locally only")
+            log_warning(SystemComponent.GUI, "Arduino not connected - cannot send continuous mode command")
 
     def set_trigger_mode(self):
         """Set system to trigger mode"""
@@ -1107,9 +1608,21 @@ class WoodSortingApp(QMainWindow):
         self.auto_detection_active = False
 
         # Send command to Arduino
-        success = self.arduino_module.send_arduino_command('T')
-        if not success:
-            log_warning(SystemComponent.GUI, "Failed to send trigger mode command to Arduino")
+        if self.arduino_module and self.arduino_module.is_connected():
+            try:
+                success = self.arduino_module.send_arduino_command('T')
+                if success:
+                    self.update_system_status("✅ Trigger mode command sent to Arduino")
+                    log_info(SystemComponent.GUI, "Successfully sent trigger mode command to Arduino")
+                else:
+                    self.update_system_status("❌ Failed to send trigger mode command to Arduino")
+                    log_arduino_error("Failed to send trigger mode command to Arduino")
+            except Exception as e:
+                self.update_system_status(f"❌ Error sending trigger mode to Arduino: {str(e)}")
+                log_arduino_error(f"Error sending trigger mode to Arduino: {str(e)}", e)
+        else:
+            self.update_system_status("⚠️ Arduino not connected - Trigger mode set locally only")
+            log_warning(SystemComponent.GUI, "Arduino not connected - cannot send trigger mode command")
 
     def set_idle_mode(self):
         """Set system to idle mode"""
@@ -1124,9 +1637,21 @@ class WoodSortingApp(QMainWindow):
         self.auto_detection_active = False
 
         # Send command to Arduino
-        success = self.arduino_module.send_arduino_command('X')
-        if not success:
-            log_warning(SystemComponent.GUI, "Failed to send idle mode command to Arduino")
+        if self.arduino_module and self.arduino_module.is_connected():
+            try:
+                success = self.arduino_module.send_arduino_command('X')
+                if success:
+                    self.update_system_status("✅ Idle mode command sent to Arduino")
+                    log_info(SystemComponent.GUI, "Successfully sent idle mode command to Arduino")
+                else:
+                    self.update_system_status("❌ Failed to send idle mode command to Arduino")
+                    log_arduino_error("Failed to send idle mode command to Arduino")
+            except Exception as e:
+                self.update_system_status(f"❌ Error sending idle mode to Arduino: {str(e)}")
+                log_arduino_error(f"Error sending idle mode to Arduino: {str(e)}", e)
+        else:
+            self.update_system_status("⚠️ Arduino not connected - Idle mode set locally only")
+            log_warning(SystemComponent.GUI, "Arduino not connected - cannot send idle mode command")
 
     def toggle_live_detection(self, checked):
         """Toggle live detection mode"""

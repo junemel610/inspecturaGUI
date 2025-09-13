@@ -1,0 +1,33 @@
+{
+    "ConfigVersion": 11,
+    "Checksum": "7a9378aa17ff5c8188d16b05bb66e3a46a6e203b12b28ba24465c304f7b7d988",
+    "DEVICE": [
+        {
+            "DeviceType": "HAILO8",
+            "RuntimeAgent": "HAILORT",
+            "SupportedDeviceTypes": "HAILORT/HAILO8",
+            "EagerBatchSize": 1
+        }
+    ],
+    "PRE_PROCESS": [
+        {
+            "InputN": 1,
+            "InputH": 640,
+            "InputW": 640,
+            "InputC": 3,
+            "InputQuantEn": true
+        }
+    ],
+    "MODEL_PARAMETERS": [
+        {
+            "ModelPath": "UpdatedDefects--640x640_quant_hailort_hailo8_1.hef"
+        }
+    ],
+    "POST_PROCESS": [
+        {
+            "OutputPostprocessType": "DetectionYoloHailo",
+            "OutputNumClasses": 4,
+            "LabelsPath": "labels_UpdatedDefects.json"
+        }
+    ]
+}

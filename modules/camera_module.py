@@ -44,208 +44,98 @@ class CameraModule:
             log_warning(SystemComponent.CAMERA, f"Could not disable MSMF backend: {str(e)}")
 
     def initialize_cameras(self):
-        """Initialize cameras with enhanced error handling and status tracking."""
+        """Initialize cameras with simple direct approach like the test program."""
         if self.dev_mode:
             log_info(SystemComponent.CAMERA, "Initializing laptop webcam for development mode")
             return self._initialize_dev_cameras()
 
-        # First, detect available cameras
-        available_cameras = self._detect_available_cameras()
-        log_info(SystemComponent.CAMERA, f"Detected available cameras: {available_cameras}")
-
-        # Build list of available cameras with their preferred backends
-        camera_options = {}
-        for cam in available_cameras:
-            camera_options[cam['index']] = cam
-
-        # Try to use index 1 first, but have fallback options
-        preferred_indices = [1]  # Start with user's preferred index
-        if available_cameras:
-            # Add other detected indices as fallbacks
-            for cam in available_cameras:
-                if cam['index'] not in preferred_indices:
-                    preferred_indices.append(cam['index'])
-
         success = True
-        
-        # Initialize top camera
-        camera_initialized = False
-        for camera_index in preferred_indices:
-            try:
-                # Get the recommended backend for this camera
-                camera_info = camera_options.get(camera_index, {})
-                recommended_backend = camera_info.get('backend', 'DEFAULT')
 
-                log_info(SystemComponent.CAMERA, f"Initializing top camera (trying webcam index {camera_index} with {recommended_backend} backend)")
+        # Initialize top camera (video0) - direct approach like test program
+        try:
+            log_info(SystemComponent.CAMERA, "Initializing top camera (video0)")
+            self.cap_top = cv2.VideoCapture(0)  # Direct camera index like test program
 
-                # Try multiple backends in order of preference - prioritize VFW for Windows stability
-                backends_to_try = [
-                    (cv2.CAP_VFW, "CAP_VFW"),  # Video for Windows - most stable on Windows
-                    (cv2.CAP_DSHOW, "DSHOW"),  # DirectShow
-                    (-1, "DEFAULT")  # Default backend
-                ]
-
-                # Check for environment variable override
-                import os
-                env_backend = os.environ.get('OPENCV_CAMERA_BACKEND', '').upper()
-                if env_backend == 'VFW':
-                    backends_to_try = [(cv2.CAP_VFW, "CAP_VFW")]
-                elif env_backend == 'DSHOW':
-                    backends_to_try = [(cv2.CAP_DSHOW, "DSHOW")]
-                elif env_backend == 'ANY':
-                    backends_to_try = [(cv2.CAP_ANY, "CAP_ANY")]
-
-                for backend_flag, backend_name in backends_to_try:
-                    try:
-                        if backend_flag == -1:
-                            self.cap_top = cv2.VideoCapture(camera_index)
-                        else:
-                            self.cap_top = cv2.VideoCapture(camera_index, backend_flag)
-
-                        if self.cap_top.isOpened():
-                            log_info(SystemComponent.CAMERA, f"Successfully opened camera {camera_index} with {backend_name} backend")
-                            break
-                        else:
-                            self.cap_top.release() if hasattr(self.cap_top, 'release') else None
-                    except Exception as backend_error:
-                        log_warning(SystemComponent.CAMERA, f"Backend {backend_name} failed for camera {camera_index}: {str(backend_error)}")
-                        self.cap_top.release() if hasattr(self.cap_top, 'release') else None
-                        continue
-
-                if self.cap_top.isOpened():
-                    # Test the camera
-                    ret, frame = self.cap_top.read()
-                    if ret and frame is not None:
-                        log_info(SystemComponent.CAMERA, f"Successfully initialized top camera at index {camera_index}")
-                        camera_initialized = True
-                        break
-                    else:
-                        self.cap_top.release()
-                        log_warning(SystemComponent.CAMERA, f"Camera at index {camera_index} opened but failed to read frame")
+            if self.cap_top.isOpened():
+                # Test the camera
+                ret, frame = self.cap_top.read()
+                if ret and frame is not None:
+                    log_info(SystemComponent.CAMERA, "Successfully initialized top camera (video0)")
                 else:
-                    log_warning(SystemComponent.CAMERA, f"Failed to open camera at index {camera_index}")
-
-            except Exception as e:
-                log_warning(SystemComponent.CAMERA, f"Exception initializing camera at index {camera_index}: {str(e)}")
-                if self.cap_top:
                     self.cap_top.release()
+                    log_warning(SystemComponent.CAMERA, "Top camera opened but failed to read frame")
                     self.cap_top = None
+            else:
+                log_warning(SystemComponent.CAMERA, "Failed to open top camera (video0)")
+                self.cap_top = None
 
-        if not camera_initialized:
-            raise Exception("No working camera found for top camera")
+        except Exception as e:
+            log_warning(SystemComponent.CAMERA, f"Exception initializing top camera: {str(e)}")
+            if self.cap_top:
+                self.cap_top.release()
+                self.cap_top = None
 
-        # Configure camera settings for the successfully initialized camera
-        self.cap_top.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
-        self.cap_top.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
-        self.cap_top.set(cv2.CAP_PROP_FPS, 30)
+        # Initialize bottom camera (video2) - direct approach like test program
+        try:
+            log_info(SystemComponent.CAMERA, "Initializing bottom camera (video2)")
+            self.cap_bottom = cv2.VideoCapture(2)  # Direct camera index like test program
 
-        # Test frame read
-        ret, frame = self.cap_top.read()
-        if not ret or frame is None:
-            raise Exception("Failed to read test frame from top camera")
-
-        actual_width = self.cap_top.get(cv2.CAP_PROP_FRAME_WIDTH)
-        actual_height = self.cap_top.get(cv2.CAP_PROP_FRAME_HEIGHT)
-
-        self.camera_status["top"]["connected"] = True
-        self.camera_status["top"]["error_count"] = 0
-        self.camera_status["top"]["last_successful_read"] = time.time()
-
-        log_info(SystemComponent.CAMERA, "Top camera initialized successfully",
-                {"width": actual_width, "height": actual_height, "index": camera_index})
-
-        # Initialize bottom camera
-        camera_initialized = False
-        for camera_index in preferred_indices:
-            try:
-                # Get the recommended backend for this camera
-                camera_info = camera_options.get(camera_index, {})
-                recommended_backend = camera_info.get('backend', 'DEFAULT')
-
-                log_info(SystemComponent.CAMERA, f"Initializing bottom camera (trying webcam index {camera_index} with {recommended_backend} backend)")
-
-                # Try multiple backends in order of preference - prioritize VFW for Windows stability
-                backends_to_try = [
-                    (cv2.CAP_VFW, "CAP_VFW"),  # Video for Windows - most stable on Windows
-                    (cv2.CAP_DSHOW, "DSHOW"),  # DirectShow
-                    (-1, "DEFAULT")  # Default backend
-                ]
-
-                # Check for environment variable override
-                import os
-                env_backend = os.environ.get('OPENCV_CAMERA_BACKEND', '').upper()
-                if env_backend == 'VFW':
-                    backends_to_try = [(cv2.CAP_VFW, "CAP_VFW")]
-                elif env_backend == 'DSHOW':
-                    backends_to_try = [(cv2.CAP_DSHOW, "DSHOW")]
-                elif env_backend == 'ANY':
-                    backends_to_try = [(cv2.CAP_ANY, "CAP_ANY")]
-
-                for backend_flag, backend_name in backends_to_try:
-                    try:
-                        if backend_flag == -1:
-                            self.cap_bottom = cv2.VideoCapture(camera_index)
-                        else:
-                            self.cap_bottom = cv2.VideoCapture(camera_index, backend_flag)
-
-                        if self.cap_bottom.isOpened():
-                            log_info(SystemComponent.CAMERA, f"Successfully opened camera {camera_index} with {backend_name} backend")
-                            break
-                        else:
-                            self.cap_bottom.release() if hasattr(self.cap_bottom, 'release') else None
-                    except Exception as backend_error:
-                        log_warning(SystemComponent.CAMERA, f"Backend {backend_name} failed for camera {camera_index}: {str(backend_error)}")
-                        self.cap_bottom.release() if hasattr(self.cap_bottom, 'release') else None
-                        continue
-
-                if self.cap_bottom.isOpened():
-                    # Test the camera
-                    ret, frame = self.cap_bottom.read()
-                    if ret and frame is not None:
-                        log_info(SystemComponent.CAMERA, f"Successfully initialized bottom camera at index {camera_index}")
-                        camera_initialized = True
-                        break
-                    else:
-                        self.cap_bottom.release()
-                        log_warning(SystemComponent.CAMERA, f"Camera at index {camera_index} opened but failed to read frame")
+            if self.cap_bottom.isOpened():
+                # Test the camera
+                ret, frame = self.cap_bottom.read()
+                if ret and frame is not None:
+                    log_info(SystemComponent.CAMERA, "Successfully initialized bottom camera (video2)")
                 else:
-                    log_warning(SystemComponent.CAMERA, f"Failed to open camera at index {camera_index}")
-
-            except Exception as e:
-                log_warning(SystemComponent.CAMERA, f"Exception initializing camera at index {camera_index}: {str(e)}")
-                if self.cap_bottom:
                     self.cap_bottom.release()
+                    log_warning(SystemComponent.CAMERA, "Bottom camera opened but failed to read frame")
                     self.cap_bottom = None
+            else:
+                log_warning(SystemComponent.CAMERA, "Failed to open bottom camera (video2)")
+                self.cap_bottom = None
 
-        if not camera_initialized:
-            raise Exception("No working camera found for bottom camera")
+        except Exception as e:
+            log_warning(SystemComponent.CAMERA, f"Exception initializing bottom camera: {str(e)}")
+            if self.cap_bottom:
+                self.cap_bottom.release()
+                self.cap_bottom = None
 
-        # Configure camera settings for the successfully initialized camera
-        self.cap_bottom.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
-        self.cap_bottom.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
-        self.cap_bottom.set(cv2.CAP_PROP_FPS, 30)
+        # Configure camera settings if cameras are available
+        if self.cap_top and self.cap_top.isOpened():
+            self.cap_top.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
+            self.cap_top.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
+            self.cap_top.set(cv2.CAP_PROP_FPS, 30)
 
-        # Test frame read
-        ret, frame = self.cap_bottom.read()
-        if not ret or frame is None:
-            raise Exception("Failed to read test frame from bottom camera")
+            actual_width = self.cap_top.get(cv2.CAP_PROP_FRAME_WIDTH)
+            actual_height = self.cap_top.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-        actual_width = self.cap_bottom.get(cv2.CAP_PROP_FRAME_WIDTH)
-        actual_height = self.cap_bottom.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            self.camera_status["top"]["connected"] = True
+            self.camera_status["top"]["error_count"] = 0
+            self.camera_status["top"]["last_successful_read"] = time.time()
 
-        self.camera_status["bottom"]["connected"] = True
-        self.camera_status["bottom"]["error_count"] = 0
-        self.camera_status["bottom"]["last_successful_read"] = time.time()
+            log_info(SystemComponent.CAMERA, "Top camera configured successfully",
+                    {"width": actual_width, "height": actual_height})
 
-        log_info(SystemComponent.CAMERA, "Bottom camera initialized successfully",
-                {"width": actual_width, "height": actual_height, "index": camera_index})
-                
+        if self.cap_bottom and self.cap_bottom.isOpened():
+            self.cap_bottom.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
+            self.cap_bottom.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
+            self.cap_bottom.set(cv2.CAP_PROP_FPS, 30)
+
+            actual_width = self.cap_bottom.get(cv2.CAP_PROP_FRAME_WIDTH)
+            actual_height = self.cap_bottom.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+            self.camera_status["bottom"]["connected"] = True
+            self.camera_status["bottom"]["error_count"] = 0
+            self.camera_status["bottom"]["last_successful_read"] = time.time()
+
+            log_info(SystemComponent.CAMERA, "Bottom camera configured successfully",
+                    {"width": actual_width, "height": actual_height})
+
         # Start connection monitoring if any camera is connected
         if self.camera_status["top"]["connected"] or self.camera_status["bottom"]["connected"]:
             self.start_connection_monitoring()
         elif not success:
             log_warning(SystemComponent.CAMERA, "No cameras could be initialized - system will run in degraded mode")
-            
+
         return success
 
     def _detect_available_cameras(self):
@@ -399,82 +289,92 @@ class CameraModule:
             return False, None
 
     def _initialize_dev_cameras(self):
-        """Initialize laptop webcam for development mode - try index 1 then 2"""
+        """Initialize cameras for development mode using direct camera indices like test program."""
         try:
-            # Try index 1 first, then 2
-            camera_indices = [1, 2]
-            working_camera = None
+            # Initialize top camera (video0) - direct approach
+            log_info(SystemComponent.CAMERA, "Initializing top camera (video0) for dev mode")
+            self.cap_top = cv2.VideoCapture(0)
 
-            for idx in camera_indices:
-                log_info(SystemComponent.CAMERA, f"Trying camera index {idx}")
-                test_cap = cv2.VideoCapture(idx)
-                if test_cap.isOpened():
-                    # Test if we can read a frame
-                    ret, frame = test_cap.read()
-                    if ret and frame is not None:
-                        working_camera = idx
-                        test_cap.release()
-                        break
-                    else:
-                        test_cap.release()
+            if self.cap_top.isOpened():
+                # Test top camera
+                ret, frame = self.cap_top.read()
+                if not ret or frame is None:
+                    log_warning(SystemComponent.CAMERA, "Top camera opened but can't read frame")
+                    self.cap_top.release()
+                    self.cap_top = None
                 else:
-                    test_cap.release()
+                    log_info(SystemComponent.CAMERA, "Top camera initialized successfully for dev mode")
+            else:
+                log_warning(SystemComponent.CAMERA, "Failed to open top camera (video0)")
+                self.cap_top = None
 
-            if working_camera is None:
-                raise Exception("No working webcam found on indices 1 or 2")
+            # Initialize bottom camera (video2) - direct approach
+            log_info(SystemComponent.CAMERA, "Initializing bottom camera (video2) for dev mode")
+            self.cap_bottom = cv2.VideoCapture(2)
 
-            log_info(SystemComponent.CAMERA, f"Found working webcam at index {working_camera}")
+            if self.cap_bottom.isOpened():
+                # Test bottom camera
+                ret, frame = self.cap_bottom.read()
+                if not ret or frame is None:
+                    log_warning(SystemComponent.CAMERA, "Bottom camera opened but can't read frame")
+                    self.cap_bottom.release()
+                    self.cap_bottom = None
+                else:
+                    log_info(SystemComponent.CAMERA, "Bottom camera initialized successfully for dev mode")
+            else:
+                log_warning(SystemComponent.CAMERA, "Failed to open bottom camera (video2)")
+                self.cap_bottom = None
 
-            # Use the working webcam for both top and bottom cameras
-            self.cap_top = cv2.VideoCapture(working_camera)
-            self.cap_bottom = cv2.VideoCapture(working_camera)  # Same webcam for both
+            # Configure camera settings for both cameras
+            if self.cap_top and self.cap_top.isOpened():
+                self.cap_top.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
+                self.cap_top.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
+                self.cap_top.set(cv2.CAP_PROP_FPS, 30)
 
-            if not self.cap_top.isOpened():
-                raise Exception(f"Failed to open working webcam (index {working_camera})")
+            if self.cap_bottom and self.cap_bottom.isOpened():
+                self.cap_bottom.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
+                self.cap_bottom.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
+                self.cap_bottom.set(cv2.CAP_PROP_FPS, 30)
 
-            # Configure camera settings
-            self.cap_top.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
-            self.cap_top.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
-            self.cap_top.set(cv2.CAP_PROP_FPS, 30)
+            # Mark cameras as connected if available
+            if self.cap_top and self.cap_top.isOpened():
+                self.camera_status["top"]["connected"] = True
+                self.camera_status["top"]["error_count"] = 0
+                self.camera_status["top"]["last_successful_read"] = time.time()
 
-            # Test frame read
-            ret, frame = self.cap_top.read()
-            if not ret or frame is None:
-                raise Exception("Failed to read test frame from laptop webcam")
+            if self.cap_bottom and self.cap_bottom.isOpened():
+                self.camera_status["bottom"]["connected"] = True
+                self.camera_status["bottom"]["error_count"] = 0
+                self.camera_status["bottom"]["last_successful_read"] = time.time()
 
-            actual_width = self.cap_top.get(cv2.CAP_PROP_FRAME_WIDTH)
-            actual_height = self.cap_top.get(cv2.CAP_PROP_FRAME_HEIGHT)
-
-            # Mark both cameras as connected
-            self.camera_status["top"]["connected"] = True
-            self.camera_status["top"]["error_count"] = 0
-            self.camera_status["top"]["last_successful_read"] = time.time()
-
-            self.camera_status["bottom"]["connected"] = True
-            self.camera_status["bottom"]["error_count"] = 0
-            self.camera_status["bottom"]["last_successful_read"] = time.time()
-
-            log_info(SystemComponent.CAMERA, f"Laptop webcam initialized successfully for dev mode (index {working_camera})",
-                    {"width": actual_width, "height": actual_height})
+            log_info(SystemComponent.CAMERA, "Development cameras initialization completed")
 
             return True
 
         except Exception as e:
-            log_camera_error("webcam", f"Failed to initialize laptop webcam: {str(e)}", e)
+            log_camera_error("webcam", f"Failed to initialize development cameras: {str(e)}", e)
             self.camera_status["top"]["connected"] = False
             self.camera_status["bottom"]["connected"] = False
             return False
 
     def _read_dev_frame(self, camera_name):
-        """Read frame from laptop webcam in dev mode"""
+        """Read frame from appropriate camera in dev mode - simplified approach."""
         try:
-            # Use the top camera capture for both (they're the same webcam)
-            ret, frame = self.cap_top.read()
+            # Use the appropriate camera capture
+            camera = self.cap_top if camera_name == "top" else self.cap_bottom
+
+            if not camera or not camera.isOpened():
+                self.camera_status[camera_name]["connected"] = False
+                self.camera_status[camera_name]["error_count"] += 1
+                log_camera_error(camera_name, f"Camera not available in dev mode")
+                return False, None
+
+            ret, frame = camera.read()
 
             if not ret or frame is None:
                 self.camera_status[camera_name]["connected"] = False
                 self.camera_status[camera_name]["error_count"] += 1
-                log_camera_error(camera_name, "Failed to read frame from laptop webcam")
+                log_camera_error(camera_name, f"Failed to read frame from {camera_name} camera in dev mode")
                 return False, None
 
             # Frame read successful
@@ -482,7 +382,7 @@ class CameraModule:
             if not self.camera_status[camera_name]["connected"]:
                 self.camera_status[camera_name]["connected"] = True
                 self.camera_status[camera_name]["error_count"] = 0
-                log_info(SystemComponent.CAMERA, f"Laptop webcam '{camera_name}' recovered")
+                log_info(SystemComponent.CAMERA, f"Dev camera '{camera_name}' recovered")
 
             self.camera_status[camera_name]["last_successful_read"] = current_time
 
@@ -496,7 +396,7 @@ class CameraModule:
             self.camera_status[camera_name]["connected"] = False
             self.camera_status[camera_name]["last_error"] = str(e)
             self.camera_status[camera_name]["error_count"] += 1
-            log_camera_error(camera_name, f"Exception reading laptop webcam: {str(e)}", e)
+            log_camera_error(camera_name, f"Exception reading {camera_name} camera in dev mode: {str(e)}", e)
             return False, None
 
     def _create_dummy_frame(self):
@@ -513,67 +413,31 @@ class CameraModule:
         return frame
 
     def _attempt_camera_reconnection(self, camera_name):
-        """Attempt to reconnect a failed camera"""
+        """Attempt to reconnect a failed camera using simple direct approach."""
         try:
             log_info(SystemComponent.CAMERA, f"Attempting to reconnect camera '{camera_name}' (attempt {self.reconnection_attempts[camera_name] + 1})")
-            
+
             # Release current camera
             camera = self.cap_top if camera_name == "top" else self.cap_bottom
             if camera is not None:
                 camera.release()
-            
+
             # Wait before reconnection
             time.sleep(1)
-            
-            # Try to reconnect using multiple backends
-            camera_index = 1  # Use webcam index 1 for both cameras
 
-            backends_to_try = [
-                (cv2.CAP_VFW, "CAP_VFW"),  # Video for Windows - most stable on Windows
-                (cv2.CAP_DSHOW, "DSHOW"),  # DirectShow
-                (-1, "DEFAULT")  # Default backend
-            ]
+            # Try to reconnect using direct camera index like test program
+            camera_index = 0 if camera_name == "top" else 2  # video0 for top, video2 for bottom
 
-            # Check for environment variable override
-            import os
-            env_backend = os.environ.get('OPENCV_CAMERA_BACKEND', '').upper()
-            if env_backend == 'VFW':
-                backends_to_try = [(cv2.CAP_VFW, "CAP_VFW")]
-            elif env_backend == 'DSHOW':
-                backends_to_try = [(cv2.CAP_DSHOW, "DSHOW")]
-            elif env_backend == 'ANY':
-                backends_to_try = [(cv2.CAP_ANY, "CAP_ANY")]
+            log_info(SystemComponent.CAMERA, f"Reconnecting camera {camera_name} at index {camera_index}")
 
-            new_camera = None
-            for backend_flag, backend_name in backends_to_try:
-                try:
-                    if backend_flag == -1:
-                        new_camera = cv2.VideoCapture(camera_index)
-                    else:
-                        new_camera = cv2.VideoCapture(camera_index, backend_flag)
+            new_camera = cv2.VideoCapture(camera_index)
 
-                    if new_camera.isOpened():
-                        log_info(SystemComponent.CAMERA, f"Successfully reconnected camera {camera_name} at index {camera_index} with {backend_name} backend")
-                        break
-                    else:
-                        new_camera.release() if hasattr(new_camera, 'release') else None
-                        new_camera = None
-                except Exception as backend_error:
-                    log_warning(SystemComponent.CAMERA, f"Backend {backend_name} failed for reconnection of camera {camera_name}: {str(backend_error)}")
-                    new_camera.release() if hasattr(new_camera, 'release') else None
-                    new_camera = None
-                    continue
-
-            if new_camera is None:
-                log_warning(SystemComponent.CAMERA, f"Failed to reconnect camera {camera_name} with any backend")
-                return False
-            
             if new_camera.isOpened():
                 # Configure settings
                 new_camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_width)
                 new_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_height)
                 new_camera.set(cv2.CAP_PROP_FPS, 30)
-                
+
                 # Test read
                 ret, frame = new_camera.read()
                 if ret and frame is not None:
@@ -582,7 +446,7 @@ class CameraModule:
                         self.cap_top = new_camera
                     else:
                         self.cap_bottom = new_camera
-                    
+
                     self.camera_status[camera_name]["connected"] = True
                     self.camera_status[camera_name]["error_count"] = 0
                     self.reconnection_attempts[camera_name] = 0
@@ -591,12 +455,12 @@ class CameraModule:
                     return True
                 else:
                     new_camera.release()
-                    
+
             self.reconnection_attempts[camera_name] += 1
-            log_warning(SystemComponent.CAMERA, 
+            log_warning(SystemComponent.CAMERA,
                        f"Failed to reconnect camera '{camera_name}' (attempt {self.reconnection_attempts[camera_name]})")
             return False
-            
+
         except Exception as e:
             self.reconnection_attempts[camera_name] += 1
             log_camera_error(camera_name, f"Exception during reconnection: {str(e)}", e)
@@ -719,57 +583,58 @@ class CameraModule:
             "camera_details": self.camera_status.copy()
         }
 
-    def apply_roi(self, frame, camera_name, roi_enabled, roi_coordinates):
-        """Apply Region of Interest (ROI) to frame for focused detection."""
-        if not roi_enabled.get(camera_name, False):
-            return frame, None
-        
-        roi_coords = roi_coordinates.get(camera_name, {})
-        if not roi_coords:
-            return frame, None
-        
-        x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
-        x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
-        
-        # Ensure coordinates are within frame bounds
-        x1 = max(0, min(x1, frame.shape[1]))
-        y1 = max(0, min(y1, frame.shape[0]))
-        x2 = max(x1, min(x2, frame.shape[1]))
-        y2 = max(y1, min(y2, frame.shape[0]))
-        
-        # Extract ROI
-        roi_frame = frame[y1:y2, x1:x2]
-        roi_info = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
-        
-        return roi_frame, roi_info
+    # COMMENTED OUT: ROI functions no longer needed for full-frame defect detection
+    # def apply_roi(self, frame, camera_name, roi_enabled, roi_coordinates):
+    #     """Apply Region of Interest (ROI) to frame for focused detection."""
+    #     if not roi_enabled.get(camera_name, False):
+    #         return frame, None
+    #
+    #     roi_coords = roi_coordinates.get(camera_name, {})
+    #     if not roi_coords:
+    #         return frame, None
+    #
+    #     x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
+    #     x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
+    #
+    #     # Ensure coordinates are within frame bounds
+    #     x1 = max(0, min(x1, frame.shape[1]))
+    #     y1 = max(0, min(y1, frame.shape[0]))
+    #     x2 = max(x1, min(x2, frame.shape[1]))
+    #     y2 = max(y1, min(y2, frame.shape[0]))
+    #
+    #     # Extract ROI
+    #     roi_frame = frame[y1:y2, x1:x2]
+    #     roi_info = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
+    #
+    #     return roi_frame, roi_info
 
-    def draw_roi_overlay(self, frame, camera_name, roi_enabled, roi_coordinates):
-        """Draw ROI rectangle overlay(s) on frame for visualization."""
-        frame_copy = frame.copy()
+    # def draw_roi_overlay(self, frame, camera_name, roi_enabled, roi_coordinates):
+    #     """Draw ROI rectangle overlay(s) on frame for visualization."""
+    #     frame_copy = frame.copy()
 
-        # Draw all enabled ROIs
-        for roi_name, enabled in roi_enabled.items():
-            if not enabled:
-                continue
+    #     # Draw all enabled ROIs
+    #     for roi_name, enabled in roi_enabled.items():
+    #         if not enabled:
+    #         continue
 
-            roi_coords = roi_coordinates.get(roi_name, {})
-            if not roi_coords:
-                continue
+    #     roi_coords = roi_coordinates.get(roi_name, {})
+    #     if not roi_coords:
+    #         continue
 
-            x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
-            x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
+    #         x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
+    #         x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
 
-            # Ensure coordinates are within frame bounds
-            x1 = max(0, min(x1, frame.shape[1]))
-            y1 = max(0, min(y1, frame.shape[0]))
-            x2 = max(x1, min(x2, frame.shape[1]))
-            y2 = max(y1, min(y2, frame.shape[0]))
+    #         # Ensure coordinates are within frame bounds
+    #         x1 = max(0, min(x1, frame.shape[1]))
+    #         y1 = max(0, min(y1, frame.shape[0]))
+    #         x2 = max(x1, min(x2, frame.shape[1]))
+    #         y2 = max(y1, min(y2, frame.shape[0]))
 
-            # Draw ROI rectangle (yellow border)
-            cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 255), 3)
+    #         # Draw ROI rectangle (yellow border)
+    #         cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 255), 3)
 
-            # Add ROI label
-            cv2.putText(frame_copy, f"{roi_name.upper()} ALIGNMENT",
-                       (x1 + 10, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    #         # Add ROI label
+    #         cv2.putText(frame_copy, f"{roi_name.upper()} ALIGNMENT",
+    #                    (x1 + 10, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-        return frame_copy
+    #     return frame_copy

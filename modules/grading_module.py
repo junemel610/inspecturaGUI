@@ -85,18 +85,27 @@ def determine_final_grade(top_grade, bottom_grade):
     return final_grade
 
 def convert_grade_to_arduino_command(standard_grade):
-    """Convert SS-EN 1611-1 grade to Arduino sorting command"""
-    # Map the 5 standard grades to sorting gates following strict classification:
-    # Good: G2-0 | Fair: G2-1, G2-2, G2-3 | Poor: G2-4
+    """Convert SS-EN 1611-1 grade to Arduino sorting command - matches Arduino reference"""
+    # Arduino Reference Commands:
+    # '1': Grade 1 - Move all servos to 90 degrees (Good)
+    # '2': Grade 2 - Move all servos to 45 degrees (Fair)
+    # '3': Grade 3 - Move all servos to 135 degrees (Poor)
+
+    # Map the 5 standard grades to Arduino commands following Arduino reference:
+    # Good: G2-0 → Command '1'
+    # Fair: G2-1, G2-2, G2-3 → Command '2'
+    # Poor: G2-4 → Command '3'
     grade_to_command = {
-        GRADE_G2_0: 1,    # Good (G2-0) - Gate 1
-        GRADE_G2_1: 2,    # Fair (G2-1) - Gate 2  
-        GRADE_G2_2: 2,    # Fair (G2-2) - Gate 2
-        GRADE_G2_3: 2,    # Fair (G2-3) - Gate 2
-        GRADE_G2_4: 3     # Poor (G2-4) - Gate 3
+        GRADE_G2_0: '1',    # Good (G2-0) - Command '1'
+        GRADE_G2_1: '2',    # Fair (G2-1) - Command '2'
+        GRADE_G2_2: '2',    # Fair (G2-2) - Command '2'
+        GRADE_G2_3: '2',    # Fair (G2-3) - Command '2'
+        GRADE_G2_4: '3'     # Poor (G2-4) - Command '3'
     }
-    
-    return grade_to_command.get(standard_grade, 3)  # Default to worst gate if unknown
+
+    command = grade_to_command.get(standard_grade, '3')  # Default to worst command if unknown
+    print(f"Grade {standard_grade} → Arduino command '{command}'")
+    return command
 
 def get_grade_color(grade):
     """Get color coding for grades"""

@@ -313,18 +313,21 @@ class ArduinoModule:
             return False
 
     def send_grade_command(self, grade):
-        """Convert grade to Arduino command and send it."""
+        """Convert grade to Arduino command and send it - matches Arduino reference"""
         try:
+            # Use the updated grading module function
             arduino_command = convert_grade_to_arduino_command(grade)
+
+            # Ensure command is sent as string (single character)
             success = self.send_arduino_command(str(arduino_command))
-            
+
             if success:
-                log_info(SystemComponent.ARDUINO, f"Sent grade command: Grade {grade} -> Command {arduino_command}")
+                log_info(SystemComponent.ARDUINO, f"Sent grade command: Grade {grade} → Arduino command '{arduino_command}'")
             else:
-                log_arduino_error(f"Failed to send grade command: Grade {grade} -> Command {arduino_command}")
-                
+                log_arduino_error(f"Failed to send grade command: Grade {grade} → Arduino command '{arduino_command}'")
+
             return success
-            
+
         except Exception as e:
             log_arduino_error(f"Error converting/sending grade command for grade '{grade}': {str(e)}", e)
             return False
