@@ -2653,3 +2653,12 @@
 2025-09-13 13:00:43,679 - WoodSortingSystem - ERROR - [GUI] Error in GUI update: WoodSortingApp.update_camera_status() missing 2 required positional arguments: 'camera_name' and 'is_available'
 2025-09-13 13:00:43,689 - WoodSortingSystem - ERROR - [GUI] Error in GUI update: WoodSortingApp.update_camera_status() missing 2 required positional arguments: 'camera_name' and 'is_available'
 2025-09-13 13:00:43,698 - WoodSortingSystem - ERROR - [GUI] Error in GUI update: WoodSortingApp.update_camera_status() missing 2 required positional arguments: 'camera_name' and 'is_available'
+2025-09-13 14:15:31,342 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:15:46,341 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:15:51,279 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:23:49,939 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:23:50,847 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:23:55,884 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:24:00,917 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:24:06,053 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:24:21,957 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')

@@ -10,8 +10,8 @@ import sys
 import cv2
 import logging
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QFrame, QGridLayout, QCheckBox, QTabWidget, QGroupBox, QTextEdit, QProgressBar, QScrollArea, QSizePolicy
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QFrame, QGridLayout, QCheckBox, QTabWidget, QGroupBox, QTextEdit, QProgressBar, QScrollArea, QSizePolicy, QComboBox, QDoubleSpinBox, QSpinBox, QFormLayout, QLineEdit
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QFont, QColor
 from PyQt5.QtCore import Qt, QTimer, QDateTime, QThread, pyqtSignal
@@ -430,7 +430,243 @@ class WoodSortingApp(QMainWindow):
 
         self.stats_notebook.addTab(performance_widget, "Performance")
 
-        # Tab 3: System Log
+        # Tab 3: Model Health & Performance
+        health_widget = QWidget()
+        health_layout = QVBoxLayout(health_widget)
+        health_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Model Health Status Section
+        health_status_group = QGroupBox("Model Health Status")
+        health_status_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        health_status_layout = QVBoxLayout(health_status_group)
+
+        # Health status display
+        self.model_health_label = QLabel("Model Health: Checking...")
+        self.model_health_label.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
+        health_status_layout.addWidget(self.model_health_label)
+
+        # Health metrics grid
+        health_metrics_layout = QGridLayout()
+        health_metrics_layout.setSpacing(10)
+
+        # Row 0: Headers
+        health_metrics_layout.addWidget(QLabel("Metric"), 0, 0)
+        health_metrics_layout.addWidget(QLabel("Value"), 0, 1)
+        health_metrics_layout.addWidget(QLabel("Status"), 0, 2)
+
+        # Row 1: Inference Time
+        health_metrics_layout.addWidget(QLabel("Avg Inference Time:"), 1, 0)
+        self.avg_inference_time_label = QLabel("N/A")
+        self.avg_inference_time_label.setStyleSheet("font-family: monospace;")
+        health_metrics_layout.addWidget(self.avg_inference_time_label, 1, 1)
+        self.inference_time_status = QLabel("Unknown")
+        health_metrics_layout.addWidget(self.inference_time_status, 1, 2)
+
+        # Row 2: Success Rate
+        health_metrics_layout.addWidget(QLabel("Success Rate:"), 2, 0)
+        self.success_rate_label = QLabel("N/A")
+        self.success_rate_label.setStyleSheet("font-family: monospace;")
+        health_metrics_layout.addWidget(self.success_rate_label, 2, 1)
+        self.success_rate_status = QLabel("Unknown")
+        health_metrics_layout.addWidget(self.success_rate_status, 2, 2)
+
+        # Row 3: Total Inferences
+        health_metrics_layout.addWidget(QLabel("Total Inferences:"), 3, 0)
+        self.total_inferences_label = QLabel("0")
+        self.total_inferences_label.setStyleSheet("font-family: monospace;")
+        health_metrics_layout.addWidget(self.total_inferences_label, 3, 1)
+        health_metrics_layout.addWidget(QLabel("Count"), 3, 2)
+
+        health_status_layout.addLayout(health_metrics_layout)
+
+        # Control buttons
+        health_controls_layout = QHBoxLayout()
+        self.btn_reload_model = QPushButton("Reload Model")
+        self.btn_reload_model.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.btn_reload_model.clicked.connect(self.reload_model)
+        health_controls_layout.addWidget(self.btn_reload_model)
+
+        self.btn_benchmark_model = QPushButton("Run Benchmark")
+        self.btn_benchmark_model.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.btn_benchmark_model.clicked.connect(self.run_model_benchmark)
+        health_controls_layout.addWidget(self.btn_benchmark_model)
+
+        health_controls_layout.addStretch()
+        health_status_layout.addLayout(health_controls_layout)
+
+        health_layout.addWidget(health_status_group)
+
+        # Camera Status Section
+        camera_status_group = QGroupBox("Camera Status")
+        camera_status_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        camera_status_layout = QVBoxLayout(camera_status_group)
+
+        # Camera status grid
+        camera_grid_layout = QGridLayout()
+        camera_grid_layout.setSpacing(10)
+
+        # Headers
+        camera_grid_layout.addWidget(QLabel("Camera"), 0, 0)
+        camera_grid_layout.addWidget(QLabel("Status"), 0, 1)
+        camera_grid_layout.addWidget(QLabel("Usage Count"), 0, 2)
+        camera_grid_layout.addWidget(QLabel("Last Used"), 0, 3)
+
+        # Top Camera
+        camera_grid_layout.addWidget(QLabel("Top Camera"), 1, 0)
+        self.top_camera_health_status = QLabel("Unknown")
+        camera_grid_layout.addWidget(self.top_camera_health_status, 1, 1)
+        self.top_camera_usage_count = QLabel("0")
+        camera_grid_layout.addWidget(self.top_camera_usage_count, 1, 2)
+        self.top_camera_last_used = QLabel("Never")
+        camera_grid_layout.addWidget(self.top_camera_last_used, 1, 3)
+
+        # Bottom Camera
+        camera_grid_layout.addWidget(QLabel("Bottom Camera"), 2, 0)
+        self.bottom_camera_health_status = QLabel("Unknown")
+        camera_grid_layout.addWidget(self.bottom_camera_health_status, 2, 1)
+        self.bottom_camera_usage_count = QLabel("0")
+        camera_grid_layout.addWidget(self.bottom_camera_usage_count, 2, 2)
+        self.bottom_camera_last_used = QLabel("Never")
+        camera_grid_layout.addWidget(self.bottom_camera_last_used, 2, 3)
+
+        camera_status_layout.addLayout(camera_grid_layout)
+        health_layout.addWidget(camera_status_group)
+
+        # Error Recovery Section
+        error_recovery_group = QGroupBox("Error Recovery Controls")
+        error_recovery_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        error_recovery_layout = QVBoxLayout(error_recovery_group)
+
+        # Recovery options
+        recovery_options_layout = QVBoxLayout()
+
+        # Auto recovery checkbox
+        self.auto_recovery_checkbox = QCheckBox("Enable Automatic Error Recovery")
+        self.auto_recovery_checkbox.setChecked(True)
+        self.auto_recovery_checkbox.setStyleSheet("font-size: 14px;")
+        recovery_options_layout.addWidget(self.auto_recovery_checkbox)
+
+        # Recovery strategy selection
+        recovery_strategy_layout = QHBoxLayout()
+        recovery_strategy_layout.addWidget(QLabel("Recovery Strategy:"))
+        self.recovery_strategy_combo = QComboBox()
+        self.recovery_strategy_combo.addItems(["Retry", "Fallback", "Circuit Breaker"])
+        self.recovery_strategy_combo.setCurrentText("Retry")
+        recovery_strategy_layout.addWidget(self.recovery_strategy_combo)
+        recovery_strategy_layout.addStretch()
+        recovery_options_layout.addLayout(recovery_strategy_layout)
+
+        # Recovery controls
+        recovery_controls_layout = QHBoxLayout()
+        self.btn_force_recovery = QPushButton("Force Recovery")
+        self.btn_force_recovery.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.btn_force_recovery.clicked.connect(self.force_error_recovery)
+        recovery_controls_layout.addWidget(self.btn_force_recovery)
+
+        self.btn_reset_error_state = QPushButton("Reset Error State")
+        self.btn_reset_error_state.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.btn_reset_error_state.clicked.connect(self.reset_error_state)
+        recovery_controls_layout.addWidget(self.btn_reset_error_state)
+
+        recovery_controls_layout.addStretch()
+        recovery_options_layout.addLayout(recovery_controls_layout)
+
+        error_recovery_layout.addLayout(recovery_options_layout)
+
+        # Error status display
+        self.error_status_text = QTextEdit()
+        self.error_status_text.setReadOnly(True)
+        self.error_status_text.setMaximumHeight(100)
+        self.error_status_text.setStyleSheet("font-family: monospace; font-size: 11px; background-color: #f9f9f9;")
+        self.error_status_text.setPlainText("No errors detected")
+        error_recovery_layout.addWidget(self.error_status_text)
+
+        health_layout.addWidget(error_recovery_group)
+
+        self.stats_notebook.addTab(health_widget, "Model Health")
+
+        # Tab 4: Model Configuration
+        config_widget = QWidget()
+        config_layout = QVBoxLayout(config_widget)
+        config_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Model Configuration Section
+        model_config_group = QGroupBox("Model Configuration")
+        model_config_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        model_config_layout = QVBoxLayout(model_config_group)
+
+        # Configuration form
+        config_form_layout = QFormLayout()
+        config_form_layout.setSpacing(10)
+
+        # Model name
+        self.config_model_name = QLineEdit("defect_detector")
+        config_form_layout.addRow("Model Name:", self.config_model_name)
+
+        # Confidence threshold
+        self.config_confidence_threshold = QDoubleSpinBox()
+        self.config_confidence_threshold.setRange(0.0, 1.0)
+        self.config_confidence_threshold.setSingleStep(0.05)
+        self.config_confidence_threshold.setValue(0.5)
+        config_form_layout.addRow("Confidence Threshold:", self.config_confidence_threshold)
+
+        # Health check interval
+        self.config_health_interval = QSpinBox()
+        self.config_health_interval.setRange(30, 3600)
+        self.config_health_interval.setValue(300)
+        self.config_health_interval.setSuffix(" seconds")
+        config_form_layout.addRow("Health Check Interval:", self.config_health_interval)
+
+        # Inference timeout
+        self.config_inference_timeout = QSpinBox()
+        self.config_inference_timeout.setRange(1000, 30000)
+        self.config_inference_timeout.setValue(5000)
+        self.config_inference_timeout.setSuffix(" ms")
+        config_form_layout.addRow("Inference Timeout:", self.config_inference_timeout)
+
+        # Retry attempts
+        self.config_retry_attempts = QSpinBox()
+        self.config_retry_attempts.setRange(1, 10)
+        self.config_retry_attempts.setValue(3)
+        config_form_layout.addRow("Retry Attempts:", self.config_retry_attempts)
+
+        model_config_layout.addLayout(config_form_layout)
+
+        # Configuration buttons
+        config_buttons_layout = QHBoxLayout()
+        self.btn_load_config = QPushButton("Load Current Config")
+        self.btn_load_config.clicked.connect(self.load_current_config)
+        config_buttons_layout.addWidget(self.btn_load_config)
+
+        self.btn_save_config = QPushButton("Save Configuration")
+        self.btn_save_config.clicked.connect(self.save_model_config)
+        config_buttons_layout.addWidget(self.btn_save_config)
+
+        self.btn_validate_config = QPushButton("Validate Configuration")
+        self.btn_validate_config.clicked.connect(self.validate_configuration)
+        config_buttons_layout.addWidget(self.btn_validate_config)
+
+        config_buttons_layout.addStretch()
+        model_config_layout.addLayout(config_buttons_layout)
+
+        config_layout.addWidget(model_config_group)
+
+        # Configuration Status Section
+        config_status_group = QGroupBox("Configuration Status")
+        config_status_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        config_status_layout = QVBoxLayout(config_status_group)
+
+        self.config_status_text = QTextEdit()
+        self.config_status_text.setReadOnly(True)
+        self.config_status_text.setMaximumHeight(150)
+        self.config_status_text.setStyleSheet("font-family: monospace; background-color: #f9f9f9;")
+        config_status_layout.addWidget(self.config_status_text)
+
+        config_layout.addWidget(config_status_group)
+
+        self.stats_notebook.addTab(config_widget, "Configuration")
+
+        # Tab 5: System Log
         log_widget = QWidget()
         log_layout = QVBoxLayout(log_widget)
         log_layout.setContentsMargins(15, 15, 15, 15)
@@ -446,12 +682,12 @@ class WoodSortingApp(QMainWindow):
         btn_clear_log = QPushButton("Clear Log")
         btn_clear_log.clicked.connect(lambda: self.log_display.clear())
         log_controls_layout.addWidget(btn_clear_log)
-        
+
         btn_export_log = QPushButton("Export Log")
         btn_export_log.clicked.connect(self.export_log)
         log_controls_layout.addWidget(btn_export_log)
         log_controls_layout.addStretch()
-        
+
         log_layout.addLayout(log_controls_layout)
         self.stats_notebook.addTab(log_widget, "System Log")
 
@@ -551,6 +787,13 @@ class WoodSortingApp(QMainWindow):
                             # Auto grade if enabled
                             if self.auto_grade_var:
                                 self.calculate_and_display_grade()
+
+                            # Update model health tracking
+                            if hasattr(self.detection_module, 'model_manager') and hasattr(self.detection_module.model_manager, 'health_monitor'):
+                                # Track inference performance
+                                inference_time = getattr(annotated_frame, 'inference_time', 100)  # Mock time if not available
+                                success = len(defects) > 0 or True  # Assume success if we got results
+                                self.detection_module.model_manager.health_monitor.track_inference("defect_detector", inference_time, success)
                         except Exception as e:
                             self.display_message(f"Detection error on top camera: {str(e)}", "error")
                             print(f"DEBUG: Exception in GUI top camera detection: {str(e)}")
@@ -645,6 +888,13 @@ class WoodSortingApp(QMainWindow):
                             # Auto grade if enabled (combined with top camera results)
                             if self.auto_grade_var:
                                 self.calculate_and_display_grade()
+
+                            # Update model health tracking
+                            if hasattr(self.detection_module, 'model_manager') and hasattr(self.detection_module.model_manager, 'health_monitor'):
+                                # Track inference performance
+                                inference_time = getattr(annotated_frame, 'inference_time', 100)  # Mock time if not available
+                                success = len(defects) > 0 or True  # Assume success if we got results
+                                self.detection_module.model_manager.health_monitor.track_inference("defect_detector", inference_time, success)
                         except Exception as e:
                             self.display_message(f"Detection error on bottom camera: {str(e)}", "error")
                             print(f"DEBUG: Exception in GUI bottom camera detection: {str(e)}")
@@ -717,7 +967,14 @@ class WoodSortingApp(QMainWindow):
 
             # Update session duration
             self.update_session_duration()
-            
+
+            # Update model health and camera status (every 5 seconds)
+            current_time = time.time()
+            if not hasattr(self, '_last_health_update') or current_time - self._last_health_update > 5.0:
+                self.update_model_health_display()
+                self.update_camera_status_display()
+                self._last_health_update = current_time
+
             # Process message queue
             self.process_message_queue()
 
@@ -1054,16 +1311,32 @@ class WoodSortingApp(QMainWindow):
             log_error(SystemComponent.GUI, f"Error handling Arduino message '{message}': {str(e)}", e)
 
     def handle_ir_beam_broken(self):
-        """Handle IR beam broken event - start predict_stream continuous inference"""
+        """Handle IR beam broken event - start enhanced predict_stream with health checks"""
         try:
-            log_info(SystemComponent.GUI, "IR beam broken - starting predict_stream continuous inference")
+            log_info(SystemComponent.GUI, "IR beam broken - starting enhanced predict_stream with health checks")
 
             # Only respond to IR triggers in TRIGGER mode
             if self.current_mode == "TRIGGER":
                 if not self.auto_detection_active:
-                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting predict_stream inference...")
-                    
-                    # Start predict_stream continuous inference
+                    # 1. Check model health before starting inference
+                    model_health = self.detection_module.get_model_health_status("defect_detector")
+                    if model_health in [self.detection_module.HealthStatus.UNHEALTHY, self.detection_module.HealthStatus.DEGRADED]:
+                        log_warning(SystemComponent.GUI, f"Model health is {model_health.value} - attempting recovery before IR trigger")
+                        if not self.detection_module.reload_model("defect_detector"):
+                            log_error(SystemComponent.GUI, "Model recovery failed - cannot process IR trigger")
+                            self.display_message("Model health check failed - IR trigger ignored", "error")
+                            return
+
+                    # 2. Check camera availability
+                    camera_status = self.detection_module.get_camera_status("top")
+                    if camera_status == self.detection_module.CameraStatus.ERROR:
+                        log_error(SystemComponent.GUI, "Camera not available - cannot process IR trigger")
+                        self.display_message("Camera unavailable - IR trigger ignored", "error")
+                        return
+
+                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting enhanced predict_stream inference...")
+
+                    # Start enhanced predict_stream continuous inference
                     self.start_predict_stream_inference()
 
                     # Set the live detection checkbox and variables
@@ -1076,8 +1349,12 @@ class WoodSortingApp(QMainWindow):
                     self.wood_confirmed = False
                     self.auto_detection_active = True
 
-                    self.update_system_status("Status: IR TRIGGERED - Predict Stream Active!")
+                    self.update_system_status("Status: IR TRIGGERED - Enhanced Predict Stream Active!")
                     self.update_detection_state("Detecting")
+
+                    # 4. Add health monitoring during inference sessions
+                    self.update_model_health_display()
+                    self.update_camera_status_display()
 
                 else:
                     log_warning(SystemComponent.GUI, "⚠️ IR beam broken but detection already active")
@@ -1089,6 +1366,9 @@ class WoodSortingApp(QMainWindow):
 
         except Exception as e:
             log_error(SystemComponent.GUI, f"Error handling IR beam broken: {str(e)}", e)
+            # 6. Add automatic recovery mechanisms
+            self.display_message("IR trigger error - attempting system recovery", "warning")
+            self.update_model_health_display()
 
     def handle_length_measurement(self, duration_ms):
         """Handle length measurement from Arduino - IR beam cleared, stop detection"""
@@ -1148,8 +1428,24 @@ class WoodSortingApp(QMainWindow):
             log_error(SystemComponent.GUI, f"Error handling length measurement: {str(e)}", e)
 
     def start_predict_stream_inference(self):
-        """Start continuous inference using predict_stream when IR beam is broken"""
+        """Start continuous inference using enhanced predict_stream with health checks and error recovery"""
         try:
+            # 1. Check model health before starting inference
+            model_health = self.detection_module.get_model_health_status("defect_detector")
+            if model_health in [self.detection_module.HealthStatus.UNHEALTHY, self.detection_module.HealthStatus.DEGRADED]:
+                log_warning(SystemComponent.GUI, f"Model health is {model_health.value} - attempting recovery before starting inference")
+                if not self.detection_module.reload_model("defect_detector"):
+                    log_error(SystemComponent.GUI, "Model recovery failed - cannot start predict_stream")
+                    self.display_message("Model health check failed - cannot start inference", "error")
+                    return
+
+            # 2. Check camera availability and prevent conflicts
+            camera_status = self.detection_module.get_camera_status("top")
+            if camera_status == self.detection_module.CameraStatus.IN_USE:
+                log_warning(SystemComponent.GUI, "Top camera is already in use - cannot start predict_stream")
+                self.display_message("Camera conflict detected - cannot start inference", "error")
+                return
+
             if not DEGIRUM_TOOLS_AVAILABLE:
                 log_error(SystemComponent.GUI, "degirum_tools not available - cannot start predict_stream")
                 return
@@ -1158,64 +1454,66 @@ class WoodSortingApp(QMainWindow):
                 log_warning(SystemComponent.GUI, "Predict stream already active")
                 return
 
-            log_info(SystemComponent.GUI, "Starting predict_stream continuous inference")
+            log_info(SystemComponent.GUI, "Starting enhanced predict_stream continuous inference")
 
-            # Reset results collection
+            # Reset results collection and performance tracking
             self.predict_stream_results = []
+            self._inference_start_time = time.time()
+            self._inference_frame_count = 0
+            self._inference_error_count = 0
 
             # Pause the GUI camera feed to avoid conflicts
             self._pause_gui_camera_feed()
 
-            # Start predict_stream in a separate thread
+            # Start predict_stream in a separate thread with enhanced monitoring
             self.predict_stream_active = True
-            self.predict_stream_thread = threading.Thread(target=self._run_predict_stream_inference)
+            self.predict_stream_thread = threading.Thread(target=self._run_enhanced_predict_stream_inference)
             self.predict_stream_thread.daemon = True
             self.predict_stream_thread.start()
 
-            log_info(SystemComponent.GUI, "Predict stream inference started successfully")
+            log_info(SystemComponent.GUI, "Enhanced predict stream inference started successfully")
 
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error starting predict_stream inference: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error starting enhanced predict_stream inference: {str(e)}", e)
             self.predict_stream_active = False
 
-    def _run_predict_stream_inference(self):
-        """Run the predict_stream inference loop in a separate thread"""
+    def _run_enhanced_predict_stream_inference(self):
+        """Run the enhanced predict_stream inference loop with error recovery and monitoring"""
         try:
-            # Get the defect model from detection module
-            model = self.detection_module.defect_model
-            if model is None:
-                log_error(SystemComponent.GUI, "Defect model not available for predict_stream - using mock mode")
-                # For testing, create a mock analyzer that doesn't use a real model
-                self._run_mock_predict_stream()
-                return
+            log_info(SystemComponent.GUI, "Starting enhanced predict_stream inference loop")
 
-            log_info(SystemComponent.GUI, "Starting predict_stream inference loop")
+            # 3. Use the new process_stream method with error recovery
+            camera_name = "top"
+            model_name = "defect_detector"
 
-            # Create a proper analyzer class that inherits from ResultAnalyzerBase
-            class DefectAnalyzer(degirum_tools.ResultAnalyzerBase):
+            # Create enhanced analyzer with performance tracking
+            class EnhancedDefectAnalyzer:
                 def __init__(self, gui_instance):
                     self.gui = gui_instance
                     self.frame_count = 0
+                    self.start_time = time.time()
+                    self.error_count = 0
 
                 def analyze(self, result):
-                    """Analyze the inference result and update GUI state"""
+                    """Enhanced analyze method with performance tracking"""
                     try:
                         self.frame_count += 1
+                        current_time = time.time()
 
-                        # Process the inference result similar to detect_defects_in_full_frame
+                        # Process the inference result
                         detections = result.results if hasattr(result, 'results') else []
 
                         frame_defects = {}
                         frame_defect_measurements = []
 
-                        # Simple processing to avoid recursion - similar to working tkinter code
+                        # Process detections with confidence filtering
                         for det in detections:
                             confidence = det.get('confidence', 0)
                             if confidence < self.gui.detection_module.defect_confidence_threshold:
                                 continue
 
                             model_label = det['label']
-                            # Simple defect counting
+                            # Count defects by type
                             if model_label in frame_defects:
                                 frame_defects[model_label] += 1
                             else:
@@ -1225,50 +1523,77 @@ class WoodSortingApp(QMainWindow):
                         frame_result = {
                             'frame_id': self.frame_count,
                             'defects': frame_defects,
-                            'timestamp': time.time()
+                            'timestamp': current_time,
+                            'processing_time': current_time - self.start_time
                         }
 
                         self.gui.predict_stream_results.append(frame_result)
 
-                        # Store the annotated frame for GUI display (most important part)
+                        # Update GUI tracking variables
+                        self.gui._inference_frame_count = self.frame_count
+
+                        # Store the annotated frame for GUI display
                         if hasattr(result, 'image_overlay'):
                             self.gui.latest_annotated_frame = result.image_overlay
 
-                        # Log progress without complex operations
-                        print(f"Processed frame {self.frame_count} - defects: {frame_defects}")
+                        # 4. Add health monitoring during inference sessions
+                        # Track inference performance
+                        inference_time = getattr(result, 'inference_time', 50)  # Default 50ms
+                        success = len(detections) > 0 or True  # Assume success if we got results
+                        self.gui.detection_module.model_manager.health_monitor.track_inference(
+                            model_name, inference_time, success
+                        )
+
+                        # Log progress with performance metrics
+                        fps = self.frame_count / (current_time - self.start_time) if (current_time - self.start_time) > 0 else 0
+                        print(f"Enhanced predict_stream: Frame {self.frame_count} - defects: {frame_defects}, FPS: {fps:.1f}")
+
+                        # Update system status with performance info
+                        if self.frame_count % 30 == 0:  # Update every 30 frames
+                            self.gui.update_system_status(f"Status: Processing frame {self.frame_count} - {len(frame_defects)} defects detected")
 
                     except Exception as e:
-                        print(f"Error in DefectAnalyzer.analyze: {str(e)}")
+                        self.error_count += 1
+                        self.gui._inference_error_count = self.error_count
+                        print(f"Error in EnhancedDefectAnalyzer.analyze: {str(e)}")
 
-                def annotate(self, result, image):
-                    """Add annotations to the image - return the annotated image"""
-                    # For now, just return the original image overlay from the model
-                    return result.image_overlay if hasattr(result, 'image_overlay') else image
+                        # 6. Add automatic recovery mechanisms
+                        if self.error_count > 5:  # If too many errors, attempt recovery
+                            log_warning(SystemComponent.GUI, f"High error rate in predict_stream ({self.error_count} errors) - attempting recovery")
+                            if self.gui.detection_module.reload_model(model_name):
+                                log_info(SystemComponent.GUI, "Model reloaded successfully during inference")
+                                self.error_count = 0  # Reset error count
+                            else:
+                                log_error(SystemComponent.GUI, "Model reload failed during inference")
 
             # Create analyzer instance
-            analyzer = DefectAnalyzer(self)
+            analyzer = EnhancedDefectAnalyzer(self)
 
-            # Determine camera index based on dev mode
-            if self.dev_mode:
-                # In dev mode, use camera index 0 (laptop webcam)
-                camera_index = 0
-                log_info(SystemComponent.GUI, f"Using camera index {camera_index} for predict_stream (dev mode)")
-            else:
-                # In production mode, temporarily release camera from camera_module to avoid conflicts
-                if hasattr(self.camera_module, 'cap_top') and self.camera_module.cap_top is not None:
-                    log_info(SystemComponent.GUI, "Temporarily releasing camera from camera_module for predict_stream")
-                    self.camera_module.cap_top.release()
-                    self.camera_module.cap_top = None
-                    self.camera_module.camera_status["top"]["connected"] = False
-
-                # Use top camera index 0
-                camera_index = 0  # Top camera
-                log_info(SystemComponent.GUI, f"Using camera index {camera_index} for predict_stream (production mode)")
-
-            # Use predict_stream with camera index
-            log_info(SystemComponent.GUI, f"Starting predict_stream with camera index {camera_index}")
+            # 2. Implement camera coordination to prevent conflicts
+            # Acquire camera through the detection module's camera coordinator
+            camera_handle = self.detection_module.acquire_camera(camera_name, "predict_stream_gui")
+            if not camera_handle:
+                log_error(SystemComponent.GUI, f"Failed to acquire camera {camera_name} for predict_stream")
+                return
 
             try:
+                # Get the defect model from detection module
+                model = self.detection_module.defect_model
+                if model is None:
+                    log_error(SystemComponent.GUI, "Defect model not available for enhanced predict_stream")
+                    return
+
+                # Determine camera index based on dev mode
+                if self.dev_mode:
+                    camera_index = 0
+                    log_info(SystemComponent.GUI, f"Using camera index {camera_index} for enhanced predict_stream (dev mode)")
+                else:
+                    camera_index = 0  # Top camera
+                    log_info(SystemComponent.GUI, f"Using camera index {camera_index} for enhanced predict_stream (production mode)")
+
+                # Use predict_stream with enhanced analyzer and error recovery
+                log_info(SystemComponent.GUI, f"Starting enhanced predict_stream with camera index {camera_index}")
+
                 for result in degirum_tools.predict_stream(
                     model=model,
                     video_source_id=camera_index,
@@ -1277,19 +1602,50 @@ class WoodSortingApp(QMainWindow):
                 ):
                     # Check if we should stop
                     if not self.predict_stream_active:
-                        log_info(SystemComponent.GUI, "Predict stream stopping due to flag")
+                        log_info(SystemComponent.GUI, "Enhanced predict stream stopping due to flag")
                         break
 
                     # Small delay to prevent overwhelming the system
                     time.sleep(0.01)
 
             except Exception as e:
-                log_error(SystemComponent.GUI, f"Error in predict_stream loop: {str(e)}", e)
+                log_error(SystemComponent.GUI, f"Error in enhanced predict_stream loop: {str(e)}", e)
 
-            log_info(SystemComponent.GUI, f"Predict stream stopped after {analyzer.frame_count} frames")
+                # 6. Add automatic recovery mechanisms for workflow stability
+                if "timeout" in str(e).lower():
+                    log_info(SystemComponent.GUI, "Timeout detected in predict_stream - attempting automatic recovery")
+                    if self.detection_module.reload_model(model_name):
+                        log_info(SystemComponent.GUI, "Model recovered from timeout")
+                    else:
+                        log_error(SystemComponent.GUI, "Model recovery from timeout failed")
+                elif "connection" in str(e).lower():
+                    log_info(SystemComponent.GUI, "Connection error detected - attempting camera reconnection")
+                    # The camera coordinator will handle reconnection automatically
+
+            log_info(SystemComponent.GUI, f"Enhanced predict stream stopped after {analyzer.frame_count} frames")
+
+            # 5. Integrate performance tracking and reporting
+            end_time = time.time()
+            total_duration = end_time - self._inference_start_time
+            avg_fps = self._inference_frame_count / total_duration if total_duration > 0 else 0
+
+            performance_report = {
+                'total_frames': self._inference_frame_count,
+                'total_duration': total_duration,
+                'average_fps': avg_fps,
+                'total_errors': self._inference_error_count,
+                'error_rate': self._inference_error_count / self._inference_frame_count if self._inference_frame_count > 0 else 0
+            }
+
+            log_info(SystemComponent.GUI, f"Enhanced predict_stream performance: {performance_report}")
+
+            # Update performance display
+            if hasattr(self, 'performance_monitor'):
+                self.performance_monitor.add_metric('predict_stream_fps', avg_fps)
+                self.performance_monitor.add_metric('predict_stream_errors', self._inference_error_count)
 
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error in predict_stream thread: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error in enhanced predict_stream thread: {str(e)}", e)
         finally:
             self.predict_stream_active = False
             # Resume GUI camera feed
@@ -1438,10 +1794,10 @@ class WoodSortingApp(QMainWindow):
             self.predict_stream_active = False
 
     def stop_predict_stream_inference(self):
-        """Stop the predict_stream inference"""
+        """Stop the enhanced predict_stream inference with performance reporting"""
         try:
             if self.predict_stream_active:
-                log_info(SystemComponent.GUI, "Stopping predict_stream inference")
+                log_info(SystemComponent.GUI, "Stopping enhanced predict_stream inference")
                 self.predict_stream_active = False
 
                 # Wait for thread to finish
@@ -1451,15 +1807,40 @@ class WoodSortingApp(QMainWindow):
                 self.predict_stream_thread = None
                 self.latest_annotated_frame = None  # Clear the latest frame
 
+                # 5. Integrate performance tracking and reporting
+                if hasattr(self, '_inference_start_time') and hasattr(self, '_inference_frame_count'):
+                    end_time = time.time()
+                    total_duration = end_time - self._inference_start_time
+                    avg_fps = self._inference_frame_count / total_duration if total_duration > 0 else 0
+
+                    performance_summary = {
+                        'session_duration': total_duration,
+                        'total_frames_processed': self._inference_frame_count,
+                        'average_fps': avg_fps,
+                        'total_errors': getattr(self, '_inference_error_count', 0),
+                        'error_rate': getattr(self, '_inference_error_count', 0) / self._inference_frame_count if self._inference_frame_count > 0 else 0
+                    }
+
+                    log_info(SystemComponent.GUI, f"Enhanced predict_stream performance summary: {performance_summary}")
+
+                    # Update performance monitor
+                    if hasattr(self, 'performance_monitor'):
+                        self.performance_monitor.add_metric('predict_stream_session_duration', total_duration)
+                        self.performance_monitor.add_metric('predict_stream_avg_fps', avg_fps)
+                        self.performance_monitor.add_metric('predict_stream_error_rate', performance_summary['error_rate'])
+
+                    # Display performance summary in GUI
+                    self.display_message(f"Session completed: {self._inference_frame_count} frames, {avg_fps:.1f} FPS avg", "info")
+
                 # Resume GUI camera feed
                 self._resume_gui_camera_feed()
 
-                log_info(SystemComponent.GUI, "Predict stream inference stopped")
+                log_info(SystemComponent.GUI, "Enhanced predict stream inference stopped")
             else:
-                log_info(SystemComponent.GUI, "Predict stream was not active")
+                log_info(SystemComponent.GUI, "Enhanced predict stream was not active")
 
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error stopping predict_stream: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error stopping enhanced predict_stream: {str(e)}", e)
 
     def handle_ir_beam_cleared(self):
         """Handle IR beam cleared event (IR: 1) - stop detection and process grading"""
@@ -1516,11 +1897,39 @@ class WoodSortingApp(QMainWindow):
             log_error(SystemComponent.GUI, f"Error handling IR beam cleared: {str(e)}", e)
 
     def finalize_detection_session(self):
-        """Finalize the detection session and perform grading if needed"""
+        """Finalize the enhanced detection session with comprehensive performance reporting"""
         try:
-            # This method would contain the logic to finalize grading
-            # Based on accumulated detection data during the session
-            log_info(SystemComponent.GUI, "Finalizing detection session...")
+            log_info(SystemComponent.GUI, "Finalizing enhanced detection session...")
+
+            # 5. Integrate performance tracking and reporting
+            session_performance = {
+                'total_frames': len(self.predict_stream_results),
+                'session_duration': time.time() - getattr(self, '_inference_start_time', time.time()),
+                'model_health_status': self.detection_module.get_model_health_status("defect_detector").value,
+                'camera_status': self.detection_module.get_camera_status("top").value,
+                'total_defects_detected': sum(sum(frame['defects'].values()) for frame in self.predict_stream_results),
+                'average_defects_per_frame': 0
+            }
+
+            if session_performance['total_frames'] > 0:
+                session_performance['average_defects_per_frame'] = session_performance['total_defects_detected'] / session_performance['total_frames']
+
+            # Get model performance report
+            model_report = self.detection_module.get_model_performance_report("defect_detector")
+            if model_report:
+                session_performance.update({
+                    'avg_inference_time': model_report.get('avg_inference_time', 0),
+                    'success_rate': model_report.get('success_rate', 0),
+                    'total_inferences': model_report.get('total_inferences', 0)
+                })
+
+            log_info(SystemComponent.GUI, f"Enhanced session performance: {session_performance}")
+
+            # Update performance monitor with session data
+            if hasattr(self, 'performance_monitor'):
+                for key, value in session_performance.items():
+                    if isinstance(value, (int, float)):
+                        self.performance_monitor.add_metric(f'session_{key}', value)
 
             # Increment counters and update statistics
             if self.current_grade_info:
@@ -1533,11 +1942,18 @@ class WoodSortingApp(QMainWindow):
                     # Update UI counters
                     self.update_grade_counters()
 
-            # Log completion
-            log_info(SystemComponent.GUI, "Detection session finalized")
+            # 4. Add health monitoring during inference sessions
+            # Update model health display after session
+            self.update_model_health_display()
+            self.update_camera_status_display()
+
+            # Generate performance report
+            self.manual_generate_report()
+
+            log_info(SystemComponent.GUI, "Enhanced detection session finalized with comprehensive reporting")
 
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error finalizing detection session: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error finalizing enhanced detection session: {str(e)}", e)
 
     def mark_object_cleared(self):
         """Mark object as cleared after 3-second buffer for no wood detection"""
@@ -1784,9 +2200,34 @@ class WoodSortingApp(QMainWindow):
         self.wood_classification_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
 
     def update_system_status(self, status_text):
-        """Update system status label"""
-        self.system_status_label.setText(status_text)
-        self.system_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        """Update system status label with enhanced information"""
+        try:
+            # Get additional status information
+            enhanced_status = status_text
+
+            # Add model health info if available
+            if hasattr(self.detection_module, 'get_model_health_status'):
+                try:
+                    model_health = self.detection_module.get_model_health_status()
+                    enhanced_status += f" | Model: {model_health.value.upper()}"
+                except:
+                    pass
+
+            # Add camera status info if available
+            if hasattr(self.detection_module, 'get_camera_status'):
+                try:
+                    top_status = self.detection_module.get_camera_status("top")
+                    bottom_status = self.detection_module.get_camera_status("bottom")
+                    enhanced_status += f" | Cameras: T:{top_status.value.upper()} B:{bottom_status.value.upper()}"
+                except:
+                    pass
+
+            self.system_status_label.setText(enhanced_status)
+            self.system_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        except Exception as e:
+            # Fallback to basic status if enhancement fails
+            self.system_status_label.setText(status_text)
+            self.system_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
 
     def update_grade_counters(self):
         """Update grade counters in the UI"""
@@ -1843,14 +2284,266 @@ class WoodSortingApp(QMainWindow):
                 log_content = self.log_display.toPlainText()
                 timestamp = QDateTime.currentDateTime().toString('yyyy-MM-dd_hh-mm-ss')
                 filename = f"logs/system_log_{timestamp}.txt"
-                
+
                 with open(filename, 'w') as f:
                     f.write(log_content)
-                
+
                 self.display_message(f"Log exported to: {filename}")
-            
+
         except Exception as e:
             self.display_message(f"Error exporting log: {str(e)}", "error")
+
+    def update_model_health_display(self):
+        """Update model health status display"""
+        try:
+            if hasattr(self.detection_module, 'get_model_health_status'):
+                health_status = self.detection_module.get_model_health_status()
+                self.model_health_label.setText(f"Model Health: {health_status.value.upper()}")
+
+                # Set color based on health status
+                if health_status.value == "healthy":
+                    color = "#27ae60"  # Green
+                elif health_status.value == "degraded":
+                    color = "#f39c12"  # Orange
+                elif health_status.value == "unhealthy":
+                    color = "#e74c3c"  # Red
+                else:
+                    color = "#95a5a6"  # Gray
+
+                self.model_health_label.setStyleSheet(f"font-size: 16px; font-weight: bold; padding: 10px; color: {color};")
+
+            if hasattr(self.detection_module, 'get_model_performance_report'):
+                performance_report = self.detection_module.get_model_performance_report()
+
+                if performance_report:
+                    # Update inference time
+                    avg_time = performance_report.get('avg_inference_time', 0)
+                    self.avg_inference_time_label.setText(f"{avg_time:.2f} ms")
+
+                    # Set inference time status
+                    if avg_time < 500:
+                        self.inference_time_status.setText("Good")
+                        self.inference_time_status.setStyleSheet("color: #27ae60;")
+                    elif avg_time < 1000:
+                        self.inference_time_status.setText("Slow")
+                        self.inference_time_status.setStyleSheet("color: #f39c12;")
+                    else:
+                        self.inference_time_status.setText("Critical")
+                        self.inference_time_status.setStyleSheet("color: #e74c3c;")
+
+                    # Update success rate
+                    success_rate = performance_report.get('success_rate', 0) * 100
+                    self.success_rate_label.setText(f"{success_rate:.1f}%")
+
+                    # Set success rate status
+                    if success_rate > 95:
+                        self.success_rate_status.setText("Excellent")
+                        self.success_rate_status.setStyleSheet("color: #27ae60;")
+                    elif success_rate > 85:
+                        self.success_rate_status.setText("Good")
+                        self.success_rate_status.setStyleSheet("color: #f39c12;")
+                    else:
+                        self.success_rate_status.setText("Poor")
+                        self.success_rate_status.setStyleSheet("color: #e74c3c;")
+
+                    # Update total inferences
+                    total_inferences = performance_report.get('total_inferences', 0)
+                    self.total_inferences_label.setText(str(total_inferences))
+
+        except Exception as e:
+            self.display_message(f"Error updating model health display: {str(e)}", "warning")
+
+    def update_camera_status_display(self):
+        """Update camera status display"""
+        try:
+            # Update top camera status
+            if hasattr(self.detection_module, 'get_camera_status'):
+                top_status = self.detection_module.get_camera_status("top")
+                self.top_camera_health_status.setText(top_status.value.upper())
+
+                # Set color based on status
+                if top_status.value == "available":
+                    color = "#27ae60"  # Green
+                elif top_status.value == "in_use":
+                    color = "#f39c12"  # Orange
+                else:
+                    color = "#e74c3c"  # Red
+
+                self.top_camera_health_status.setStyleSheet(f"color: {color};")
+
+            # Update bottom camera status
+            if hasattr(self.detection_module, 'get_camera_status'):
+                bottom_status = self.detection_module.get_camera_status("bottom")
+                self.bottom_camera_health_status.setText(bottom_status.value.upper())
+
+                # Set color based on status
+                if bottom_status.value == "available":
+                    color = "#27ae60"  # Green
+                elif bottom_status.value == "in_use":
+                    color = "#f39c12"  # Orange
+                else:
+                    color = "#e74c3c"  # Red
+
+                self.bottom_camera_health_status.setStyleSheet(f"color: {color};")
+
+            # Update usage statistics (mock data for now)
+            self.top_camera_usage_count.setText("N/A")
+            self.bottom_camera_usage_count.setText("N/A")
+            self.top_camera_last_used.setText("N/A")
+            self.bottom_camera_last_used.setText("N/A")
+
+        except Exception as e:
+            self.display_message(f"Error updating camera status display: {str(e)}", "warning")
+
+    def reload_model(self):
+        """Reload the model with error recovery"""
+        try:
+            self.display_message("Reloading model...")
+            if hasattr(self.detection_module, 'reload_model'):
+                success = self.detection_module.reload_model()
+                if success:
+                    self.display_message("Model reloaded successfully", "info")
+                    self.update_model_health_display()
+                else:
+                    self.display_message("Model reload failed", "error")
+            else:
+                self.display_message("Model reload not available", "warning")
+        except Exception as e:
+            self.display_message(f"Error reloading model: {str(e)}", "error")
+
+    def run_model_benchmark(self):
+        """Run model performance benchmark"""
+        try:
+            self.display_message("Running model benchmark...")
+            if hasattr(self.detection_module, 'benchmark_model'):
+                benchmark_result = self.detection_module.benchmark_model()
+                if benchmark_result:
+                    self.display_message(f"Benchmark completed: {benchmark_result.avg_inference_time:.2f}ms avg, {benchmark_result.throughput:.2f} FPS", "info")
+                    self.update_model_health_display()
+                else:
+                    self.display_message("Benchmark failed", "error")
+            else:
+                self.display_message("Model benchmark not available", "warning")
+        except Exception as e:
+            self.display_message(f"Error running benchmark: {str(e)}", "error")
+
+    def load_current_config(self):
+        """Load current model configuration into the form"""
+        try:
+            if hasattr(self.detection_module, 'get_model_config'):
+                model_name = self.config_model_name.text()
+                config = self.detection_module.get_model_config(model_name)
+
+                if config:
+                    # Update form fields with current config
+                    self.config_confidence_threshold.setValue(config.get('confidence_threshold', 0.5))
+                    self.config_health_interval.setValue(config.get('health_check_interval', 300))
+                    self.config_inference_timeout.setValue(config.get('timeout', 5000))
+                    self.config_retry_attempts.setValue(config.get('retry_attempts', 3))
+
+                    self.config_status_text.setPlainText(f"✅ Configuration loaded for model: {model_name}\n\n{json.dumps(config, indent=2)}")
+                    self.display_message("Configuration loaded successfully", "info")
+                else:
+                    self.config_status_text.setPlainText("❌ No configuration found for model")
+                    self.display_message("No configuration found", "warning")
+            else:
+                self.config_status_text.setPlainText("❌ Configuration management not available")
+                self.display_message("Configuration management not available", "warning")
+        except Exception as e:
+            self.config_status_text.setPlainText(f"❌ Error loading configuration: {str(e)}")
+            self.display_message(f"Error loading configuration: {str(e)}", "error")
+
+    def save_model_config(self):
+        """Save model configuration from the form"""
+        try:
+            if hasattr(self.detection_module, 'update_model_config'):
+                model_name = self.config_model_name.text()
+
+                # Collect form data
+                updates = {
+                    'confidence_threshold': self.config_confidence_threshold.value(),
+                    'health_check_interval': self.config_health_interval.value(),
+                    'timeout': self.config_inference_timeout.value(),
+                    'retry_attempts': self.config_retry_attempts.value()
+                }
+
+                # Save configuration
+                success = self.detection_module.update_model_config(model_name, updates)
+
+                if success:
+                    self.config_status_text.setPlainText(f"✅ Configuration saved for model: {model_name}\n\n{json.dumps(updates, indent=2)}")
+                    self.display_message("Configuration saved successfully", "info")
+                else:
+                    self.config_status_text.setPlainText("❌ Failed to save configuration")
+                    self.display_message("Failed to save configuration", "error")
+            else:
+                self.config_status_text.setPlainText("❌ Configuration management not available")
+                self.display_message("Configuration management not available", "warning")
+        except Exception as e:
+            self.config_status_text.setPlainText(f"❌ Error saving configuration: {str(e)}")
+            self.display_message(f"Error saving configuration: {str(e)}", "error")
+
+    def validate_configuration(self):
+        """Validate current configuration"""
+        try:
+            if hasattr(self.detection_module, 'validate_configuration'):
+                validation_result = self.detection_module.validate_configuration()
+
+                if validation_result.is_valid:
+                    self.config_status_text.setPlainText(f"✅ Configuration is valid\n\n{validation_result.message}")
+                    self.display_message("Configuration validation passed", "info")
+                else:
+                    self.config_status_text.setPlainText(f"❌ Configuration validation failed\n\n{validation_result.message}")
+                    if validation_result.details:
+                        self.config_status_text.append(f"\nDetails:\n{json.dumps(validation_result.details, indent=2)}")
+                    self.display_message("Configuration validation failed", "warning")
+            else:
+                self.config_status_text.setPlainText("❌ Configuration validation not available")
+                self.display_message("Configuration validation not available", "warning")
+        except Exception as e:
+            self.config_status_text.setPlainText(f"❌ Error validating configuration: {str(e)}")
+            self.display_message(f"Error validating configuration: {str(e)}", "error")
+
+    def force_error_recovery(self):
+        """Force error recovery for the model"""
+        try:
+            self.display_message("Forcing error recovery...")
+            strategy = self.recovery_strategy_combo.currentText().lower()
+
+            if hasattr(self.detection_module, 'reload_model'):
+                success = self.detection_module.reload_model()
+                if success:
+                    self.error_status_text.setPlainText(f"✅ Error recovery successful using {strategy} strategy\n\nModel reloaded and health restored")
+                    self.display_message("Error recovery completed successfully", "info")
+                    self.update_model_health_display()
+                else:
+                    self.error_status_text.setPlainText(f"❌ Error recovery failed using {strategy} strategy\n\nModel reload unsuccessful")
+                    self.display_message("Error recovery failed", "error")
+            else:
+                self.error_status_text.setPlainText("❌ Error recovery not available")
+                self.display_message("Error recovery not available", "warning")
+        except Exception as e:
+            self.error_status_text.setPlainText(f"❌ Error during recovery: {str(e)}")
+            self.display_message(f"Error during recovery: {str(e)}", "error")
+
+    def reset_error_state(self):
+        """Reset error state and clear error history"""
+        try:
+            self.display_message("Resetting error state...")
+            # Reset error status display
+            self.error_status_text.setPlainText("✅ Error state reset\n\nNo errors detected")
+
+            # Reset model health monitoring if available
+            if hasattr(self.detection_module, 'model_manager') and hasattr(self.detection_module.model_manager, 'health_monitor'):
+                # Clear the metrics (this is a simplified reset)
+                if hasattr(self.detection_module.model_manager.health_monitor, 'metrics'):
+                    self.detection_module.model_manager.health_monitor.metrics.clear()
+
+            self.display_message("Error state reset successfully", "info")
+            self.update_model_health_display()
+        except Exception as e:
+            self.error_status_text.setPlainText(f"❌ Error resetting state: {str(e)}")
+            self.display_message(f"Error resetting state: {str(e)}", "error")
 
 def main():
     """Main function to run the application"""

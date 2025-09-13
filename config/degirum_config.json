@@ -1,0 +1,42 @@
+{
+  "models": {
+    "defect_detector": {
+      "type": "defect",
+      "path": "/home/inspectura/Desktop/InspecturaGUI/models/UpdatedDefects--640x640_quant_hailort_hailo8_1/UpdatedDefects--640x640_quant_hailort_hailo8_1.hef",
+      "zoo_url": "/home/inspectura/Desktop/InspecturaGUI/models/UpdatedDefects--640x640_quant_hailort_hailo8_1",
+      "model_name": "UpdatedDefects--640x640_quant_hailort_hailo8_1",
+      "confidence_threshold": 0.5,
+      "input_shape": [
+        640,
+        640,
+        3
+      ],
+      "health_check_interval": 300,
+      "inference_host": "@local"
+    }
+  },
+  "inference": {
+    "fps": 30,
+    "batch_size": 1,
+    "timeout": 5000,
+    "retry_attempts": 3
+  },
+  "cameras": {
+    "top": {
+      "index": 0,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 30
+    },
+    "bottom": {
+      "index": 2,
+      "resolution": [
+        1920,
+        1080
+      ],
+      "fps": 30
+    }
+  }
+}
