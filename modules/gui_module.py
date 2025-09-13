@@ -11,7 +11,7 @@ import cv2
 import logging
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QGridLayout, QCheckBox, QTabWidget, QGroupBox, QTextEdit, QProgressBar, QScrollArea, QSizePolicy, QComboBox, QDoubleSpinBox, QSpinBox, QFormLayout, QLineEdit
+    QPushButton, QFrame, QGridLayout, QCheckBox, QTabWidget, QGroupBox, QTextEdit, QProgressBar, QScrollArea, QSizePolicy, QComboBox, QDoubleSpinBox, QSpinBox, QFormLayout, QLineEdit, QListWidget, QListWidgetItem
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QFont, QColor
 from PyQt5.QtCore import Qt, QTimer, QDateTime, QThread, pyqtSignal
@@ -31,13 +31,18 @@ from modules.detection_module import DetectionModule
 from modules.arduino_module import ArduinoModule
 from modules.reporting_module import ReportingModule
 from modules.grading_module import calculate_grade, determine_final_grade, get_grade_color
+from modules import grading_module
 from modules.utils_module import TOP_CAMERA_PIXEL_TO_MM, BOTTOM_CAMERA_PIXEL_TO_MM, WOOD_PALLET_WIDTH_MM, map_model_output_to_standard, calculate_defect_size
 from modules.error_handler import (
-    log_info, log_warning, log_error, SystemComponent, 
+    log_info, log_warning, log_error, SystemComponent,
     get_error_summary, error_handler, log_arduino_error
 )
 from modules.performance_monitor import get_performance_monitor, start_performance_monitoring
 from config.settings import get_config
+
+# ROI-based wood detection imports
+from modules.roi_module import ROIModule, ROIManager, OverlapDetector, ROIBasedWorkflowManager, ROIVisualizer, ROIStatus
+from modules.wood_detection_module import WoodDetectionEngine
 
 class WoodSortingApp(QMainWindow):
     def __init__(self, dev_mode=False, config=None):
@@ -77,6 +82,14 @@ class WoodSortingApp(QMainWindow):
         self.camera_module.initialize_cameras()  # Initialize cameras
         self.detection_module = DetectionModule(dev_mode=self.dev_mode)
         self.arduino_module = ArduinoModule(message_queue=self.message_queue)
+
+        # Initialize ROI-based wood detection system
+        self.roi_module = ROIModule()
+        self.roi_module.initialize_workflow_manager(
+            self.detection_module,
+            grading_module,
+            self.arduino_module
+        )
         
         # Setup Arduino connection (only in non-dev mode)
         if not self.dev_mode:
@@ -94,11 +107,11 @@ class WoodSortingApp(QMainWindow):
         self.live_detection_var = False # For live inference mode (continuous)
         self.auto_grade_var = False # For auto grading in live mode
         
-        # Wood detection state (IR-triggered workflow)
-        self.ir_triggered = False
+        # Wood detection state (ROI-triggered workflow)
+        self.roi_triggered = False
         self.wood_confirmed = False
-        self.wood_detection_active = False
-        self.current_detection_session = None
+        self.roi_detection_active = False
+        self.current_roi_session = None
 
         # Predict stream state
         self.predict_stream_active = False
@@ -130,6 +143,9 @@ class WoodSortingApp(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_feeds)
         self.timer.start(50)  # Update every 50ms (20 FPS)
+
+        # Initialize ROI configuration UI
+        self.update_roi_list()
 
     def setup_connections(self):
         pass
@@ -207,6 +223,47 @@ class WoodSortingApp(QMainWindow):
         self.wood_classification_label.setAlignment(Qt.AlignCenter)
         self.wood_classification_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #666;")
         defect_analysis_layout.addWidget(self.wood_classification_label)
+
+        # ROI Status Section
+        roi_status_group = QGroupBox("ROI Status")
+        roi_status_group.setStyleSheet("QGroupBox { font-size: 12px; font-weight: bold; }")
+        roi_status_layout = QVBoxLayout(roi_status_group)
+        roi_status_layout.setContentsMargins(5, 5, 5, 5)
+
+        # ROI activity indicators
+        self.roi_activity_label = QLabel("Active ROIs: 0")
+        self.roi_activity_label.setStyleSheet("font-size: 11px; color: #666;")
+        roi_status_layout.addWidget(self.roi_activity_label)
+
+        self.roi_overlap_label = QLabel("Overlaps: 0")
+        self.roi_overlap_label.setStyleSheet("font-size: 11px; color: #666;")
+        roi_status_layout.addWidget(self.roi_overlap_label)
+
+        self.roi_sessions_label = QLabel("Active Sessions: 0")
+        self.roi_sessions_label.setStyleSheet("font-size: 11px; color: #666;")
+        roi_status_layout.addWidget(self.roi_sessions_label)
+
+        defect_analysis_layout.addWidget(roi_status_group)
+
+        # Wood Detection Status Section
+        wood_status_group = QGroupBox("Wood Detection")
+        wood_status_group.setStyleSheet("QGroupBox { font-size: 12px; font-weight: bold; }")
+        wood_status_layout = QVBoxLayout(wood_status_group)
+        wood_status_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.wood_detections_label = QLabel("Detections: 0")
+        self.wood_detections_label.setStyleSheet("font-size: 11px; color: #666;")
+        wood_status_layout.addWidget(self.wood_detections_label)
+
+        self.wood_confidence_label = QLabel("Avg Confidence: 0.00")
+        self.wood_confidence_label.setStyleSheet("font-size: 11px; color: #666;")
+        wood_status_layout.addWidget(self.wood_confidence_label)
+
+        self.wood_features_label = QLabel("Features: None")
+        self.wood_features_label.setStyleSheet("font-size: 11px; color: #666;")
+        wood_status_layout.addWidget(self.wood_features_label)
+
+        defect_analysis_layout.addWidget(wood_status_group)
 
         # Add defect panel to cameras container
         top_section_layout.addWidget(cameras_container, 7)  # 70% width
@@ -666,7 +723,122 @@ class WoodSortingApp(QMainWindow):
 
         self.stats_notebook.addTab(config_widget, "Configuration")
 
-        # Tab 5: System Log
+        # Tab 5: ROI Configuration
+        roi_config_widget = QWidget()
+        roi_config_layout = QVBoxLayout(roi_config_widget)
+        roi_config_layout.setContentsMargins(15, 15, 15, 15)
+
+        # ROI Configuration Section
+        roi_config_group = QGroupBox("Interactive ROI Configuration")
+        roi_config_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        roi_config_group_layout = QVBoxLayout(roi_config_group)
+
+        # Camera selection
+        camera_selection_layout = QHBoxLayout()
+        camera_selection_layout.addWidget(QLabel("Camera:"))
+        self.roi_camera_combo = QComboBox()
+        self.roi_camera_combo.addItems(["top", "bottom"])
+        self.roi_camera_combo.currentTextChanged.connect(self.update_roi_list)
+        camera_selection_layout.addWidget(self.roi_camera_combo)
+        camera_selection_layout.addStretch()
+        roi_config_group_layout.addLayout(camera_selection_layout)
+
+        # ROI list
+        roi_list_group = QGroupBox("ROI List")
+        roi_list_layout = QVBoxLayout(roi_list_group)
+
+        self.roi_list_widget = QListWidget()
+        self.roi_list_widget.itemSelectionChanged.connect(self.on_roi_selected)
+        roi_list_layout.addWidget(self.roi_list_widget)
+
+        # ROI control buttons
+        roi_buttons_layout = QHBoxLayout()
+        self.btn_add_roi = QPushButton("Add ROI")
+        self.btn_add_roi.clicked.connect(self.add_roi)
+        roi_buttons_layout.addWidget(self.btn_add_roi)
+
+        self.btn_edit_roi = QPushButton("Edit ROI")
+        self.btn_edit_roi.clicked.connect(self.edit_roi)
+        roi_buttons_layout.addWidget(self.btn_edit_roi)
+
+        self.btn_delete_roi = QPushButton("Delete ROI")
+        self.btn_delete_roi.clicked.connect(self.delete_roi)
+        roi_buttons_layout.addWidget(self.btn_delete_roi)
+
+        self.btn_activate_roi = QPushButton("Activate")
+        self.btn_activate_roi.clicked.connect(self.activate_roi)
+        roi_buttons_layout.addWidget(self.btn_activate_roi)
+
+        self.btn_deactivate_roi = QPushButton("Deactivate")
+        self.btn_deactivate_roi.clicked.connect(self.deactivate_roi)
+        roi_buttons_layout.addWidget(self.btn_deactivate_roi)
+
+        roi_list_layout.addLayout(roi_buttons_layout)
+        roi_config_group_layout.addWidget(roi_list_group)
+
+        # ROI properties
+        roi_properties_group = QGroupBox("ROI Properties")
+        roi_properties_layout = QFormLayout(roi_properties_group)
+
+        self.roi_name_edit = QLineEdit()
+        roi_properties_layout.addRow("Name:", self.roi_name_edit)
+
+        self.roi_x1_spin = QSpinBox()
+        self.roi_x1_spin.setRange(0, 1280)
+        roi_properties_layout.addRow("X1:", self.roi_x1_spin)
+
+        self.roi_y1_spin = QSpinBox()
+        self.roi_y1_spin.setRange(0, 720)
+        roi_properties_layout.addRow("Y1:", self.roi_y1_spin)
+
+        self.roi_x2_spin = QSpinBox()
+        self.roi_x2_spin.setRange(0, 1280)
+        roi_properties_layout.addRow("X2:", self.roi_x2_spin)
+
+        self.roi_y2_spin = QSpinBox()
+        self.roi_y2_spin.setRange(0, 720)
+        roi_properties_layout.addRow("Y2:", self.roi_y2_spin)
+
+        self.roi_threshold_spin = QDoubleSpinBox()
+        self.roi_threshold_spin.setRange(0.0, 1.0)
+        self.roi_threshold_spin.setSingleStep(0.1)
+        self.roi_threshold_spin.setValue(0.5)
+        roi_properties_layout.addRow("Threshold:", self.roi_threshold_spin)
+
+        # Save/Load buttons
+        roi_save_load_layout = QHBoxLayout()
+        self.btn_save_roi_config = QPushButton("Save Configuration")
+        self.btn_save_roi_config.clicked.connect(self.save_roi_config)
+        roi_save_load_layout.addWidget(self.btn_save_roi_config)
+
+        self.btn_load_roi_config = QPushButton("Load Configuration")
+        self.btn_load_roi_config.clicked.connect(self.load_roi_config)
+        roi_save_load_layout.addWidget(self.btn_load_roi_config)
+
+        self.btn_reset_roi_config = QPushButton("Reset to Default")
+        self.btn_reset_roi_config.clicked.connect(self.reset_roi_config)
+        roi_save_load_layout.addWidget(self.btn_reset_roi_config)
+
+        roi_properties_layout.addRow(roi_save_load_layout)
+        roi_config_group_layout.addWidget(roi_properties_group)
+
+        roi_config_layout.addWidget(roi_config_group)
+
+        # ROI Preview Section
+        roi_preview_group = QGroupBox("ROI Preview")
+        roi_preview_layout = QVBoxLayout(roi_preview_group)
+
+        self.roi_preview_label = QLabel("Select an ROI to preview")
+        self.roi_preview_label.setAlignment(Qt.AlignCenter)
+        self.roi_preview_label.setMinimumSize(320, 180)
+        self.roi_preview_label.setStyleSheet("background-color: black; border: 1px solid gray;")
+        roi_preview_layout.addWidget(self.roi_preview_label)
+
+        roi_config_layout.addWidget(roi_preview_group)
+
+        self.stats_notebook.addTab(roi_config_widget, "ROI Config")
+
+        # Tab 6: System Log
         log_widget = QWidget()
         log_layout = QVBoxLayout(log_widget)
         log_layout.setContentsMargins(15, 15, 15, 15)
@@ -817,56 +989,45 @@ class WoodSortingApp(QMainWindow):
                     # except Exception as e:
                     #     self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
 
-                    # REMOVED: Wood detection logic - focusing on full-frame defect detection only
-                    # try:
-                    #     # Always run wood detection for ROI alerts and bounding boxes
-                    #     wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
-                    #
-                    #     if wood_detected and wood_bbox:
-                    #         # Check if wood bbox intersects with any ROI
-                    #         wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "top")
-                    #
-                    #         # Add red border and text if wood intersects ROI
-                    #         if wood_intersects_roi:
-                    #             self._add_misalignment_indicators(annotated_frame)
-                    #             print(f"DEBUG: Added misalignment indicators for top camera - wood bbox: {wood_bbox}")
-                    #
-                    #         # Set wood confirmation flag during IR-triggered detection
-                    #         if self.current_mode == "TRIGGER" and self.auto_detection_active and not self.wood_confirmed:
-                    #             self.wood_confirmed = True
-                    #             log_info(SystemComponent.GUI, "✅ Wood confirmed during IR trigger period")
-                    #             self.update_system_status("Status: Wood detected - collecting defect data...")
-                    #
-                    #         # Draw bounding boxes regardless of live detection status
-                    #         if self.wood_detection_checkbox.isChecked():
-                    #             # Draw wood bounding box
-                    #             x1, y1, x2, y2 = wood_bbox
-                    #             if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
-                    #                 # Choose color based on ROI intersection
-                    #                 box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
-                    #
-                    #                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
-                    #
-                    #                 # Add corner markers
-                    #                 corner_size = 25
-                    #                 cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
-                    #
-                    #                 # Add label
-                    #                 status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
-                    #                 cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
-                    #                            (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
-                    #
-                    #                 print(f"DEBUG: Drew bounding box for top camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
-                    # except Exception as e:
-                    #     self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
-                    #     print(f"DEBUG: Exception in top camera ROI system: {str(e)}")
+                    # INTEGRATED: ROI-based wood detection and visual feedback
+                    try:
+                        # Process frame through ROI module for wood detection and overlap analysis
+                        roi_results = self.roi_module.process_frame(annotated_frame, "top")
+
+                        # Extract results
+                        wood_detections = roi_results.get('wood_detections', [])
+                        overlaps = roi_results.get('overlaps', {})
+                        annotated_frame = roi_results.get('annotated_frame', annotated_frame)
+
+                        # Handle ROI overlap triggers
+                        overlapping_roi_ids = []
+                        for roi_ids in overlaps.values():
+                            overlapping_roi_ids.extend(roi_ids)
+
+                        if overlapping_roi_ids and self.current_mode == "TRIGGER" and not self.auto_detection_active:
+                            # Trigger ROI-based workflow
+                            self.handle_roi_wood_overlap("top", wood_detections, overlapping_roi_ids)
+
+                        # Update wood confirmation flag during ROI-triggered detection
+                        if self.current_mode == "TRIGGER" and self.auto_detection_active and not self.wood_confirmed and wood_detections:
+                            self.wood_confirmed = True
+                            log_info(SystemComponent.GUI, "✅ Wood confirmed during ROI trigger period")
+                            self.update_system_status("Status: Wood detected in ROI - collecting defect data...")
+
+                        # Visual feedback for ROI and wood detection status
+                        if self.roi_checkbox.isChecked():
+                            # ROI overlays are already drawn by roi_module.process_frame
+                            pass
+
+                        if self.wood_detection_checkbox.isChecked() and wood_detections:
+                            # Wood detection overlays are already drawn by roi_module.process_frame
+                            pass
+
+                        print(f"DEBUG: ROI processing complete - wood detections: {len(wood_detections)}, overlaps: {len(overlaps)}")
+
+                    except Exception as e:
+                        self.display_message(f"Error in ROI-based detection system: {str(e)}", "warning")
+                        print(f"DEBUG: Exception in ROI system: {str(e)}")
 
                     # Convert and display
                     self.display_frame(annotated_frame, self.top_camera_label)
@@ -911,56 +1072,50 @@ class WoodSortingApp(QMainWindow):
                     # except Exception as e:
                     #     self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
 
-                    # REMOVED: Wood detection logic - focusing on full-frame defect detection only
-                    # try:
-                    #     # Always run wood detection for ROI alerts and bounding boxes
-                    #     wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
-                    #
-                    #     if wood_detected and wood_bbox:
-                    #         # Check if wood bbox intersects with any ROI
-                    #         wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "bottom")
-                    #
-                    #         # Add red border and text if wood intersects ROI
-                    #         if wood_intersects_roi:
-                    #             self._add_misalignment_indicators(annotated_frame)
-                    #             print(f"DEBUG: Added misalignment indicators for bottom camera - wood bbox: {wood_bbox}")
-                    #
-                    #         # Set wood confirmation flag during IR-triggered detection
-                    #         if self.current_mode == "TRIGGER" and self.auto_detection_active and not self.wood_confirmed:
-                    #             self.wood_confirmed = True
-                    #             log_info(SystemComponent.GUI, "✅ Wood confirmed during IR trigger period (bottom camera)")
-                    #             self.update_system_status("Status: Wood detected - collecting defect data...")
-                    #
-                    #         # Draw bounding boxes regardless of live detection status
-                    #         if self.wood_detection_checkbox.isChecked():
-                    #             # Draw wood bounding box
-                    #             x1, y1, x2, y2 = wood_bbox
-                    #             if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
-                    #                 # Choose color based on ROI intersection
-                    #                 box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
-                    #
-                    #                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
-                    #
-                    #                 # Add corner markers
-                    #                 corner_size = 25
-                    #                 cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
-                    #                 cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
-                    #
-                    #                 # Add label
-                    #                 status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
-                    #                 cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
-                    #                            (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
-                    #
-                    #                 print(f"DEBUG: Drew bounding box for bottom camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
-                    # except Exception as e:
-                    #     self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
-                    #     print(f"DEBUG: Exception in bottom camera ROI system: {str(e)}")
+                    # INTEGRATED: ROI-based wood detection and visual feedback
+                    try:
+                        # Process frame through ROI module for wood detection and overlap analysis
+                        roi_results = self.roi_module.process_frame(annotated_frame, "bottom")
+
+                        # Extract results
+                        wood_detections = roi_results.get('wood_detections', [])
+                        overlaps = roi_results.get('overlaps', {})
+                        annotated_frame = roi_results.get('annotated_frame', annotated_frame)
+
+                        # Handle ROI overlap triggers
+                        overlapping_roi_ids = []
+                        for roi_ids in overlaps.values():
+                            overlapping_roi_ids.extend(roi_ids)
+
+                        if overlapping_roi_ids and self.current_mode == "TRIGGER" and not self.auto_detection_active:
+                            # Trigger ROI-based workflow
+                            self.handle_roi_wood_overlap("bottom", wood_detections, overlapping_roi_ids)
+
+                        # Update wood confirmation flag during ROI-triggered detection
+                        if self.current_mode == "TRIGGER" and self.auto_detection_active and not self.wood_confirmed and wood_detections:
+                            self.wood_confirmed = True
+                            log_info(SystemComponent.GUI, "✅ Wood confirmed during ROI trigger period (bottom camera)")
+                            self.update_system_status("Status: Wood detected in ROI - collecting defect data...")
+
+                        # Enhanced visual feedback for ROI and wood detection status
+                        if self.roi_checkbox.isChecked():
+                            # ROI overlays are already drawn by roi_module.process_frame
+                            # Add additional status information overlay
+                            self._add_roi_status_overlay(annotated_frame, camera_name, overlaps)
+
+                        if self.wood_detection_checkbox.isChecked() and wood_detections:
+                            # Wood detection overlays are already drawn by roi_module.process_frame
+                            # Add confidence score overlays
+                            self._add_wood_detection_overlays(annotated_frame, wood_detections)
+
+                        # Update status displays with real-time information
+                        self.update_roi_status_display(camera_name, overlaps, wood_detections)
+
+                        print(f"DEBUG: ROI processing complete for bottom camera - wood detections: {len(wood_detections)}, overlaps: {len(overlaps)}")
+
+                    except Exception as e:
+                        self.display_message(f"Error in ROI-based detection system (bottom): {str(e)}", "warning")
+                        print(f"DEBUG: Exception in ROI system (bottom): {str(e)}")
 
                     # Convert and display
                     self.display_frame(annotated_frame, self.bottom_camera_label)
@@ -1108,34 +1263,41 @@ class WoodSortingApp(QMainWindow):
             self.bottom_camera_status.setStyleSheet(f"font-size: 12px; color: {color};")
 
     def update_arduino_status(self):
-        """Update Arduino connection status display"""
+        """Update Arduino connection status display with concise text"""
         try:
             if self.arduino_module:
                 status = self.arduino_module.get_connection_status()
                 is_connected = status.get("connected", False)
                 port = status.get("port", "None")
 
-                status_text = f"Arduino: {'Connected' if is_connected else 'Disconnected'}"
-                if port and port != "None":
-                    status_text += f" ({port})"
+                # Make status text more concise
+                if is_connected:
+                    # Extract just the port number for brevity
+                    if port and port != "None":
+                        port_short = port.split('/')[-1] if '/' in port else port[:8]  # Last part or first 8 chars
+                        status_text = f"Arduino: ✓ {port_short}"
+                    else:
+                        status_text = "Arduino: ✓ Connected"
+                else:
+                    status_text = "Arduino: ✗ Disconnected"
 
                 color = "green" if is_connected else "red"
                 self.arduino_status.setText(status_text)
-                self.arduino_status.setStyleSheet(f"font-size: 12px; color: {color};")
+                self.arduino_status.setStyleSheet(f"font-size: 11px; color: {color}; font-weight: bold;")
 
-                # Update system status if Arduino status changed
+                # Update system status if Arduino status changed (without redundant info)
                 if is_connected:
-                    self.update_system_status("Arduino connected and ready")
+                    self.update_system_status("Arduino ready")
                 else:
-                    self.update_system_status("Arduino disconnected - running in manual mode")
+                    self.update_system_status("Arduino offline - manual mode")
             else:
-                self.arduino_status.setText("Arduino: Module not initialized")
-                self.arduino_status.setStyleSheet("font-size: 12px; color: orange;")
+                self.arduino_status.setText("Arduino: N/A")
+                self.arduino_status.setStyleSheet("font-size: 11px; color: orange; font-weight: bold;")
 
         except Exception as e:
             log_error(SystemComponent.GUI, f"Error updating Arduino status: {str(e)}", e)
-            self.arduino_status.setText("Arduino: Status error")
-            self.arduino_status.setStyleSheet("font-size: 12px; color: red;")
+            self.arduino_status.setText("Arduino: Error")
+            self.arduino_status.setStyleSheet("font-size: 11px; color: red; font-weight: bold;")
 
     def calculate_and_display_grade(self):
         """Calculate grade from current defects and display results"""
@@ -1166,12 +1328,22 @@ class WoodSortingApp(QMainWindow):
                     # Add defect details
                     all_defect_lists.extend(camera_defect_list)
 
-            # Calculate grade
-            grade_info = calculate_grade(all_defects)
-            final_grade = determine_final_grade(grade_info)
-            
-            print(f"DEBUG: Grading - all_defects: {all_defects}")
-            print(f"DEBUG: Grading - grade_info: {grade_info}")
+            # ✅ FIXED: Calculate separate grades for top and bottom cameras
+            top_defects = self.current_defects.get("top", {}).get("defects", {})
+            bottom_defects = self.current_defects.get("bottom", {}).get("defects", {})
+
+            top_grade_info = calculate_grade(top_defects)
+            bottom_grade_info = calculate_grade(bottom_defects)
+
+            # Extract grade values
+            top_grade = top_grade_info.get('grade', 0)
+            bottom_grade = bottom_grade_info.get('grade', 0)
+
+            # ✅ FIXED: Pass both grades to determine_final_grade
+            final_grade = determine_final_grade(top_grade, bottom_grade)
+
+            print(f"DEBUG: Grading - top_defects: {top_defects}, bottom_defects: {bottom_defects}")
+            print(f"DEBUG: Grading - top_grade: {top_grade}, bottom_grade: {bottom_grade}")
             print(f"DEBUG: Grading - final_grade: {final_grade}")
             
             # Store current grade info
@@ -1179,9 +1351,10 @@ class WoodSortingApp(QMainWindow):
                 'grade': final_grade,
                 'defects': all_defects,
                 'defect_list': all_defect_lists,
-                'grade_info': grade_info
+                'top_grade_info': top_grade_info,
+                'bottom_grade_info': bottom_grade_info
             }
-            
+
             # Update grade display
             grade_color = get_grade_color(final_grade)
             self.current_grade_label.setText(f"Final Grade: {final_grade}")
@@ -1194,8 +1367,8 @@ class WoodSortingApp(QMainWindow):
             # Update wood classification
             self.update_wood_classification()
 
-            # Update defect details
-            self.update_defect_details(all_defects, all_defect_lists, grade_info)
+            # Update defect details - use top_grade_info as primary
+            self.update_defect_details(all_defects, all_defect_lists, top_grade_info)
 
             # Update detection state
             self.update_detection_state("Grading")
@@ -1220,10 +1393,53 @@ class WoodSortingApp(QMainWindow):
         except Exception as e:
             self.display_message(f"Error calculating grade: {str(e)}", "error")
 
+    def update_roi_status_display(self, camera_name, overlaps, wood_detections):
+        """Update ROI and wood detection status displays"""
+        try:
+            # Update ROI activity
+            active_rois = self.roi_module.roi_manager.get_active_rois(camera_name)
+            self.roi_activity_label.setText(f"Active ROIs: {len(active_rois)}")
+
+            # Update overlap information
+            total_overlaps = len(overlaps) if overlaps else 0
+            self.roi_overlap_label.setText(f"Overlaps: {total_overlaps}")
+
+            # Update session information
+            if hasattr(self.roi_module, 'workflow_manager') and self.roi_module.workflow_manager:
+                active_sessions = len(self.roi_module.workflow_manager.get_active_sessions(camera_name))
+                self.roi_sessions_label.setText(f"Active Sessions: {active_sessions}")
+            else:
+                self.roi_sessions_label.setText("Active Sessions: N/A")
+
+            # Update wood detection information
+            detection_count = len([d for d in wood_detections if d.detected]) if wood_detections else 0
+            self.wood_detections_label.setText(f"Detections: {detection_count}")
+
+            # Calculate average confidence
+            if wood_detections:
+                confidences = [d.confidence for d in wood_detections if d.detected]
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+                self.wood_confidence_label.setText(f"Avg Confidence: {avg_confidence:.2f}")
+            else:
+                self.wood_confidence_label.setText("Avg Confidence: 0.00")
+
+            # Update features information
+            if wood_detections and wood_detections[0].detected:
+                features = wood_detections[0].features
+                if features and 'dominant_color' in features:
+                    self.wood_features_label.setText(f"Features: {features['dominant_color']}")
+                else:
+                    self.wood_features_label.setText("Features: Basic")
+            else:
+                self.wood_features_label.setText("Features: None")
+
+        except Exception as e:
+            self.display_message(f"Error updating ROI status display: {str(e)}", "warning")
+
     def update_defect_details(self, defects, defect_list, grade_info):
         """Update the defect details display"""
         details_text = "=== DEFECT ANALYSIS ===\n\n"
-        
+
         # Defect summary
         if defects:
             details_text += "Defect Summary:\n"
@@ -1231,27 +1447,36 @@ class WoodSortingApp(QMainWindow):
                 details_text += f"• {defect_type}: {count}\n"
         else:
             details_text += "No defects detected.\n"
-        
+
         details_text += "\n=== GRADE CALCULATION ===\n\n"
-        
-        # Grade breakdown
+
+        # Grade breakdown - handle both old and new formats
         if grade_info:
-            for grade, criteria in grade_info.items():
-                if criteria['meets_criteria']:
-                    details_text += f"✓ Grade {grade}: MEETS CRITERIA\n"
-                    details_text += f"  Max defects allowed: {criteria['max_defects']}\n"
-                    details_text += f"  Current defects: {criteria['current_defects']}\n\n"
-                else:
-                    details_text += f"✗ Grade {grade}: EXCEEDS LIMITS\n"
-                    details_text += f"  Max defects allowed: {criteria['max_defects']}\n"
-                    details_text += f"  Current defects: {criteria['current_defects']}\n\n"
-        
+            # Check if it's the new format (dict with grade keys)
+            if isinstance(grade_info, dict) and any(isinstance(k, int) for k in grade_info.keys()):
+                # New format: {grade: criteria}
+                for grade, criteria in grade_info.items():
+                    if isinstance(criteria, dict) and 'meets_criteria' in criteria:
+                        if criteria['meets_criteria']:
+                            details_text += f"✓ Grade {grade}: MEETS CRITERIA\n"
+                            details_text += f"  Max defects allowed: {criteria.get('max_defects', 'N/A')}\n"
+                            details_text += f"  Current defects: {criteria.get('current_defects', 'N/A')}\n\n"
+                        else:
+                            details_text += f"✗ Grade {grade}: EXCEEDS LIMITS\n"
+                            details_text += f"  Max defects allowed: {criteria.get('max_defects', 'N/A')}\n"
+                            details_text += f"  Current defects: {criteria.get('current_defects', 'N/A')}\n\n"
+                    else:
+                        details_text += f"Grade {grade}: {criteria}\n"
+            else:
+                # Old format or other structure
+                details_text += f"Grade Information: {grade_info}\n"
+
         # Detailed defect list
         if defect_list:
             details_text += "=== DETAILED DEFECTS ===\n\n"
             for i, (defect_type, x, y) in enumerate(defect_list, 1):
                 details_text += f"{i}. {defect_type} at ({x:.1f}, {y:.1f})\n"
-        
+
         self.defect_details_text.setPlainText(details_text)
 
     def update_session_duration(self):
@@ -1287,57 +1512,62 @@ class WoodSortingApp(QMainWindow):
                 actual_message = str(message)
                 log_info(SystemComponent.GUI, f"Arduino message received: {actual_message}")
 
+            # LEGACY IR SUPPORT: Keep IR beam messages for backward compatibility
             if actual_message == "B":
                 # IR beam broken - start wood detection workflow (legacy support)
-                self.handle_ir_beam_broken()
+                log_info(SystemComponent.GUI, "Legacy IR beam broken message received - ignoring (ROI-based system active)")
+                self.update_system_status("Status: Legacy IR message received - using ROI-based detection")
             elif actual_message == "IR: 0" or actual_message == "IR:0":
-                # IR beam broken - start wood detection workflow
-                self.handle_ir_beam_broken()
+                # IR beam broken - start wood detection workflow (legacy support)
+                log_info(SystemComponent.GUI, "Legacy IR beam broken message received - ignoring (ROI-based system active)")
+                self.update_system_status("Status: Legacy IR message received - using ROI-based detection")
             elif actual_message == "IR: 1" or actual_message == "IR:1":
-                # IR beam cleared - stop detection and process grading
-                self.handle_ir_beam_cleared()
+                # IR beam cleared - stop detection and process grading (legacy support)
+                log_info(SystemComponent.GUI, "Legacy IR beam cleared message received - ignoring (ROI-based system active)")
+                self.update_system_status("Status: Legacy IR message received - using ROI-based detection")
             elif actual_message.startswith("L:"):
                 # Length measurement received (legacy support)
                 try:
                     duration_ms = int(actual_message.split(":")[1])
-                    self.handle_length_measurement(duration_ms)
+                    log_info(SystemComponent.GUI, f"Legacy length measurement received: {duration_ms}ms - ignoring (ROI-based system active)")
+                    self.update_system_status(f"Status: Legacy length measurement received - using ROI-based detection")
                 except (ValueError, IndexError) as e:
                     log_error(SystemComponent.GUI, f"Invalid length message format: {actual_message}", e)
             else:
-                # Other Arduino messages
+                # Other Arduino messages (status updates, etc.)
                 self.update_system_status(f"Arduino: {actual_message}")
 
         except Exception as e:
             log_error(SystemComponent.GUI, f"Error handling Arduino message '{message}': {str(e)}", e)
 
-    def handle_ir_beam_broken(self):
-        """Handle IR beam broken event - start enhanced predict_stream with health checks"""
+    def handle_roi_wood_overlap(self, camera_name: str, wood_detections: list, overlapping_rois: list):
+        """Handle wood-ROI overlap detection - start ROI-based workflow"""
         try:
-            log_info(SystemComponent.GUI, "IR beam broken - starting enhanced predict_stream with health checks")
+            log_info(SystemComponent.GUI, f"Wood-ROI overlap detected on {camera_name} - starting ROI-based workflow")
 
-            # Only respond to IR triggers in TRIGGER mode
+            # Only respond to ROI triggers in TRIGGER mode
             if self.current_mode == "TRIGGER":
                 if not self.auto_detection_active:
                     # 1. Check model health before starting inference
                     model_health = self.detection_module.get_model_health_status("defect_detector")
                     if model_health in [self.detection_module.HealthStatus.UNHEALTHY, self.detection_module.HealthStatus.DEGRADED]:
-                        log_warning(SystemComponent.GUI, f"Model health is {model_health.value} - attempting recovery before IR trigger")
+                        log_warning(SystemComponent.GUI, f"Model health is {model_health.value} - attempting recovery before ROI trigger")
                         if not self.detection_module.reload_model("defect_detector"):
-                            log_error(SystemComponent.GUI, "Model recovery failed - cannot process IR trigger")
-                            self.display_message("Model health check failed - IR trigger ignored", "error")
+                            log_error(SystemComponent.GUI, "Model recovery failed - cannot process ROI trigger")
+                            self.display_message("Model health check failed - ROI trigger ignored", "error")
                             return
 
                     # 2. Check camera availability
-                    camera_status = self.detection_module.get_camera_status("top")
+                    camera_status = self.detection_module.get_camera_status(camera_name)
                     if camera_status == self.detection_module.CameraStatus.ERROR:
-                        log_error(SystemComponent.GUI, "Camera not available - cannot process IR trigger")
-                        self.display_message("Camera unavailable - IR trigger ignored", "error")
+                        log_error(SystemComponent.GUI, f"Camera {camera_name} not available - cannot process ROI trigger")
+                        self.display_message("Camera unavailable - ROI trigger ignored", "error")
                         return
 
-                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting enhanced predict_stream inference...")
+                    log_info(SystemComponent.GUI, f"✅ TRIGGER MODE: Starting ROI-based workflow for {camera_name}")
 
-                    # Start enhanced predict_stream continuous inference
-                    self.start_predict_stream_inference()
+                    # Start ROI-based detection workflow
+                    self.start_roi_based_workflow(camera_name, wood_detections, overlapping_rois)
 
                     # Set the live detection checkbox and variables
                     self.live_detection_checkbox.setChecked(True)
@@ -1345,29 +1575,28 @@ class WoodSortingApp(QMainWindow):
                     self.auto_grade_var = True
 
                     # Update states
-                    self.ir_triggered = True
-                    self.wood_confirmed = False
+                    self.roi_triggered = True
+                    self.wood_confirmed = True  # Wood is confirmed by ROI overlap
                     self.auto_detection_active = True
 
-                    self.update_system_status("Status: IR TRIGGERED - Enhanced Predict Stream Active!")
+                    self.update_system_status(f"Status: ROI TRIGGERED - Wood detected in {camera_name}!")
                     self.update_detection_state("Detecting")
 
-                    # 4. Add health monitoring during inference sessions
+                    # Add health monitoring during inference sessions
                     self.update_model_health_display()
                     self.update_camera_status_display()
 
                 else:
-                    log_warning(SystemComponent.GUI, "⚠️ IR beam broken but detection already active")
+                    log_warning(SystemComponent.GUI, "⚠️ ROI overlap detected but detection already active")
             else:
-                # In IDLE or CONTINUOUS mode, just log the IR signal but don't act on it
-                log_info(SystemComponent.GUI, f"❌ IR beam broken received but system is in {self.current_mode} mode - ignoring trigger")
-                self.update_system_status(f"Status: IR signal ignored ({self.current_mode} mode)")
+                # In IDLE or CONTINUOUS mode, just log the ROI signal but don't act on it
+                log_info(SystemComponent.GUI, f"❌ ROI overlap detected but system is in {self.current_mode} mode - ignoring trigger")
+                self.update_system_status(f"Status: ROI signal ignored ({self.current_mode} mode)")
                 self.update_detection_state("Waiting")
 
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error handling IR beam broken: {str(e)}", e)
-            # 6. Add automatic recovery mechanisms
-            self.display_message("IR trigger error - attempting system recovery", "warning")
+            log_error(SystemComponent.GUI, f"Error handling ROI wood overlap: {str(e)}", e)
+            self.display_message("ROI trigger error - attempting system recovery", "warning")
             self.update_model_health_display()
 
     def handle_length_measurement(self, duration_ms):
@@ -1842,17 +2071,17 @@ class WoodSortingApp(QMainWindow):
         except Exception as e:
             log_error(SystemComponent.GUI, f"Error stopping enhanced predict_stream: {str(e)}", e)
 
-    def handle_ir_beam_cleared(self):
-        """Handle IR beam cleared event (IR: 1) - stop detection and process grading"""
+    def handle_roi_session_end(self, camera_name: str, session_results: dict):
+        """Handle ROI session end - stop detection and process grading"""
         try:
-            log_info(SystemComponent.GUI, "IR beam cleared (IR: 1) - stopping detection and processing grade")
+            log_info(SystemComponent.GUI, f"ROI session ended for {camera_name} - processing accumulated defects")
 
-            # Only respond to IR triggers in TRIGGER mode
+            # Only respond to ROI triggers in TRIGGER mode
             if self.current_mode == "TRIGGER" and self.auto_detection_active:
-                log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Processing predict_stream results...")
+                log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Processing ROI session results...")
 
-                # Stop predict_stream inference
-                self.stop_predict_stream_inference()
+                # Stop ROI-based detection workflow
+                self.stop_roi_based_workflow(camera_name)
 
                 # Deactivate the checkboxes
                 self.live_detection_checkbox.setChecked(False)
@@ -1864,37 +2093,122 @@ class WoodSortingApp(QMainWindow):
 
                 # Stop detection session
                 self.auto_detection_active = False
-                self.ir_triggered = False
+                self.roi_triggered = False
 
-                if self.wood_confirmed:
-                    # Wood was detected, calculate grade from collected defects
-                    log_info(SystemComponent.GUI, "Wood confirmed - calculating grade from predict_stream defect data")
+                if session_results and session_results.get('total_frames', 0) > 0:
+                    # Wood was detected and defects accumulated, calculate grade
+                    log_info(SystemComponent.GUI, "Wood confirmed - calculating grade from ROI session defect data")
                     self.wood_confirmed = False
 
-                    # Calculate and display grade based on current defect information
-                    self.calculate_and_display_grade()
+                    # Use accumulated defect data for grading
+                    self.calculate_grade_from_roi_session(session_results)
 
-                    self.update_system_status("Status: Grade calculated and sent - Ready for next trigger")
+                    self.update_system_status("Status: Grade calculated from ROI session - Ready for next trigger")
                     self.update_detection_state("Waiting")
                 else:
-                    # No wood detected - but we can still grade based on defects found
-                    log_info(SystemComponent.GUI, "IR beam cleared - grading based on predict_stream defects detected")
-                    
-                    # Calculate and display grade based on current defect information (even if no wood confirmed)
-                    if self.current_defects:  # Check if we have any defect data
-                        self.calculate_and_display_grade()
-                        self.update_system_status("Status: Grade calculated from predict_stream defects - Ready for next trigger")
-                    else:
-                        self.update_system_status("Status: No defects detected - Ready for next trigger")
-                    
+                    # No defects accumulated in session
+                    log_info(SystemComponent.GUI, "ROI session ended - no defects accumulated")
+                    self.update_system_status("Status: No defects detected in ROI session - Ready for next trigger")
                     self.update_detection_state("Waiting")
 
             else:
-                log_info(SystemComponent.GUI, f"IR beam cleared but system is in {self.current_mode} mode or no detection active")
-                self.update_system_status("Status: IR beam cleared")
+                log_info(SystemComponent.GUI, f"ROI session ended but system is in {self.current_mode} mode or no detection active")
+                self.update_system_status("Status: ROI session completed")
 
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error handling IR beam cleared: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error handling ROI session end: {str(e)}", e)
+
+    def start_roi_based_workflow(self, camera_name: str, wood_detections: list, overlapping_rois: list):
+        """Start ROI-based detection workflow"""
+        try:
+            log_info(SystemComponent.GUI, f"Starting ROI-based workflow for {camera_name}")
+
+            # Start predict_stream for continuous detection during ROI overlap
+            self.start_predict_stream_inference()
+
+            # Initialize ROI session tracking
+            self.active_roi_sessions = getattr(self, 'active_roi_sessions', {})
+            self.active_roi_sessions[camera_name] = {
+                'start_time': time.time(),
+                'wood_detections': wood_detections,
+                'overlapping_rois': overlapping_rois,
+                'accumulated_defects': {}
+            }
+
+            log_info(SystemComponent.GUI, f"ROI-based workflow started for {camera_name}")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error starting ROI-based workflow: {str(e)}", e)
+
+    def stop_roi_based_workflow(self, camera_name: str):
+        """Stop ROI-based detection workflow"""
+        try:
+            log_info(SystemComponent.GUI, f"Stopping ROI-based workflow for {camera_name}")
+
+            # Stop predict_stream inference
+            self.stop_predict_stream_inference()
+
+            # Clear ROI session tracking
+            if hasattr(self, 'active_roi_sessions'):
+                self.active_roi_sessions.pop(camera_name, None)
+
+            log_info(SystemComponent.GUI, f"ROI-based workflow stopped for {camera_name}")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error stopping ROI-based workflow: {str(e)}", e)
+
+    def calculate_grade_from_roi_session(self, session_results: dict):
+        """Calculate grade from accumulated ROI session defects"""
+        try:
+            # Extract defect data from session results
+            total_defects = session_results.get('total_defects', {})
+
+            # Convert to format expected by grading system
+            grading_defects = []
+            for defect_type, count in total_defects.items():
+                # Add size information (use default if not available)
+                for _ in range(count):
+                    grading_defects.append((defect_type, 10.0, 5.0))  # Default size values
+
+            # Perform grading
+            from modules.grading_module import determine_surface_grade
+            grade = determine_surface_grade(grading_defects)
+
+            # Update grade display
+            grade_color = get_grade_color(grade)
+            self.current_grade_label.setText(f"Final Grade: {grade}")
+            self.current_grade_label.setStyleSheet(f"""
+                font-size: 18px; font-weight: bold; padding: 10px;
+                border: 2px solid {grade_color}; border-radius: 5px;
+                background-color: {grade_color}20; color: {grade_color};
+            """)
+
+            # Send grade command to Arduino
+            if self.arduino_module and self.arduino_module.is_connected():
+                try:
+                    success = self.arduino_module.send_grade_command(grade)
+                    if success:
+                        self.update_system_status(f"✅ Grade {grade} sent to Arduino for sorting")
+                        log_info(SystemComponent.GUI, f"Successfully sent grade {grade} to Arduino")
+                    else:
+                        self.update_system_status(f"❌ Failed to send grade {grade} to Arduino")
+                        log_arduino_error(f"Failed to send grade {grade} to Arduino")
+                except Exception as e:
+                    self.update_system_status(f"❌ Error sending grade to Arduino: {str(e)}")
+                    log_arduino_error(f"Error sending grade {grade} to Arduino: {str(e)}", e)
+            else:
+                self.update_system_status(f"⚠️ Arduino not connected - Grade {grade} calculated but not sent")
+                log_warning(SystemComponent.GUI, f"Arduino not connected - cannot send grade {grade}")
+
+            # Update statistics
+            if grade in self.grade_counts:
+                self.grade_counts[grade] += 1
+                self.live_stats[f"grade{grade}"] += 1
+                self.total_pieces_processed += 1
+                self.update_grade_counters()
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error calculating grade from ROI session: {str(e)}", e)
 
     def finalize_detection_session(self):
         """Finalize the enhanced detection session with comprehensive performance reporting"""
@@ -1989,8 +2303,8 @@ class WoodSortingApp(QMainWindow):
         self.update_system_status("Status: CONTINUOUS MODE - Live detection & auto-grading enabled")
         self.update_detection_state("Waiting")
 
-        # Reset IR-triggered state
-        self.ir_triggered = False
+        # Reset ROI-triggered state
+        self.roi_triggered = False
         self.wood_confirmed = False
         self.auto_detection_active = False
 
@@ -2015,11 +2329,11 @@ class WoodSortingApp(QMainWindow):
         """Set system to trigger mode"""
         self.current_mode = "TRIGGER"
         self.display_message("System set to TRIGGER mode")
-        self.update_system_status("Status: TRIGGER MODE - Waiting for IR beam trigger")
+        self.update_system_status("Status: TRIGGER MODE - Waiting for ROI wood detection trigger")
         self.update_detection_state("Waiting")
 
         # Reset state
-        self.ir_triggered = False
+        self.roi_triggered = False
         self.wood_confirmed = False
         self.auto_detection_active = False
 
@@ -2048,7 +2362,7 @@ class WoodSortingApp(QMainWindow):
         self.update_detection_state("Waiting")
 
         # Reset state
-        self.ir_triggered = False
+        self.roi_triggered = False
         self.wood_confirmed = False
         self.auto_detection_active = False
 
@@ -2140,6 +2454,130 @@ class WoodSortingApp(QMainWindow):
             print(f"DEBUG: Exception in ROI intersection check: {str(e)}")
             return False
 
+    def _add_roi_status_overlay(self, frame, camera_name, overlaps):
+        """Add comprehensive ROI status overlay to frame"""
+        try:
+            height, width = frame.shape[:2]
+
+            # Get ROI information
+            active_rois = self.roi_module.roi_manager.get_active_rois(camera_name)
+            roi_states = self.roi_module.roi_manager.roi_states.get(camera_name, {})
+
+            # Add status bar at top of frame
+            status_bar_height = 40
+            status_bar = np.zeros((status_bar_height, width, 3), dtype=np.uint8)
+            status_bar[:] = [50, 50, 50]  # Dark gray background
+
+            # Add status text
+            status_text = f"ROI Status: {len(active_rois)} active"
+            cv2.putText(status_bar, status_text, (10, 25),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+            # Add overlap information
+            if overlaps:
+                overlap_text = f" | Overlaps: {len(overlaps)}"
+                cv2.putText(status_bar, overlap_text, (200, 25),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            # Add mode information
+            mode_text = f" | Mode: {self.current_mode}"
+            cv2.putText(status_bar, mode_text, (400, 25),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+            # Overlay status bar on frame
+            frame[0:status_bar_height, :] = cv2.addWeighted(
+                frame[0:status_bar_height, :], 0.7, status_bar, 0.3, 0
+            )
+
+            # Add individual ROI status indicators
+            y_offset = height - 100
+            for i, roi_id in enumerate(active_rois):
+                roi_config = self.roi_module.roi_manager.get_roi_config(camera_name, roi_id)
+                if not roi_config:
+                    continue
+
+                status = roi_states.get(roi_id, ROIStatus.INACTIVE)
+                color = {
+                    ROIStatus.ACTIVE: (0, 255, 0),
+                    ROIStatus.OVERLAPPING: (0, 165, 255),
+                    ROIStatus.INACTIVE: (128, 128, 128),
+                    ROIStatus.ERROR: (0, 0, 255)
+                }.get(status, (128, 128, 128))
+
+                # Draw status indicator
+                indicator_x = 10
+                indicator_y = y_offset - (i * 25)
+                cv2.circle(frame, (indicator_x, indicator_y), 8, color, -1)
+                cv2.circle(frame, (indicator_x, indicator_y), 8, (255, 255, 255), 2)
+
+                # Add ROI label
+                label = f"{roi_config.name}: {status.value}"
+                cv2.putText(frame, label, (25, indicator_y + 5),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        except Exception as e:
+            self.display_message(f"Error adding ROI status overlay: {str(e)}", "warning")
+
+    def _add_wood_detection_overlays(self, frame, wood_detections):
+        """Add enhanced wood detection overlays with confidence scores"""
+        try:
+            for i, detection in enumerate(wood_detections):
+                if not detection.detected:
+                    continue
+
+                bbox = detection.bbox
+                confidence = detection.confidence
+                features = detection.features or {}
+
+                x1, y1, x2, y2 = bbox
+
+                # Determine color based on confidence
+                if confidence >= 0.8:
+                    color = (0, 255, 0)  # Green for high confidence
+                elif confidence >= 0.6:
+                    color = (0, 255, 255)  # Yellow for medium confidence
+                else:
+                    color = (0, 165, 255)  # Orange for low confidence
+
+                # Draw enhanced bounding box
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+
+                # Draw corner markers
+                marker_size = 15
+                # Top-left
+                cv2.line(frame, (x1, y1), (x1 + marker_size, y1), color, 2)
+                cv2.line(frame, (x1, y1), (x1, y1 + marker_size), color, 2)
+                # Top-right
+                cv2.line(frame, (x2, y1), (x2 - marker_size, y1), color, 2)
+                cv2.line(frame, (x2, y1), (x2, y1 + marker_size), color, 2)
+                # Bottom-left
+                cv2.line(frame, (x1, y2), (x1 + marker_size, y2), color, 2)
+                cv2.line(frame, (x1, y2), (x1, y2 - marker_size), color, 2)
+                # Bottom-right
+                cv2.line(frame, (x2, y2), (x2 - marker_size, y2), color, 2)
+                cv2.line(frame, (x2, y2), (x2, y2 - marker_size), color, 2)
+
+                # Add confidence score
+                confidence_text = f"Wood {i+1}: {confidence:.2f}"
+                cv2.putText(frame, confidence_text, (x1 + 10, y1 + 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+                # Add feature information if available
+                if features.get('dominant_color'):
+                    color_text = f"Color: {features['dominant_color']}"
+                    cv2.putText(frame, color_text, (x1 + 10, y1 + 60),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+                # Add area information if available
+                if 'contour_data' in features and 'area' in features['contour_data']:
+                    area = features['contour_data']['area']
+                    area_text = f"Area: {area:.0f}px²"
+                    cv2.putText(frame, area_text, (x1 + 10, y1 + 85),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+        except Exception as e:
+            self.display_message(f"Error adding wood detection overlays: {str(e)}", "warning")
+
     def _add_misalignment_indicators(self, frame):
         """Add red border and 'Wood not aligned' text to frame"""
         try:
@@ -2191,43 +2629,138 @@ class WoodSortingApp(QMainWindow):
             log_error(SystemComponent.GUI, f"Error updating detection state: {str(e)}", e)
 
     def update_wood_classification(self):
-        """Update wood classification display"""
-        # Mock wood classification - in real implementation this would come from detection module
-        wood_types = ["Pine", "Oak", "Maple", "Cedar", "Spruce"]
-        import random
-        self.wood_classification = random.choice(wood_types)
-        self.wood_classification_label.setText(f"Wood Classification: {self.wood_classification}")
-        self.wood_classification_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        """Update wood classification based on defect analysis"""
+        try:
+            # Get current defect information
+            current_defects = getattr(self, 'current_defects', {})
+            top_defects = current_defects.get('top', {}).get('defects', {})
+            bottom_defects = current_defects.get('bottom', {}).get('defects', {})
+
+            # Combine defects from both cameras
+            all_defects = {}
+            for defect_type, count in top_defects.items():
+                all_defects[defect_type] = all_defects.get(defect_type, 0) + count
+            for defect_type, count in bottom_defects.items():
+                all_defects[defect_type] = all_defects.get(defect_type, 0) + count
+
+            # Classify wood based on defect patterns
+            wood_type = self._classify_wood_from_defects(all_defects)
+
+            self.wood_classification = wood_type
+            self.wood_classification_label.setText(f"Wood Type: {self.wood_classification}")
+
+            # Set color based on wood type confidence
+            if wood_type == "Unknown":
+                color = "#95a5a6"  # Gray for unknown
+                style = "font-size: 14px; font-weight: bold; color: #95a5a6; font-style: italic;"
+            else:
+                color = "#2c3e50"  # Dark blue for classified
+                style = "font-size: 14px; font-weight: bold; color: #2c3e50;"
+
+            self.wood_classification_label.setStyleSheet(style)
+
+        except Exception as e:
+            # Fallback to unknown if classification fails
+            self.wood_classification = "Unknown"
+            self.wood_classification_label.setText("Wood Type: Unknown")
+            self.wood_classification_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #95a5a6; font-style: italic;")
+            print(f"Error in wood classification: {str(e)}")
+
+    def _classify_wood_from_defects(self, defects):
+        """Classify wood type based on defect patterns"""
+        try:
+            if not defects:
+                return "Unknown"
+
+            total_defects = sum(defects.values())
+
+            # Wood classification rules based on defect patterns
+            # These are simplified rules - in practice would use ML model
+
+            # High knot density often indicates softwoods
+            knot_count = defects.get('knot', 0)
+            knot_ratio = knot_count / total_defects if total_defects > 0 else 0
+
+            # Crack patterns can indicate wood type
+            crack_count = defects.get('crack', 0)
+            crack_ratio = crack_count / total_defects if total_defects > 0 else 0
+
+            # Classification logic
+            if knot_ratio > 0.6:
+                # High knot ratio suggests softwoods
+                if total_defects > 10:
+                    return "Pine"  # Pine often has many small knots
+                else:
+                    return "Spruce"  # Spruce has fewer but distinctive knots
+            elif crack_ratio > 0.5:
+                # High crack ratio suggests hardwoods that are prone to checking
+                return "Oak"  # Oak is prone to cracking
+            elif knot_ratio > 0.3:
+                # Moderate knot ratio
+                if crack_count > knot_count:
+                    return "Maple"  # Maple can have cracks and knots
+                else:
+                    return "Cedar"  # Cedar has moderate knotting
+            elif total_defects < 3:
+                # Very few defects suggests high-quality wood
+                return "Oak"  # High-quality oak
+            else:
+                # Default classification based on most common defect
+                most_common_defect = max(defects, key=defects.get)
+                if most_common_defect == 'knot':
+                    return "Pine"
+                elif most_common_defect == 'crack':
+                    return "Oak"
+                elif most_common_defect == 'resin':
+                    return "Pine"
+                else:
+                    return "Maple"  # Default fallback
+
+        except Exception as e:
+            print(f"Error in defect-based classification: {str(e)}")
+            return "Unknown"
 
     def update_system_status(self, status_text):
-        """Update system status label with enhanced information"""
+        """Update system status label with concise enhanced information"""
         try:
-            # Get additional status information
+            # Start with the main status
             enhanced_status = status_text
 
-            # Add model health info if available
+            # Add model health info if available (keep it short)
             if hasattr(self.detection_module, 'get_model_health_status'):
                 try:
                     model_health = self.detection_module.get_model_health_status()
-                    enhanced_status += f" | Model: {model_health.value.upper()}"
+                    # Use single letter for brevity
+                    health_short = model_health.value[0].upper()  # H, D, U, or ?
+                    enhanced_status += f" | M:{health_short}"
                 except:
                     pass
 
-            # Add camera status info if available
+            # Add camera status info if available (keep it very short)
             if hasattr(self.detection_module, 'get_camera_status'):
                 try:
                     top_status = self.detection_module.get_camera_status("top")
                     bottom_status = self.detection_module.get_camera_status("bottom")
-                    enhanced_status += f" | Cameras: T:{top_status.value.upper()} B:{bottom_status.value.upper()}"
+                    # Use single letters: A=Available, I=In Use, E=Error
+                    top_short = "A" if top_status.value == "available" else ("I" if top_status.value == "in_use" else "E")
+                    bottom_short = "A" if bottom_status.value == "available" else ("I" if bottom_status.value == "in_use" else "E")
+                    enhanced_status += f" | C:{top_short}{bottom_short}"
                 except:
                     pass
 
+            # Limit the total length to prevent overflow
+            if len(enhanced_status) > 80:
+                enhanced_status = enhanced_status[:77] + "..."
+
             self.system_status_label.setText(enhanced_status)
-            self.system_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+            self.system_status_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #2c3e50;")
         except Exception as e:
             # Fallback to basic status if enhancement fails
+            # Truncate if too long
+            if len(status_text) > 80:
+                status_text = status_text[:77] + "..."
             self.system_status_label.setText(status_text)
-            self.system_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+            self.system_status_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #2c3e50;")
 
     def update_grade_counters(self):
         """Update grade counters in the UI"""
@@ -2544,6 +3077,308 @@ class WoodSortingApp(QMainWindow):
         except Exception as e:
             self.error_status_text.setPlainText(f"❌ Error resetting state: {str(e)}")
             self.display_message(f"Error resetting state: {str(e)}", "error")
+
+    # ROI Configuration Methods
+    def update_roi_list(self):
+        """Update the ROI list for the selected camera"""
+        try:
+            camera_name = self.roi_camera_combo.currentText()
+            self.roi_list_widget.clear()
+
+            if hasattr(self, 'roi_module') and self.roi_module:
+                active_rois = self.roi_module.roi_manager.get_active_rois(camera_name)
+                roi_states = self.roi_module.roi_manager.roi_states.get(camera_name, {})
+
+                for roi_id in active_rois:
+                    roi_config = self.roi_module.roi_manager.get_roi_config(camera_name, roi_id)
+                    if roi_config:
+                        status = roi_states.get(roi_id, ROIStatus.INACTIVE)
+                        item_text = f"{roi_config.name} ({roi_id}) - {status.value}"
+                        item = QListWidgetItem(item_text)
+                        item.setData(Qt.UserRole, roi_id)
+                        self.roi_list_widget.addItem(item)
+
+        except Exception as e:
+            self.display_message(f"Error updating ROI list: {str(e)}", "warning")
+
+    def on_roi_selected(self):
+        """Handle ROI selection in the list"""
+        try:
+            current_item = self.roi_list_widget.currentItem()
+            if not current_item:
+                return
+
+            camera_name = self.roi_camera_combo.currentText()
+            roi_id = current_item.data(Qt.UserRole)
+
+            roi_config = self.get_roi_config(camera_name, roi_id)
+            if roi_config:
+                    # Update property fields
+                    self.roi_name_edit.setText(roi_config.name)
+                    self.roi_x1_spin.setValue(roi_config.coordinates[0])
+                    self.roi_y1_spin.setValue(roi_config.coordinates[1])
+                    self.roi_x2_spin.setValue(roi_config.coordinates[2])
+                    self.roi_y2_spin.setValue(roi_config.coordinates[3])
+                    self.roi_threshold_spin.setValue(roi_config.overlap_threshold)
+
+                    # Update preview
+                    self.update_roi_preview(camera_name, roi_config)
+
+        except Exception as e:
+            self.display_message(f"Error selecting ROI: {str(e)}", "warning")
+
+    def update_roi_preview(self, camera_name, roi_config):
+        """Update the ROI preview image"""
+        try:
+            # Get current frame for preview
+            if camera_name == "top":
+                frame = self.top_frame_original
+            else:
+                frame = self.bottom_frame_original
+
+            if frame is not None:
+                # Create a copy for drawing
+                preview_frame = frame.copy()
+
+                # Draw ROI rectangle
+                x1, y1, x2, y2 = roi_config.coordinates
+                cv2.rectangle(preview_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+                # Add ROI info text
+                cv2.putText(preview_frame, f"ROI: {roi_config.name}", (x1 + 10, y1 + 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+
+                # Convert to QPixmap and display
+                rgb_image = cv2.cvtColor(preview_frame, cv2.COLOR_BGR2RGB)
+                h, w = rgb_image.shape[:2]
+                bytes_per_line = 3 * w
+                qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+
+                pixmap = QPixmap.fromImage(qt_image)
+                scaled_pixmap = pixmap.scaled(self.roi_preview_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.roi_preview_label.setPixmap(scaled_pixmap)
+            else:
+                self.roi_preview_label.setText("No frame available for preview")
+
+        except Exception as e:
+            self.display_message(f"Error updating ROI preview: {str(e)}", "warning")
+
+    def add_roi(self):
+        """Add a new ROI"""
+        try:
+            camera_name = self.roi_camera_combo.currentText()
+            roi_name = self.roi_name_edit.text().strip()
+
+            if not roi_name:
+                roi_name = f"ROI_{len(self.roi_module.roi_manager.get_active_rois(camera_name)) + 1}"
+
+            # Get coordinates from spin boxes
+            x1 = self.roi_x1_spin.value()
+            y1 = self.roi_y1_spin.value()
+            x2 = self.roi_x2_spin.value()
+            y2 = self.roi_y2_spin.value()
+
+            # Validate coordinates
+            if x2 <= x1 or y2 <= y1:
+                self.display_message("Invalid ROI coordinates: X2 must be > X1 and Y2 must be > Y1", "error")
+                return
+
+            coordinates = (x1, y1, x2, y2)
+            threshold = self.roi_threshold_spin.value()
+
+            # Generate unique ROI ID
+            roi_id = f"{camera_name}_roi_{int(time.time())}"
+
+            if hasattr(self, 'roi_module') and self.roi_module:
+                success = self.roi_module.roi_manager.define_roi(
+                    camera_name, roi_id, coordinates, roi_name, threshold
+                )
+
+                if success:
+                    self.display_message(f"ROI '{roi_name}' added successfully", "info")
+                    self.update_roi_list()
+                else:
+                    self.display_message("Failed to add ROI", "error")
+
+        except Exception as e:
+            self.display_message(f"Error adding ROI: {str(e)}", "error")
+
+    def edit_roi(self):
+        """Edit the selected ROI"""
+        try:
+            current_item = self.roi_list_widget.currentItem()
+            if not current_item:
+                self.display_message("Please select an ROI to edit", "warning")
+                return
+
+            camera_name = self.roi_camera_combo.currentText()
+            roi_id = current_item.data(Qt.UserRole)
+
+            # Get updated values
+            roi_name = self.roi_name_edit.text().strip()
+            x1 = self.roi_x1_spin.value()
+            y1 = self.roi_y1_spin.value()
+            x2 = self.roi_x2_spin.value()
+            y2 = self.roi_y2_spin.value()
+            threshold = self.roi_threshold_spin.value()
+
+            # Validate coordinates
+            if x2 <= x1 or y2 <= y1:
+                self.display_message("Invalid ROI coordinates", "error")
+                return
+
+            # Update ROI configuration
+            roi_config = self.get_roi_config(camera_name, roi_id)
+            if roi_config:
+                roi_config.name = roi_name
+                roi_config.coordinates = (x1, y1, x2, y2)
+                roi_config.overlap_threshold = threshold
+
+                # Save configuration
+                self.roi_module.roi_manager.save_config()
+                self.display_message(f"ROI '{roi_name}' updated successfully", "info")
+                self.update_roi_list()
+            else:
+                self.display_message("ROI not found", "error")
+
+        except Exception as e:
+            self.display_message(f"Error editing ROI: {str(e)}", "error")
+
+    def delete_roi(self):
+        """Delete the selected ROI"""
+        try:
+            current_item = self.roi_list_widget.currentItem()
+            if not current_item:
+                self.display_message("Please select an ROI to delete", "warning")
+                return
+
+            camera_name = self.roi_camera_combo.currentText()
+            roi_id = current_item.data(Qt.UserRole)
+
+            if hasattr(self, 'roi_module') and self.roi_module:
+                # Remove from active ROIs
+                if camera_name in self.roi_module.roi_manager.active_rois:
+                    self.roi_module.roi_manager.active_rois[camera_name].discard(roi_id)
+
+                # Remove from ROIs dict
+                if camera_name in self.roi_module.roi_manager.rois:
+                    self.roi_module.roi_manager.rois[camera_name].pop(roi_id, None)
+
+                # Remove from states
+                if camera_name in self.roi_module.roi_manager.roi_states:
+                    self.roi_module.roi_manager.roi_states[camera_name].pop(roi_id, None)
+
+                # Save configuration
+                self.roi_module.roi_manager.save_config()
+
+                self.display_message("ROI deleted successfully", "info")
+                self.update_roi_list()
+
+                # Clear property fields
+                self.roi_name_edit.clear()
+                self.roi_preview_label.setText("Select an ROI to preview")
+
+        except Exception as e:
+            self.display_message(f"Error deleting ROI: {str(e)}", "error")
+
+    def activate_roi(self):
+        """Activate the selected ROI"""
+        try:
+            current_item = self.roi_list_widget.currentItem()
+            if not current_item:
+                self.display_message("Please select an ROI to activate", "warning")
+                return
+
+            camera_name = self.roi_camera_combo.currentText()
+            roi_id = current_item.data(Qt.UserRole)
+
+            if hasattr(self, 'roi_module') and self.roi_module:
+                success = self.roi_module.roi_manager.activate_roi(camera_name, roi_id)
+                if success:
+                    self.display_message("ROI activated successfully", "info")
+                    self.update_roi_list()
+                else:
+                    self.display_message("Failed to activate ROI", "error")
+
+        except Exception as e:
+            self.display_message(f"Error activating ROI: {str(e)}", "error")
+
+    def deactivate_roi(self):
+        """Deactivate the selected ROI"""
+        try:
+            current_item = self.roi_list_widget.currentItem()
+            if not current_item:
+                self.display_message("Please select an ROI to deactivate", "warning")
+                return
+
+            camera_name = self.roi_camera_combo.currentText()
+            roi_id = current_item.data(Qt.UserRole)
+
+            if hasattr(self, 'roi_module') and self.roi_module:
+                success = self.roi_module.roi_manager.deactivate_roi(camera_name, roi_id)
+                if success:
+                    self.display_message("ROI deactivated successfully", "info")
+                    self.update_roi_list()
+                else:
+                    self.display_message("Failed to deactivate ROI", "error")
+
+        except Exception as e:
+            self.display_message(f"Error deactivating ROI: {str(e)}", "error")
+
+    def save_roi_config(self):
+        """Save ROI configuration"""
+        try:
+            if hasattr(self, 'roi_module') and self.roi_module:
+                success = self.roi_module.roi_manager.save_config()
+                if success:
+                    self.display_message("ROI configuration saved successfully", "info")
+                else:
+                    self.display_message("Failed to save ROI configuration", "error")
+        except Exception as e:
+            self.display_message(f"Error saving ROI configuration: {str(e)}", "error")
+
+    def load_roi_config(self):
+        """Load ROI configuration"""
+        try:
+            if hasattr(self, 'roi_module') and self.roi_module:
+                success = self.roi_module.roi_manager.load_config()
+                if success:
+                    self.display_message("ROI configuration loaded successfully", "info")
+                    self.update_roi_list()
+                else:
+                    self.display_message("Failed to load ROI configuration", "error")
+        except Exception as e:
+            self.display_message(f"Error loading ROI configuration: {str(e)}", "error")
+
+    def reset_roi_config(self):
+        """Reset ROI configuration to default"""
+        try:
+            if hasattr(self, 'roi_module') and self.roi_module:
+                # Clear all ROIs
+                self.roi_module.roi_manager.rois.clear()
+                self.roi_module.roi_manager.active_rois.clear()
+                self.roi_module.roi_manager.roi_states.clear()
+
+                # Create default ROIs
+                self.roi_module.roi_manager.define_roi("top", "top_roi_1", (64, 0, 1216, 108), "Top ROI", 0.3)
+                self.roi_module.roi_manager.define_roi("bottom", "bottom_roi_1", (64, 612, 1216, 720), "Bottom ROI", 0.3)
+
+                self.display_message("ROI configuration reset to default", "info")
+                self.update_roi_list()
+
+        except Exception as e:
+            self.display_message(f"Error resetting ROI configuration: {str(e)}", "error")
+
+    def get_roi_config(self, camera_name, roi_id):
+        """Get ROI configuration from the ROI manager"""
+        try:
+            if hasattr(self, 'roi_module') and self.roi_module:
+                if camera_name in self.roi_module.roi_manager.rois:
+                    return self.roi_module.roi_manager.rois[camera_name].get(roi_id)
+            return None
+        except Exception as e:
+            self.display_message(f"Error getting ROI config: {str(e)}", "warning")
+            return None
 
 def main():
     """Main function to run the application"""

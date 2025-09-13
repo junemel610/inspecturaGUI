@@ -121,31 +121,31 @@ def get_grade_color(grade):
 def calculate_grade(defect_dict):
     """Calculate grade based on defect dictionary and return grade info"""
     total_defects = sum(defect_dict.values()) if defect_dict else 0
-    
+
     if total_defects == 0:
         return {
-            'grade': 0,  # Grade 0 for perfect wood
+            'grade': GRADE_G2_0,  # Perfect wood
             'text': 'Perfect (No Defects)',
             'total_defects': 0,
             'color': 'dark green'
         }
     elif total_defects <= 2:
         return {
-            'grade': 1,
+            'grade': GRADE_G2_0,  # Good grade
             'text': f'Good (G2-0) - {total_defects} defects',
             'total_defects': total_defects,
             'color': 'green'
         }
     elif total_defects <= 6:
         return {
-            'grade': 2,
-            'text': f'Fair (G2-1, G2-2, G2-3) - {total_defects} defects',
+            'grade': GRADE_G2_2,  # Fair grade
+            'text': f'Fair (G2-2) - {total_defects} defects',
             'total_defects': total_defects,
             'color': 'orange'
         }
     else:
         return {
-            'grade': 3,
+            'grade': GRADE_G2_4,  # Poor grade
             'text': f'Poor (G2-4) - {total_defects} defects',
             'total_defects': total_defects,
             'color': 'red'

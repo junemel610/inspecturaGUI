@@ -2662,3 +2662,69 @@
 2025-09-13 14:24:00,917 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
 2025-09-13 14:24:06,053 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
 2025-09-13 14:24:21,957 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:30:50,444 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:30:52,960 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:30:57,996 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:31:03,037 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:31:08,086 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:34:59,077 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:35:02,155 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:35:06,974 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:35:12,100 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:35:17,040 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:43:21,404 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:43:21,408 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:43:26,263 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:43:31,255 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:43:36,292 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:45:53,135 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:45:54,430 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:45:59,493 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:46:04,403 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:46:09,437 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 14:52:02,984 - WoodSortingSystem - ERROR - [ARDUINO] Error sending command '1': write failed: [Errno 9] Bad file descriptor (Exception: write failed: [Errno 9] Bad file descriptor)
+2025-09-13 14:56:55,937 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyACM0: [Errno 16] could not open port /dev/ttyACM0: [Errno 16] Device or resource busy: '/dev/ttyACM0'
+2025-09-13 14:56:55,937 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyACM1: [Errno 2] could not open port /dev/ttyACM1: [Errno 2] No such file or directory: '/dev/ttyACM1'
+2025-09-13 14:56:55,938 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyACM2: [Errno 2] could not open port /dev/ttyACM2: [Errno 2] No such file or directory: '/dev/ttyACM2'
+2025-09-13 14:56:55,938 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyACM3: [Errno 2] could not open port /dev/ttyACM3: [Errno 2] No such file or directory: '/dev/ttyACM3'
+2025-09-13 14:56:55,939 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyUSB0: [Errno 2] could not open port /dev/ttyUSB0: [Errno 2] No such file or directory: '/dev/ttyUSB0'
+2025-09-13 14:56:55,940 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyUSB1: [Errno 2] could not open port /dev/ttyUSB1: [Errno 2] No such file or directory: '/dev/ttyUSB1'
+2025-09-13 14:56:55,941 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyUSB2: [Errno 2] could not open port /dev/ttyUSB2: [Errno 2] No such file or directory: '/dev/ttyUSB2'
+2025-09-13 14:56:55,941 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyUSB3: [Errno 2] could not open port /dev/ttyUSB3: [Errno 2] No such file or directory: '/dev/ttyUSB3'
+2025-09-13 14:56:55,942 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyUSB01: [Errno 2] could not open port /dev/ttyUSB01: [Errno 2] No such file or directory: '/dev/ttyUSB01'
+2025-09-13 14:56:55,943 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyACM01: [Errno 2] could not open port /dev/ttyACM01: [Errno 2] No such file or directory: '/dev/ttyACM01'
+2025-09-13 14:56:55,945 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyAMA0: [Errno 2] could not open port /dev/ttyAMA0: [Errno 2] No such file or directory: '/dev/ttyAMA0'
+2025-09-13 14:56:55,949 - WoodSortingSystem - ERROR - [ARDUINO] Failed to connect on port /dev/ttyAMA1: [Errno 2] could not open port /dev/ttyAMA1: [Errno 2] No such file or directory: '/dev/ttyAMA1'
+2025-09-13 15:06:06,609 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 15:06:11,038 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 15:06:16,125 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 15:06:21,162 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 15:06:25,995 - WoodSortingSystem - ERROR - [GUI] Error handling IR beam broken: 'DetectionModule' object has no attribute 'HealthStatus' (Exception: 'DetectionModule' object has no attribute 'HealthStatus')
+2025-09-13 15:22:44,214 - WoodSortingSystem - ERROR - [CAMERA] Invalid ROI coordinates: (200, 100, 100, 200)
+2025-09-13 15:24:49,216 - WoodSortingSystem - ERROR - [CAMERA] Error loading ROI configuration: Expecting value: line 1 column 1 (char 0)
+2025-09-13 15:38:07,985 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:07,986 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_inspection_zone_1757749087985'}
+2025-09-13 15:38:07,993 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:07,993 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_inspection_zone_1757749087992'}
+2025-09-13 15:38:11,003 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,003 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_inspection_zone_1757749088001'}
+2025-09-13 15:38:11,010 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,010 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091009'}
+2025-09-13 15:38:11,012 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,012 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091011'}
+2025-09-13 15:38:11,013 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,014 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091012'}
+2025-09-13 15:38:11,016 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,016 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091014'}
+2025-09-13 15:38:11,018 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,018 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091016'}
+2025-09-13 15:38:11,019 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,020 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091018'}
+2025-09-13 15:38:11,021 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,021 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091020'}
+2025-09-13 15:38:11,023 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,023 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091021'}
+2025-09-13 15:38:11,024 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,024 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091023'}
+2025-09-13 15:38:11,026 - WoodSortingSystem - ERROR - [CAMERA] Error in end_roi_session: 'ROISession' object has no attribute 'duration'
+2025-09-13 15:38:11,026 - WoodSortingSystem - ERROR - [CAMERA] Context: {'session_id': 'top_bench_zone_1757749091024'}

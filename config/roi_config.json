@@ -1,0 +1,131 @@
+{
+  "rois": {
+    "test_camera": {
+      "test_roi": {
+        "coordinates": [
+          10,
+          10,
+          50,
+          50
+        ],
+        "active": true,
+        "name": "ROI_test_roi",
+        "overlap_threshold": 0.3,
+        "camera_name": "test_camera",
+        "roi_id": "test_roi"
+      },
+      "roi1": {
+        "coordinates": [
+          100,
+          100,
+          200,
+          200
+        ],
+        "active": true,
+        "name": "ROI_roi1",
+        "overlap_threshold": 0.3,
+        "camera_name": "test_camera",
+        "roi_id": "roi1"
+      },
+      "roi2": {
+        "coordinates": [
+          250,
+          250,
+          350,
+          350
+        ],
+        "active": true,
+        "name": "ROI_roi2",
+        "overlap_threshold": 0.3,
+        "camera_name": "test_camera",
+        "roi_id": "roi2"
+      }
+    },
+    "test": {
+      "roi": {
+        "coordinates": [
+          50,
+          50,
+          150,
+          150
+        ],
+        "active": true,
+        "name": "ROI_roi",
+        "overlap_threshold": 0.3,
+        "camera_name": "test",
+        "roi_id": "roi"
+      }
+    },
+    "top_camera": {
+      "inspection_zone": {
+        "coordinates": [
+          100,
+          20,
+          540,
+          120
+        ],
+        "active": true,
+        "name": "Top Inspection Zone",
+        "overlap_threshold": 0.3,
+        "camera_name": "top_camera",
+        "roi_id": "inspection_zone"
+      },
+      "secondary_zone": {
+        "coordinates": [
+          200,
+          150,
+          440,
+          250
+        ],
+        "active": true,
+        "name": "Top Secondary Zone",
+        "overlap_threshold": 0.5,
+        "camera_name": "top_camera",
+        "roi_id": "secondary_zone"
+      }
+    },
+    "bottom_camera": {
+      "inspection_zone": {
+        "coordinates": [
+          100,
+          320,
+          540,
+          420
+        ],
+        "active": true,
+        "name": "Bottom Inspection Zone",
+        "overlap_threshold": 0.3,
+        "camera_name": "bottom_camera",
+        "roi_id": "inspection_zone"
+      }
+    },
+    "top": {
+      "inspection_zone": {
+        "coordinates": [
+          100,
+          100,
+          500,
+          300
+        ],
+        "active": true,
+        "name": "ROI_inspection_zone",
+        "overlap_threshold": 0.3,
+        "camera_name": "top",
+        "roi_id": "inspection_zone"
+      },
+      "bench_zone": {
+        "coordinates": [
+          100,
+          100,
+          500,
+          300
+        ],
+        "active": true,
+        "name": "ROI_bench_zone",
+        "overlap_threshold": 0.3,
+        "camera_name": "top",
+        "roi_id": "bench_zone"
+      }
+    }
+  }
+}
