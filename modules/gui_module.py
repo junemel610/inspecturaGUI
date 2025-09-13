@@ -1,5 +1,14 @@
+#!/usr/bin/env python3
+"""
+Wood Sorting Application - Main GUI Module
+
+This module contains the main GUI application for the wood sorting system.
+Includes enhanced error handling, performance monitoring, and live detection capabilities.
+"""
+
 import sys
 import cv2
+import logging
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QPushButton, QFrame, QGridLayout, QCheckBox, QTabWidget, QGroupBox, QTextEdit, QProgressBar, QScrollArea, QSizePolicy
@@ -27,6 +36,9 @@ class WoodSortingApp(QMainWindow):
         super().__init__()
         self.dev_mode = dev_mode
         
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
+        
         # Initialize configuration
         self.config = config or get_config(environment="development" if dev_mode else "production")
         
@@ -50,11 +62,11 @@ class WoodSortingApp(QMainWindow):
         self.performance_monitor = get_performance_monitor()
         if self.config.performance.enable_monitoring:
             start_performance_monitoring()
-            # Use thread-safe update mechanism
-            self.performance_monitor.add_update_callback(self.queue_performance_update)
+            self.performance_monitor.add_update_callback(self.update_performance_display)
 
-        # Initialize modules with enhanced error handling
+        # Initialize modules
         self.camera_module = CameraModule(dev_mode=self.dev_mode)
+        self.camera_module.initialize_cameras()  # Initialize cameras
         self.detection_module = DetectionModule(dev_mode=self.dev_mode)
         self.arduino_module = ArduinoModule(message_queue=self.message_queue)
         self.reporting_module = ReportingModule()
@@ -78,42 +90,26 @@ class WoodSortingApp(QMainWindow):
         self.live_stats = {"grade0": 0, "grade1": 0, "grade2": 0, "grade3": 0}
         self.session_log = []
 
-        # Error monitoring
-        self.error_monitoring_active = True
-        self.last_error_check = time.time()
+        # Store original frame sizes and defect information
+        self.top_frame_original = None
+        self.bottom_frame_original = None
+        self.current_defects = {}
+        self.current_grade_info = None
+        self.wood_classification = "Unknown"  # Wood type classification
+        self.detection_state = "Waiting"  # Detection state for UI
 
-        log_info(SystemComponent.GUI, f"WoodSortingApp initialized (dev_mode={dev_mode})")
-
-        self.setup_ui()
+        # UI initialization
         self.setup_connections()
+        self.setup_ui()
         self.setup_dev_mode()
-
-        # Start camera feeds and message processing
-        if not self.dev_mode:
-            self.camera_module.initialize_cameras()
-            self.update_feeds() # Start the main update loop for real cameras
-        else:
-            self.update_feeds() # Start the main update loop for dev_mode logic
-            
-        # Start message queue processing
-        self.process_message_queue()
         
-        # Start error monitoring
-        self.setup_error_monitoring()
-
-    def center_window(self):
-        """Center the window on the screen"""
-        screen = QApplication.desktop().screenGeometry()
-        window = self.geometry()
-        x = (screen.width() - window.width()) // 2
-        y = (screen.height() - window.height()) // 2
-        self.move(x, y)
+        # Start the UI update timer
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_feeds)
+        self.timer.start(50)  # Update every 50ms (20 FPS)
 
     def setup_connections(self):
-        """Setup connections and signals between modules"""
-        # This method sets up connections between different components
-        # For now, we're using the message queue for communication
-        log_info(SystemComponent.GUI, "Setting up module connections")
+        pass
 
     def setup_ui(self):
         # Main layout with responsive margins for maximized mode
@@ -166,91 +162,40 @@ class WoodSortingApp(QMainWindow):
         self.defect_analysis_panel.setMinimumWidth(350)  # Minimum width
         self.defect_analysis_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.defect_analysis_panel.setStyleSheet("QGroupBox { font-size: 16px; font-weight: bold; }")
-        defect_panel_layout = QVBoxLayout(self.defect_analysis_panel)
-        defect_panel_layout.setContentsMargins(10, 15, 10, 10)
-        defect_panel_layout.setSpacing(8)
-        
-        # Current Grade Display (Responsive height)
-        self.current_grade_frame = QFrame()
-        self.current_grade_frame.setMinimumHeight(50)  # Minimum height
-        self.current_grade_frame.setMaximumHeight(80)  # Maximum height
-        self.current_grade_frame.setFrameStyle(QFrame.StyledPanel)
-        self.current_grade_frame.setStyleSheet("background-color: #f0f0f0; border: 2px solid #ccc; border-radius: 5px;")
-        current_grade_layout = QVBoxLayout(self.current_grade_frame)
-        current_grade_layout.setContentsMargins(5, 5, 5, 5)
-        
+        defect_analysis_layout = QVBoxLayout(self.defect_analysis_panel)
+        defect_analysis_layout.setContentsMargins(10, 15, 10, 10)
+
+        # Defect details display
+        self.defect_details_text = QTextEdit()
+        self.defect_details_text.setReadOnly(True)
+        self.defect_details_text.setMinimumHeight(200)  # Minimum height
+        self.defect_details_text.setMaximumHeight(300)  # Maximum height for responsive design
+        self.defect_details_text.setStyleSheet("font-size: 12px; background-color: #f9f9f9;")
+        defect_analysis_layout.addWidget(self.defect_details_text)
+
+        # Current grade display
         self.current_grade_label = QLabel("Final Grade: Waiting for wood...")
         self.current_grade_label.setAlignment(Qt.AlignCenter)
-        self.current_grade_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #666; padding: 8px;")
-        current_grade_layout.addWidget(self.current_grade_label)
-        
-        defect_panel_layout.addWidget(self.current_grade_frame)
-        
-        # Defect Details Area (Responsive sizing)
-        self.defect_details_scroll = QScrollArea()
-        self.defect_details_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.defect_details_widget = QWidget()
-        self.defect_details_layout = QVBoxLayout(self.defect_details_widget)
-        self.defect_details_layout.setAlignment(Qt.AlignTop)
-        self.defect_details_layout.setContentsMargins(5, 5, 5, 5)
-        self.defect_details_layout.setSpacing(5)
-        
-        # Initial placeholder
-        placeholder_label = QLabel("No defects detected\n\nWaiting for wood detection...")
-        placeholder_label.setAlignment(Qt.AlignCenter)
-        placeholder_label.setStyleSheet("color: #888; font-style: italic; padding: 20px; font-size: 18px;")
-        self.defect_details_layout.addWidget(placeholder_label)
-        
-        self.defect_details_scroll.setWidget(self.defect_details_widget)
-        self.defect_details_scroll.setWidgetResizable(True)
-        self.defect_details_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.defect_details_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        defect_panel_layout.addWidget(self.defect_details_scroll)
-        
-        # Camera Status Summary (Responsive height)
-        camera_status_frame = QFrame()
-        camera_status_frame.setMinimumHeight(40)  # Minimum height
-        camera_status_frame.setMaximumHeight(60)  # Maximum height
-        camera_status_frame.setFrameStyle(QFrame.StyledPanel)
-        camera_status_layout = QVBoxLayout(camera_status_frame)
-        camera_status_layout.setContentsMargins(5, 5, 5, 5)
-        
-        self.top_camera_status = QLabel("Top Camera: Ready")
-        self.top_camera_status.setStyleSheet("font-size: 14px; color: #666;")
-        self.bottom_camera_status = QLabel("Bottom Camera: Ready")
-        self.bottom_camera_status.setStyleSheet("font-size: 14px; color: #666;")
-        
-        camera_status_layout.addWidget(self.top_camera_status)
-        camera_status_layout.addWidget(self.bottom_camera_status)
-        defect_panel_layout.addWidget(camera_status_frame)
-        
-        # Add camera container and defect panel to top section with proportions
-        top_section_layout.addWidget(cameras_container, 70)  # 70% width for cameras
-        top_section_layout.addWidget(self.defect_analysis_panel, 30)  # 30% width for defect panel
+        self.current_grade_label.setStyleSheet("font-size: 18px; font-weight: bold; padding: 10px; border: 2px solid #ccc; border-radius: 5px;")
+        defect_analysis_layout.addWidget(self.current_grade_label)
+
+        # Wood classification display
+        self.wood_classification_label = QLabel("Wood Classification: Unknown")
+        self.wood_classification_label.setAlignment(Qt.AlignCenter)
+        self.wood_classification_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #666;")
+        defect_analysis_layout.addWidget(self.wood_classification_label)
+
+        # Add defect panel to cameras container
+        top_section_layout.addWidget(cameras_container, 7)  # 70% width
+        top_section_layout.addWidget(self.defect_analysis_panel, 3)  # 30% width
 
         self.main_layout.addWidget(top_section_container)
 
-        # Middle Section: Controls (Responsive height)
+        # Middle Section: Controls (Responsive layout)
         controls_container = QWidget()
-        controls_container.setMinimumHeight(100)  # Minimum height
-        controls_container.setMaximumHeight(140)  # Maximum height
         controls_layout = QHBoxLayout(controls_container)
-        controls_layout.setContentsMargins(10, 5, 10, 5)
+        controls_layout.setContentsMargins(5, 5, 5, 5)
         controls_layout.setSpacing(15)
-
-        # System Status Group (Responsive width)
-        status_group = QGroupBox("System Status")
-        status_group.setMinimumWidth(250)  # Minimum width
-        status_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
-        status_layout = QVBoxLayout(status_group)
-        status_layout.setContentsMargins(10, 15, 10, 10)
-        self.status_label = QLabel("Status: Initializing...")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("font-weight: bold; font-size: 16px; padding: 10px;")
-        self.status_label.setWordWrap(True)
-        status_layout.addWidget(self.status_label)
-        controls_layout.addWidget(status_group)
 
         # Conveyor Control Group (Responsive width)
         conveyor_group = QGroupBox("Conveyor Control")
@@ -286,29 +231,64 @@ class WoodSortingApp(QMainWindow):
         detection_layout = QVBoxLayout(detection_group)
         detection_layout.setContentsMargins(10, 15, 10, 10)
         detection_layout.setSpacing(5)
-        
-        self.roi_checkbox = QCheckBox("Top ROI")
-        self.roi_checkbox.setChecked(True) # Default from original
-        self.roi_checkbox.stateChanged.connect(self.toggle_roi)
+
+        # Detection State Label
+        self.detection_state_label = QLabel("State: Waiting")
+        self.detection_state_label.setStyleSheet("font-size: 12px; color: #666; font-weight: bold;")
+        detection_layout.addWidget(self.detection_state_label)
+
+        self.roi_checkbox = QCheckBox("Top ROI Active")
+        self.roi_checkbox.setChecked(True)
         self.roi_checkbox.setStyleSheet("font-size: 14px;")
+        self.roi_checkbox.toggled.connect(self.toggle_roi)
         detection_layout.addWidget(self.roi_checkbox)
-        
-        self.live_detect_checkbox = QCheckBox("Live Detect")
-        self.live_detect_checkbox.setChecked(False) # Default from original
-        self.live_detect_checkbox.stateChanged.connect(self.toggle_live_detection_mode)
-        self.live_detect_checkbox.setStyleSheet("font-size: 14px;")
-        detection_layout.addWidget(self.live_detect_checkbox)
-        
+
+        self.wood_detection_checkbox = QCheckBox("Show Wood Detection")
+        self.wood_detection_checkbox.setChecked(True)
+        self.wood_detection_checkbox.setStyleSheet("font-size: 14px;")
+        self.wood_detection_checkbox.toggled.connect(self.toggle_wood_detection)
+        detection_layout.addWidget(self.wood_detection_checkbox)
+
+        self.live_detection_checkbox = QCheckBox("Live Detection")
+        self.live_detection_checkbox.setStyleSheet("font-size: 14px;")
+        self.live_detection_checkbox.toggled.connect(self.toggle_live_detection)
+        detection_layout.addWidget(self.live_detection_checkbox)
+
         self.auto_grade_checkbox = QCheckBox("Auto Grade")
-        self.auto_grade_checkbox.setChecked(False) # Default from original
-        self.auto_grade_checkbox.stateChanged.connect(self.toggle_auto_grade)
         self.auto_grade_checkbox.setStyleSheet("font-size: 14px;")
+        self.auto_grade_checkbox.toggled.connect(self.toggle_auto_grade)
         detection_layout.addWidget(self.auto_grade_checkbox)
         controls_layout.addWidget(detection_group)
 
+        # Status Information Group (Responsive width)
+        status_group = QGroupBox("System Status")
+        status_group.setMinimumWidth(200)  # Minimum width
+        status_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
+        status_layout = QVBoxLayout(status_group)
+        status_layout.setContentsMargins(10, 15, 10, 10)
+        status_layout.setSpacing(5)
+        
+        self.top_camera_status = QLabel("Top Camera: Initializing")
+        self.top_camera_status.setStyleSheet("font-size: 12px;")
+        status_layout.addWidget(self.top_camera_status)
+        
+        self.bottom_camera_status = QLabel("Bottom Camera: Initializing")
+        self.bottom_camera_status.setStyleSheet("font-size: 12px;")
+        status_layout.addWidget(self.bottom_camera_status)
+        
+        self.arduino_status = QLabel("Arduino: Disconnected")
+        self.arduino_status.setStyleSheet("font-size: 12px; color: red;")
+        status_layout.addWidget(self.arduino_status)
+
+        self.system_status_label = QLabel("System: Initializing")
+        self.system_status_label.setStyleSheet("font-size: 12px; color: #666;")
+        status_layout.addWidget(self.system_status_label)
+
+        controls_layout.addWidget(status_group)
+
         # Reports Group (Responsive width)
         reports_group = QGroupBox("Reports")
-        reports_group.setMinimumWidth(250)  # Minimum width
+        reports_group.setMinimumWidth(200)  # Minimum width
         reports_group.setStyleSheet("QGroupBox { font-size: 14px; font-weight: bold; }")
         reports_layout = QVBoxLayout(reports_group)
         reports_layout.setContentsMargins(10, 15, 10, 10)
@@ -333,11 +313,12 @@ class WoodSortingApp(QMainWindow):
         self.last_report_label.setStyleSheet("font-size: 12px; color: #666;")
         self.last_report_label.setWordWrap(True)
         reports_layout.addWidget(self.last_report_label)
+        
         controls_layout.addWidget(reports_group)
 
         self.main_layout.addWidget(controls_container)
 
-        # Bottom Section: Enhanced Tabbed Statistics with Error Monitoring (Responsive for maximized)
+        # Bottom Section: Enhanced Tabbed Statistics (Responsive for maximized)
         self.stats_notebook = QTabWidget()
         self.stats_notebook.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.stats_notebook.setMinimumHeight(250)  # Minimum height for content
@@ -362,649 +343,94 @@ class WoodSortingApp(QMainWindow):
         self.main_layout.addWidget(self.stats_notebook)
 
         # Tab 1: Grade Summary (Enhanced with fixed dimensions)
-        grade_summary_tab = QWidget()
-        grade_summary_layout = QVBoxLayout(grade_summary_tab)
-        grade_summary_layout.setContentsMargins(15, 10, 15, 10)
-        grade_summary_layout.setSpacing(8)
-        self.stats_notebook.addTab(grade_summary_tab, "Grade Summary")
+        grade_summary_widget = QWidget()
+        grade_summary_layout = QVBoxLayout(grade_summary_widget)
+        grade_summary_layout.setContentsMargins(15, 15, 15, 15)
+        grade_summary_layout.setSpacing(10)
 
-        # Grade counts in a clean grid (Fixed dimensions)
-        grade_counts_frame = QWidget()
-        grade_counts_frame.setFixedHeight(120)  # Increased height for bigger text
-        grade_counts_layout = QHBoxLayout(grade_counts_frame)
-        grade_counts_layout.setSpacing(10)
-        grade_counts_layout.setContentsMargins(10, 5, 10, 5)
-        self.live_stats_labels = {}
-        grade_info = [
-            ("grade0", "Perfect\n(No Defects)", "dark green"),
-            ("grade1", "Good\n(G2-0)", "green"), 
-            ("grade2", "Fair\n(G2-1, G2-2, G2-3)", "orange"),
-            ("grade3", "Poor\n(G2-4)", "red")
-        ]
-        for grade_key, label_text, color in grade_info:
-            grade_container = QFrame()
-            grade_container.setFrameShape(QFrame.StyledPanel)
-            grade_container.setFrameShadow(QFrame.Sunken)
-            grade_container.setMinimumSize(220, 90)  # Increased minimum container size
-            grade_container.setMaximumSize(350, 120)  # Increased maximum container size
-            grade_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            grade_container_layout = QVBoxLayout(grade_container)
-            grade_container_layout.setContentsMargins(5, 5, 5, 5)
-            grade_container_layout.setSpacing(3)
-            
-            title_label = QLabel(label_text)
-            title_label.setAlignment(Qt.AlignCenter)
-            title_label.setFont(QFont("Arial", 10, QFont.Bold))  # Reduced title font slightly
-            title_label.setFixedHeight(35)  # Increased height for title
-            grade_container_layout.addWidget(title_label)
+        # Grade statistics frame
+        grade_stats_frame = QFrame()
+        grade_stats_frame.setStyleSheet("border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: #f9f9f9;")
+        grade_stats_layout = QGridLayout(grade_stats_frame)
+        grade_stats_layout.setContentsMargins(10, 10, 10, 10)
+        grade_stats_layout.setSpacing(10)
+
+        # Grade labels with enhanced styling
+        for i in range(4):
+            grade_label = QLabel(f"Grade {i}")
+            grade_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+            grade_stats_layout.addWidget(grade_label, i, 0)
             
             count_label = QLabel("0")
+            count_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #333;")
             count_label.setAlignment(Qt.AlignCenter)
-            count_label.setStyleSheet(f"color: {color}; font-size: 22pt; font-weight: bold;")  # Slightly reduced
-            count_label.setFixedHeight(50)  # Increased height for count
-            self.live_stats_labels[grade_key] = count_label
-            grade_container_layout.addWidget(count_label)
+            setattr(self, f"grade_{i}_count", count_label)
+            grade_stats_layout.addWidget(count_label, i, 1)
             
-            grade_counts_layout.addWidget(grade_container)
-        grade_summary_layout.addWidget(grade_counts_frame)
+            percentage_label = QLabel("0%")
+            percentage_label.setStyleSheet("font-size: 14px; color: #666;")
+            percentage_label.setAlignment(Qt.AlignCenter)
+            setattr(self, f"grade_{i}_percentage", percentage_label)
+            grade_stats_layout.addWidget(percentage_label, i, 2)
 
-        # Live Grading Results (Fixed dimensions)
-        live_grading_group = QGroupBox("Live Grading Results")
-        live_grading_group.setFixedHeight(140)  # Increased height for bigger text
-        live_grading_layout = QGridLayout(live_grading_group)
-        live_grading_layout.setContentsMargins(15, 15, 15, 10)
-        live_grading_layout.setSpacing(8)
+        grade_summary_layout.addWidget(grade_stats_frame)
+
+        # Session information
+        session_info_frame = QFrame()
+        session_info_frame.setStyleSheet("border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: #f0f8ff;")
+        session_info_layout = QGridLayout(session_info_frame)
+        session_info_layout.setContentsMargins(10, 10, 10, 10)
+
+        session_info_layout.addWidget(QLabel("Total Processed:"), 0, 0)
+        self.total_processed_label = QLabel("0")
+        self.total_processed_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        session_info_layout.addWidget(self.total_processed_label, 0, 1)
+
+        session_info_layout.addWidget(QLabel("Session Duration:"), 1, 0)
+        self.session_duration_label = QLabel("00:00:00")
+        self.session_duration_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        session_info_layout.addWidget(self.session_duration_label, 1, 1)
+
+        grade_summary_layout.addWidget(session_info_frame)
+        self.stats_notebook.addTab(grade_summary_widget, "Grade Summary")
+
+        # Tab 2: Performance Metrics
+        performance_widget = QWidget()
+        performance_layout = QVBoxLayout(performance_widget)
+        performance_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Performance display area
+        self.performance_display = QTextEdit()
+        self.performance_display.setReadOnly(True)
+        self.performance_display.setStyleSheet("font-family: monospace; background-color: #f5f5f5;")
+        performance_layout.addWidget(self.performance_display)
+
+        self.stats_notebook.addTab(performance_widget, "Performance")
+
+        # Tab 3: System Log
+        log_widget = QWidget()
+        log_layout = QVBoxLayout(log_widget)
+        log_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Log display area
+        self.log_display = QTextEdit()
+        self.log_display.setReadOnly(True)
+        self.log_display.setStyleSheet("font-family: monospace; font-size: 11px; background-color: #f8f8f8;")
+        log_layout.addWidget(self.log_display)
+
+        # Log controls
+        log_controls_layout = QHBoxLayout()
+        btn_clear_log = QPushButton("Clear Log")
+        btn_clear_log.clicked.connect(lambda: self.log_display.clear())
+        log_controls_layout.addWidget(btn_clear_log)
         
-        # Top Camera Result
-        top_label = QLabel("Top Camera:")
-        top_label.setFixedWidth(120)  # Increased width
-        top_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        live_grading_layout.addWidget(top_label, 0, 0)
-        self.top_grade_label = QLabel("No wood detected")
-        self.top_grade_label.setStyleSheet("color: gray; font-size: 14px;")
-        self.top_grade_label.setFixedWidth(220)  # Increased width
-        live_grading_layout.addWidget(self.top_grade_label, 0, 1)
-
-        # Bottom Camera Result
-        bottom_label = QLabel("Bottom Camera:")
-        bottom_label.setFixedWidth(120)  # Increased width
-        bottom_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        live_grading_layout.addWidget(bottom_label, 1, 0)
-        self.bottom_grade_label = QLabel("No wood detected")
-        self.bottom_grade_label.setStyleSheet("color: gray; font-size: 14px;")
-        self.bottom_grade_label.setFixedWidth(220)  # Increased width
-        live_grading_layout.addWidget(self.bottom_grade_label, 1, 1)
-
-        # Final Grade Result (spanning 2 rows)
-        final_label = QLabel("Final Grade:")
-        final_label.setFixedWidth(120)  # Increased width
-        final_label.setStyleSheet("font-weight: bold; font-size: 16px;")
-        live_grading_layout.addWidget(final_label, 0, 2, 2, 1) # Span 2 rows
-        self.combined_grade_label = QLabel("No wood detected")
-        self.combined_grade_label.setStyleSheet("font-weight: bold; color: gray; font-size: 16px;")
-        self.combined_grade_label.setFixedWidth(280)  # Increased width
-        live_grading_layout.addWidget(self.combined_grade_label, 0, 3, 2, 1) # Span 2 rows
+        btn_export_log = QPushButton("Export Log")
+        btn_export_log.clicked.connect(self.export_log)
+        log_controls_layout.addWidget(btn_export_log)
+        log_controls_layout.addStretch()
         
-        grade_summary_layout.addWidget(live_grading_group)
-
-        # Tab 2: System Health & Error Monitoring (Fixed dimensions)
-        error_monitoring_tab = QWidget()
-        error_monitoring_layout = QVBoxLayout(error_monitoring_tab)
-        error_monitoring_layout.setContentsMargins(15, 10, 15, 10)
-        error_monitoring_layout.setSpacing(8)
-        self.stats_notebook.addTab(error_monitoring_tab, "System Health")
-        
-        # System status overview (Fixed dimensions)
-        health_overview_group = QGroupBox("System Status Overview")
-        health_overview_group.setFixedHeight(140)  # Fixed height
-        health_overview_layout = QGridLayout(health_overview_group)
-        health_overview_layout.setContentsMargins(15, 15, 15, 10)
-        health_overview_layout.setSpacing(8)
-        
-        # Camera System Status
-        cam_label = QLabel("Camera System:")
-        cam_label.setFixedWidth(120)
-        cam_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        health_overview_layout.addWidget(cam_label, 0, 0)
-        self.camera_health_label = QLabel("Checking...")
-        self.camera_health_label.setStyleSheet("color: gray; font-size: 14px;")
-        self.camera_health_label.setFixedWidth(200)
-        health_overview_layout.addWidget(self.camera_health_label, 0, 1)
-        
-        # Arduino Status
-        ard_label = QLabel("Arduino:")
-        ard_label.setFixedWidth(120)
-        ard_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        health_overview_layout.addWidget(ard_label, 1, 0)
-        self.arduino_health_label = QLabel("Checking...")
-        self.arduino_health_label.setStyleSheet("color: gray; font-size: 14px;")
-        self.arduino_health_label.setFixedWidth(200)
-        health_overview_layout.addWidget(self.arduino_health_label, 1, 1)
-        
-        # Detection System Status
-        det_label = QLabel("Detection System:")
-        det_label.setFixedWidth(120)
-        det_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        health_overview_layout.addWidget(det_label, 2, 0)
-        self.detection_health_label = QLabel("OK")
-        self.detection_health_label.setStyleSheet("color: green; font-size: 14px;")
-        self.detection_health_label.setFixedWidth(200)
-        health_overview_layout.addWidget(self.detection_health_label, 2, 1)
-        
-        # Wood Detection Status
-        wood_label = QLabel("Wood Detection:")
-        wood_label.setFixedWidth(120)
-        wood_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        health_overview_layout.addWidget(wood_label, 3, 0)
-        self.wood_detection_status_label = QLabel("Waiting for IR trigger")
-        self.wood_detection_status_label.setStyleSheet("color: gray; font-size: 14px;")
-        self.wood_detection_status_label.setFixedWidth(200)
-        health_overview_layout.addWidget(self.wood_detection_status_label, 3, 1)
-        
-        error_monitoring_layout.addWidget(health_overview_group)
-        
-        # Error summary (Fixed dimensions)
-        error_summary_group = QGroupBox("Recent Errors")
-        error_summary_group.setFixedHeight(150)  # Fixed height
-        error_summary_layout = QVBoxLayout(error_summary_group)
-        error_summary_layout.setContentsMargins(15, 15, 15, 10)
-        self.error_summary_text = QTextEdit()
-        self.error_summary_text.setFixedHeight(115)  # Fixed content height
-        self.error_summary_text.setReadOnly(True)
-        self.error_summary_text.setStyleSheet("font-size: 12px; font-family: Consolas, monospace;")
-        error_summary_layout.addWidget(self.error_summary_text)
-        error_monitoring_layout.addWidget(error_summary_group)
-
-        # Tab 3: Defect Details (Enhanced with fixed dimensions)
-        defect_details_tab = QWidget()
-        defect_details_layout = QVBoxLayout(defect_details_tab)
-        defect_details_layout.setContentsMargins(15, 10, 15, 10)
-        self.stats_notebook.addTab(defect_details_tab, "Defect Details")
-        
-        self.defect_details_text = QTextEdit()
-        self.defect_details_text.setFixedHeight(290)  # Fixed height for content
-        self.defect_details_text.setReadOnly(True)
-        self.defect_details_text.setText("Waiting for detection data...")
-        self.defect_details_text.setStyleSheet("font-size: 14px; font-family: Arial;")
-        defect_details_layout.addWidget(self.defect_details_text)
-
-        # Tab 4: Performance Metrics (Enhanced with fixed dimensions)
-        performance_tab = QWidget()
-        performance_layout = QVBoxLayout(performance_tab)
-        performance_layout.setContentsMargins(15, 10, 15, 10)
-        self.stats_notebook.addTab(performance_tab, "Performance")
-        
-        self.performance_text = QTextEdit()
-        self.performance_text.setFixedHeight(290)  # Fixed height for content
-        self.performance_text.setReadOnly(True)
-        self.performance_text.setStyleSheet("font-size: 14px; font-family: Arial;")
-        performance_layout.addWidget(self.performance_text)
-
-        # Tab 5: Recent Activity (Enhanced with fixed dimensions)
-        activity_tab = QWidget()
-        activity_layout = QVBoxLayout(activity_tab)
-        activity_layout.setContentsMargins(15, 10, 15, 10)
-        self.stats_notebook.addTab(activity_tab, "Recent Activity")
-        
-        self.activity_text = QTextEdit()
-        self.activity_text.setFixedHeight(290)  # Fixed height for content
-        self.activity_text.setReadOnly(True)
-        self.activity_text.setStyleSheet("font-size: 14px; font-family: Arial;")
-        activity_layout.addWidget(self.activity_text)
-
-    def setup_error_monitoring(self):
-        """Setup periodic error monitoring"""
-        self.error_timer = QTimer(self)
-        self.error_timer.timeout.connect(self.update_error_monitoring)
-        self.error_timer.start(5000)  # Update every 5 seconds
-        log_info(SystemComponent.GUI, "Error monitoring started")
-
-    def queue_performance_update(self, metrics):
-        """Queue performance update to be processed in main thread"""
-        try:
-            # Use QTimer.singleShot to ensure GUI updates happen in main thread
-            QTimer.singleShot(0, lambda: self.update_performance_display(metrics))
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error queuing performance update: {str(e)}", e)
-
-    def update_performance_display(self, metrics):
-        """Update performance display with real-time metrics"""
-        try:
-            if hasattr(self, 'performance_text'):
-                performance_text = f"""Real-Time Performance Metrics
-=================================
-
-Frame Rate: {metrics.fps:.1f} FPS
-Memory Usage: {metrics.memory_usage_mb:.1f} MB
-CPU Usage: {metrics.cpu_usage_percent:.1f}%
-Processing Time: {metrics.processing_time_ms:.1f} ms
-
-Component Timing:
-• Detection: {metrics.detection_time_ms:.1f} ms
-• Arduino: {metrics.arduino_time_ms:.1f} ms  
-• GUI Updates: {metrics.gui_update_time_ms:.1f} ms
-
-System Status: {'OPTIMAL' if metrics.fps > 25 and metrics.cpu_usage_percent < 80 else 'DEGRADED' if metrics.fps > 15 else 'CRITICAL'}
-"""
-                self.performance_text.setText(performance_text)
-                
-                # Update frame rate for performance monitoring
-                self.performance_monitor.update_frame_rate()
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error updating performance display: {str(e)}", e)
-
-    def update_error_monitoring(self):
-        """Update system health indicators and error summary"""
-        if not self.error_monitoring_active:
-            return
-            
-        try:
-            # Update camera health
-            camera_status = self.camera_module.get_camera_status()
-            available_cameras = self.camera_module.get_available_cameras()
-            
-            if len(available_cameras) == 2:
-                self.camera_health_label.setText("HEALTHY")
-                self.camera_health_label.setStyleSheet("color: green; font-weight: bold;")
-            elif len(available_cameras) == 1:
-                self.camera_health_label.setText("DEGRADED (1 camera)")
-                self.camera_health_label.setStyleSheet("color: orange; font-weight: bold;")
-            else:
-                self.camera_health_label.setText("CRITICAL (no cameras)")
-                self.camera_health_label.setStyleSheet("color: red; font-weight: bold;")
-            
-            # Update Arduino health
-            arduino_status = self.arduino_module.get_connection_status()
-            if arduino_status.get("connected", False):
-                self.arduino_health_label.setText("CONNECTED")
-                self.arduino_health_label.setStyleSheet("color: green; font-weight: bold;")
-            else:
-                self.arduino_health_label.setText("DISCONNECTED")
-                self.arduino_health_label.setStyleSheet("color: red; font-weight: bold;")
-            
-            # Update wood detection status based on current mode and IR state
-            if self.current_mode == "TRIGGER":
-                if self.ir_triggered:
-                    if self.wood_confirmed:
-                        self.wood_detection_status_label.setText("Wood detected - Processing")
-                        self.wood_detection_status_label.setStyleSheet("color: green; font-weight: bold;")
-                    else:
-                        self.wood_detection_status_label.setText("Object detected - Checking for wood")
-                        self.wood_detection_status_label.setStyleSheet("color: orange; font-weight: bold;")
-                else:
-                    self.wood_detection_status_label.setText("Waiting for IR trigger")
-                    self.wood_detection_status_label.setStyleSheet("color: gray;")
-            elif self.current_mode == "CONTINUOUS":
-                self.wood_detection_status_label.setText("Continuous mode - Always active")
-                self.wood_detection_status_label.setStyleSheet("color: blue;")
-            else:
-                self.wood_detection_status_label.setText("IDLE - Detection inactive")
-                self.wood_detection_status_label.setStyleSheet("color: gray;")
-            
-            # Update error summary
-            error_summary = get_error_summary()
-            error_text = f"Total Errors: {error_summary.get('total_errors', 0)}\n"
-            
-            if error_summary.get('last_errors'):
-                error_text += "Recent Issues:\n"
-                for component, error_info in error_summary['last_errors'].items():
-                    error_text += f"• {component}: {error_info.get('message', 'Unknown')} ({error_info.get('timestamp', 'Unknown time')})\n"
-            else:
-                error_text += "No recent errors detected."
-            
-            self.error_summary_text.setText(error_text)
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error in error monitoring update: {str(e)}", e)
-
-    def process_message_queue(self):
-        """Process messages from Arduino and other background threads"""
-        try:
-            while not self.message_queue.empty():
-                try:
-                    message_type, message_data = self.message_queue.get_nowait()
-                    
-                    if message_type == "arduino_message":
-                        self.handle_arduino_message(message_data)
-                    elif message_type == "status_update":
-                        self.status_label.setText(f"Status: {message_data}")
-                        log_info(SystemComponent.GUI, f"Status update: {message_data}")
-                    elif message_type == "error":
-                        log_error(SystemComponent.GUI, f"Received error message: {message_data}")
-                        
-                except queue.Empty:
-                    break
-                except Exception as e:
-                    log_error(SystemComponent.GUI, f"Error processing message: {str(e)}", e)
-                    
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error in message queue processing: {str(e)}", e)
-        
-        # Schedule next check
-        QTimer.singleShot(100, self.process_message_queue)
-
-    def handle_arduino_message(self, message):
-        """Handle messages received from Arduino"""
-        try:
-            log_info(SystemComponent.GUI, f"Arduino message received: {message}")
-            
-            if message == "B":
-                # IR beam broken - start wood detection workflow
-                self.handle_ir_beam_broken()
-            elif message.startswith("L:"):
-                # Length measurement received
-                try:
-                    duration_ms = int(message.split(":")[1])
-                    self.handle_length_measurement(duration_ms)
-                except (ValueError, IndexError) as e:
-                    log_error(SystemComponent.GUI, f"Invalid length message format: {message}", e)
-            else:
-                # Other Arduino messages
-                self.status_label.setText(f"Status: Arduino: {message}")
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error handling Arduino message '{message}': {str(e)}", e)
-
-    def handle_ir_beam_broken(self):
-        """Handle IR beam broken event - start wood detection workflow with checkbox activation"""
-        try:
-            log_info(SystemComponent.GUI, "IR beam broken - starting wood detection workflow")
-            
-            # Only respond to IR triggers in TRIGGER mode (like original application)
-            if self.current_mode == "TRIGGER":
-                if not self.auto_detection_active:
-                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting detection...")
-                    log_info(SystemComponent.GUI, "🔧 Arduino should now set motorActiveForTrigger = true")
-                    log_info(SystemComponent.GUI, "⚡ Stepper motor should start running NOW!")
-                    
-                    # Activate the Live Detection and Auto Grade checkboxes (like original behavior)
-                    self.live_detect_checkbox.setChecked(True)
-                    self.auto_grade_checkbox.setChecked(True)
-                    
-                    # Update internal state variables
-                    self.live_detection_var = True
-                    self.auto_grade_var = True
-                    
-                    # Update states
-                    self.ir_triggered = True
-                    self.wood_confirmed = False
-                    self.auto_detection_active = True
-                    
-                    self.status_label.setText("Status: IR TRIGGERED - Motor should be running!")
-                    
-                else:
-                    log_warning(SystemComponent.GUI, "⚠️ IR beam broken but detection already active")
-            else:
-                # In IDLE or CONTINUOUS mode, just log the IR signal but don't act on it
-                log_info(SystemComponent.GUI, f"❌ IR beam broken received but system is in {self.current_mode} mode - ignoring trigger")
-                self.status_label.setText(f"Status: IR signal ignored ({self.current_mode} mode)")
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error handling IR beam broken: {str(e)}", e)
-
-    def handle_length_measurement(self, duration_ms):
-        """Handle length measurement from Arduino - IR beam cleared, stop detection"""
-        try:
-            # Calculate estimated length based on conveyor speed
-            estimated_speed_mm_per_ms = 0.1  # Adjust this value based on testing
-            estimated_length_mm = duration_ms * estimated_speed_mm_per_ms
-            
-            log_info(SystemComponent.GUI, f"Length measurement: {duration_ms}ms → ~{estimated_length_mm:.1f}mm")
-            
-            # In TRIGGER mode, stop detection when beam clears (length message received)
-            if self.current_mode == "TRIGGER" and self.auto_detection_active:
-                log_info(SystemComponent.GUI, "IR beam cleared – stopping detection (TRIGGER MODE)")
-                
-                # Deactivate the checkboxes (like original behavior)
-                self.live_detect_checkbox.setChecked(False)
-                self.auto_grade_checkbox.setChecked(False)
-                
-                # Update internal state variables
-                self.live_detection_var = False
-                self.auto_grade_var = False
-                
-                # Stop detection session
-                self.auto_detection_active = False
-                self.ir_triggered = False
-                self.wood_confirmed = False
-                
-                self.status_label.setText("Status: Processing results... → Ready for next trigger")
-                
-                # Process any final grading if needed
-                self.finalize_detection_session()
-                
-                # Return to ready state
-                self.status_label.setText("Status: TRIGGER MODE - Waiting for IR beam trigger")
-                
-            else:
-                log_info(SystemComponent.GUI, f"Length signal received (duration: {duration_ms}ms) but system is in {self.current_mode} mode or no detection active")
-                self.status_label.setText(f"Status: Object length: ~{estimated_length_mm:.1f}mm")
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error handling length measurement: {str(e)}", e)
-
-    def finalize_detection_session(self):
-        """Finalize the detection session and perform grading if needed"""
-        try:
-            # This method would contain the logic to finalize grading
-            # Based on accumulated detection data during the session
-            log_info(SystemComponent.GUI, "Finalizing detection session...")
-            
-            # Here you would typically:
-            # 1. Collect all detection results from the session
-            # 2. Determine final grade
-            # 3. Send Arduino command
-            # 4. Update statistics
-            
-            # For now, just log completion
-            log_info(SystemComponent.GUI, "Detection session finalized")
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error finalizing detection session: {str(e)}", e)
-
-    def update_defect_analysis_panel(self, camera_name, defect_dict, measurements=None):
-        """Update the live defect analysis panel with detailed defect information"""
-        try:
-            # Clear existing defect widgets
-            while self.defect_details_layout.count():
-                child = self.defect_details_layout.takeAt(0)
-                if child.widget():
-                    child.widget().deleteLater()
-            
-            if measurements and defect_dict:
-                # Update current grade display
-                surface_grade = self.determine_surface_grade(measurements)
-                grade_color = self.get_grade_color(surface_grade)
-                self.current_grade_label.setText(f"Final Grade: {surface_grade}")
-                self.current_grade_label.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {grade_color}; padding: 10px;")
-                
-                # Camera info header
-                camera_header = QLabel(f"📹 {camera_name.title()} Camera Analysis")
-                camera_header.setStyleSheet("font-size: 13px; font-weight: bold; color: #2c3e50; padding: 8px; background-color: #ecf0f1; border-radius: 3px;")
-                self.defect_details_layout.addWidget(camera_header)
-                
-                # Defect count summary
-                defect_count_label = QLabel(f"🔍 Total Defects Found: {len(measurements)}")
-                defect_count_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #e74c3c; padding: 5px;")
-                self.defect_details_layout.addWidget(defect_count_label)
-                
-                # Individual defect details
-                for i, (defect_type, size_mm, percentage) in enumerate(measurements, 1):
-                    defect_frame = QFrame()
-                    defect_frame.setFrameStyle(QFrame.StyledPanel)
-                    defect_frame.setStyleSheet("background-color: #ffffff; border: 1px solid #bdc3c7; border-radius: 5px; margin: 2px;")
-                    defect_layout = QVBoxLayout(defect_frame)
-                    defect_layout.setContentsMargins(8, 8, 8, 8)
-                    
-                    # Defect type and number
-                    defect_title = QLabel(f"Defect #{i}: {defect_type.replace('_', ' ').title()}")
-                    defect_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #2c3e50;")
-                    defect_layout.addWidget(defect_title)
-                    
-                    # Size information with visual representation
-                    size_text = f"📏 Size: {size_mm:.1f}mm ({percentage:.1f}% of wood width)"
-                    size_label = QLabel(size_text)
-                    size_label.setStyleSheet("font-size: 11px; color: #34495e; margin-left: 10px;")
-                    defect_layout.addWidget(size_label)
-                    
-                    # Size bar visualization
-                    size_bar = QProgressBar()
-                    size_bar.setMaximum(100)
-                    size_bar.setValue(min(int(percentage), 100))
-                    size_bar.setTextVisible(False)
-                    size_bar.setFixedHeight(8)
-                    
-                    # Color code the progress bar based on severity
-                    if percentage < 10:
-                        bar_color = "#27ae60"  # Green for small defects
-                    elif percentage < 25:
-                        bar_color = "#f39c12"  # Orange for medium defects
-                    else:
-                        bar_color = "#e74c3c"  # Red for large defects
-                        
-                    size_bar.setStyleSheet(f"""
-                        QProgressBar {{
-                            border: 1px solid #bdc3c7;
-                            border-radius: 4px;
-                            background-color: #ecf0f1;
-                        }}
-                        QProgressBar::chunk {{
-                            background-color: {bar_color};
-                            border-radius: 3px;
-                        }}
-                    """)
-                    defect_layout.addWidget(size_bar)
-                    
-                    # Individual grade for this defect
-                    individual_grade = self.grade_individual_defect(defect_type, size_mm, percentage)
-                    grade_color = self.get_grade_color(individual_grade)
-                    grade_text = f"⭐ Individual Grade: {individual_grade}"
-                    grade_label = QLabel(grade_text)
-                    grade_label.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {grade_color}; margin-left: 10px;")
-                    defect_layout.addWidget(grade_label)
-                    
-                    # SS-EN 1611-1 threshold information
-                    threshold_info = self.get_threshold_info(defect_type, size_mm, percentage)
-                    threshold_label = QLabel(f"📋 Threshold: {threshold_info}")
-                    threshold_label.setStyleSheet("font-size: 10px; color: #7f8c8d; margin-left: 10px; font-style: italic;")
-                    defect_layout.addWidget(threshold_label)
-                    
-                    self.defect_details_layout.addWidget(defect_frame)
-                
-                # Grading summary
-                self.add_grading_summary(measurements)
-                
-                # Update camera status
-                self.update_camera_status(camera_name, f"✅ {len(measurements)} defects detected")
-                
-            elif defect_dict:
-                # Simple detection mode (no measurements)
-                self.current_grade_label.setText("Final Grade: Simple Detection Mode")
-                self.current_grade_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #f39c12; padding: 10px;")
-                
-                simple_info = QLabel(f"Simple detection for {camera_name.title()} Camera\nTotal defects: {sum(defect_dict.values())}")
-                simple_info.setStyleSheet("color: #7f8c8d; padding: 10px;")
-                self.defect_details_layout.addWidget(simple_info)
-                
-                self.update_camera_status(camera_name, f"⚠️ Simple mode: {sum(defect_dict.values())} defects")
-                
-            else:
-                # No defects detected
-                self.current_grade_label.setText("Final Grade: Waiting for wood...")
-                self.current_grade_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #666; padding: 10px;")
-                
-                no_defects_label = QLabel("No defects detected\n\nWaiting for wood detection...")
-                no_defects_label.setAlignment(Qt.AlignCenter)
-                no_defects_label.setStyleSheet("color: #888; font-style: italic; padding: 20px;")
-                self.defect_details_layout.addWidget(no_defects_label)
-                
-                self.update_camera_status(camera_name, "🔄 Ready for detection")
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error updating defect analysis panel: {str(e)}", e)
-
-    def determine_surface_grade(self, measurements):
-        """Determine surface grade from measurements - simplified version"""
-        if not measurements:
-            return "G2-0"  # Perfect grade if no defects
-        
-        # This is a simplified grading - in production you'd use the full SS-EN 1611-1 logic
-        total_defects = len(measurements)
-        if total_defects > 6:
-            return "G2-4"
-        elif total_defects > 4:
-            return "G2-3"
-        elif total_defects > 2:
-            return "G2-2"
-        else:
-            return "G2-1"
-
-    def grade_individual_defect(self, defect_type, size_mm, percentage):
-        """Grade individual defect - simplified version"""
-        if percentage > 35:
-            return "G2-4"
-        elif percentage > 25:
-            return "G2-3"
-        elif percentage > 15:
-            return "G2-2"
-        elif percentage > 5:
-            return "G2-1"
-        else:
-            return "G2-0"
-
-    def get_grade_color(self, grade):
-        """Get color for grade display"""
-        color_map = {
-            "G2-0": "#27ae60",  # Green
-            "G2-1": "#2ecc71",  # Light green
-            "G2-2": "#f39c12",  # Orange
-            "G2-3": "#e67e22",  # Dark orange
-            "G2-4": "#e74c3c"   # Red
-        }
-        return color_map.get(grade, "#666")
-
-    def get_threshold_info(self, defect_type, size_mm, percentage):
-        """Get threshold information for display"""
-        # Simplified threshold display
-        if defect_type == "Sound_Knot":
-            return f"Sound knot limits: G2-0≤10mm, G2-1≤30mm, G2-2≤50mm"
-        else:
-            return f"Unsound knot limits: G2-0≤7mm, G2-1≤20mm, G2-2≤35mm"
-
-    def add_grading_summary(self, measurements):
-        """Add grading summary to defect panel"""
-        summary_frame = QFrame()
-        summary_frame.setFrameStyle(QFrame.StyledPanel)
-        summary_frame.setStyleSheet("background-color: #f8f9fa; border: 2px solid #3498db; border-radius: 5px; margin: 5px;")
-        summary_layout = QVBoxLayout(summary_frame)
-        
-        summary_title = QLabel("📊 SS-EN 1611-1 Grading Summary")
-        summary_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #2c3e50; padding: 5px;")
-        summary_layout.addWidget(summary_title)
-        
-        total_defects = len(measurements)
-        if total_defects > 6:
-            reasoning = "More than 6 defects → Automatic G2-4"
-        elif total_defects > 4:
-            reasoning = "More than 4 defects → Maximum G2-3"
-        elif total_defects > 2:
-            reasoning = "More than 2 defects → Maximum G2-2"
-        else:
-            reasoning = "≤2 defects → Based on individual grades"
-        
-        reasoning_label = QLabel(f"Reasoning: {reasoning}")
-        reasoning_label.setStyleSheet("font-size: 11px; color: #34495e; padding: 3px; margin-left: 10px;")
-        summary_layout.addWidget(reasoning_label)
-        
-        self.defect_details_layout.addWidget(summary_frame)
-
-    def update_camera_status(self, camera_name, status_text):
-        """Update camera status in the defect panel"""
-        if camera_name == "top":
-            self.top_camera_status.setText(f"Top Camera: {status_text}")
-        else:
-            self.bottom_camera_status.setText(f"Bottom Camera: {status_text}")
+        log_layout.addLayout(log_controls_layout)
+        self.stats_notebook.addTab(log_widget, "System Log")
 
     def setup_dev_mode(self):
         if self.dev_mode:
@@ -1034,587 +460,883 @@ System Status: {'OPTIMAL' if metrics.fps > 25 and metrics.cpu_usage_percent < 80
         return True # Always detect wood in dev mode for now
 
     def simulate_camera_feed(self):
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self._update_simulated_feed)
-        self.timer.start(100) # Update every 100 ms (10 FPS)
-
-    def _update_simulated_feed(self):
-        current_time = QDateTime.currentDateTime().toString(Qt.DefaultLocaleLongDate)
-        dummy_image = QImage(self.camera_module.camera_width, self.camera_module.camera_height, QImage.Format_RGB32)
-        dummy_image.fill(Qt.darkGray)
+        """Simulate camera feeds in development mode"""
+        import numpy as np
         
-        painter = QPainter(dummy_image)
-        painter.setPen(Qt.white)
-        painter.setFont(QFont("Arial", 24))
-        painter.drawText(dummy_image.rect(), Qt.AlignCenter, f"SIMULATED FEED\n{current_time}\nDEV MODE")
-        painter.end()
+        # Create mock images for top and bottom cameras
+        height, width = 480, 640
+        
+        # Top camera - create a mock wood piece image
+        top_image = np.random.randint(100, 200, (height, width, 3), dtype=np.uint8)
+        # Add some wood-like texture
+        cv2.rectangle(top_image, (50, 100), (590, 380), (139, 69, 19), -1)  # Brown wood color
+        cv2.putText(top_image, "TOP CAMERA - MOCK FEED", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        # Bottom camera - create another mock wood piece image
+        bottom_image = np.random.randint(80, 180, (height, width, 3), dtype=np.uint8)
+        cv2.rectangle(bottom_image, (60, 120), (580, 360), (101, 67, 33), -1)  # Different brown
+        cv2.putText(bottom_image, "BOTTOM CAMERA - MOCK FEED", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        # Store mock frames
+        self.top_frame_original = top_image
+        self.bottom_frame_original = bottom_image
 
-        pixmap = QPixmap.fromImage(dummy_image)
-        self.top_camera_label.setPixmap(pixmap.scaled(self.top_camera_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.bottom_camera_label.setPixmap(pixmap.scaled(self.bottom_camera_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+    def display_message(self, message, msg_type="info"):
+        """Display message in the log with timestamp"""
+        timestamp = QDateTime.currentDateTime().toString('hh:mm:ss')
+        log_entry = f"[{timestamp}] {message}"
+        
+        # Add to log display
+        if hasattr(self, 'log_display'):
+            self.log_display.append(log_entry)
+        
+        # Print to console
+        print(log_entry)
 
     def update_feeds(self):
-        """Enhanced camera feed update with integrated wood detection and error handling"""
+        """Update camera feeds and process detection"""
         try:
-            # In dev_mode, the simulated feed is handled by _update_simulated_feed's QTimer.
+            print(f"DEBUG: update_feeds called - live_detection_var: {self.live_detection_var}")
+            # Get frames from cameras or use mock frames in dev mode
             if self.dev_mode:
-                QTimer.singleShot(10, self.update_feeds)
-                return
-
-            # Read frames from cameras
-            ret_top, frame_top = self.camera_module.read_frame("top")
-            ret_bottom, frame_bottom = self.camera_module.read_frame("bottom")
-
-            # Process top camera
-            if ret_top and frame_top is not None:
-                try:
-                    # Determine if we should run defect detection
-                    run_defect_detection = self._should_run_defect_detection()
-                    
-                    # Apply ROI if enabled
-                    roi_frame_top, roi_info = self.camera_module.apply_roi(
-                        frame_top, "top", {"top": True}, 
-                        {"top": {"x1": 150, "y1": 80, "x2": 1130, "y2": 640}}
-                    )
-                    
-                    if run_defect_detection:
-                        # Run defect detection on ROI frame
-                        processed_frame_top, defect_dict_top, measurements_top = self.detection_module.analyze_frame(
-                            roi_frame_top if roi_info else frame_top, "top"
-                        )
-                        
-                        # Update defect details and grading if we have detections
-                        if defect_dict_top or measurements_top:
-                            self.update_defect_details("top", defect_dict_top, measurements_top)
-                            
-                    else:
-                        processed_frame_top = roi_frame_top if roi_info else frame_top
-                        
-                    # Draw ROI overlay for visualization
-                    display_frame_top = self.camera_module.draw_roi_overlay(
-                        processed_frame_top, "top", {"top": True},
-                        {"top": {"x1": 150, "y1": 80, "x2": 1130, "y2": 640}}
-                    )
-                    
-                    self._display_frame(display_frame_top, self.top_camera_label)
-                    
-                except Exception as e:
-                    log_error(SystemComponent.GUI, f"Error processing top camera frame: {str(e)}", e)
-                    self.top_camera_label.setText("Top Camera: Processing Error")
+                top_frame = self.top_frame_original.copy() if self.top_frame_original is not None else None
+                bottom_frame = self.bottom_frame_original.copy() if self.bottom_frame_original is not None else None
             else:
-                self.top_camera_label.setText("Top Camera: Not Available")
+                top_frame = self.camera_module.get_top_frame()
+                bottom_frame = self.camera_module.get_bottom_frame()
 
-            # Process bottom camera
-            if ret_bottom and frame_bottom is not None:
-                try:
-                    run_defect_detection = self._should_run_defect_detection()
-                    
-                    if run_defect_detection:
-                        processed_frame_bottom, defect_dict_bottom, measurements_bottom = self.detection_module.analyze_frame(
-                            frame_bottom, "bottom"
-                        )
-                        
-                        if defect_dict_bottom or measurements_bottom:
-                            self.update_defect_details("bottom", defect_dict_bottom, measurements_bottom)
+            # Update camera status
+            self.update_camera_status("top", top_frame is not None)
+            self.update_camera_status("bottom", bottom_frame is not None)
+
+            # Process frames if available
+            if top_frame is not None:
+                # Validate frame before processing
+                if not self._validate_frame(top_frame):
+                    self.display_message("Invalid frame data received from top camera", "warning")
+                    top_frame = None
+                else:
+                    # Run detection if live detection is enabled
+                    if self.live_detection_var:
+                        try:
+                            print(f"DEBUG: GUI calling detection_module.analyze_frame for top camera")
+                            annotated_frame, defects, defect_list, alignment_result = self.detection_module.analyze_frame(top_frame, "top")
+                            print(f"DEBUG: GUI received result from detection_module.analyze_frame for top camera")
+                            self.current_defects["top"] = {"defects": defects, "defect_list": defect_list}
+
+                            # Auto grade if enabled
+                            if self.auto_grade_var:
+                                self.calculate_and_display_grade()
+                        except Exception as e:
+                            self.display_message(f"Detection error on top camera: {str(e)}", "error")
+                            print(f"DEBUG: Exception in GUI top camera detection: {str(e)}")
+                            import traceback
+                            traceback.print_exc()
+                            annotated_frame = top_frame
                     else:
-                        processed_frame_bottom = frame_bottom
-                        
-                    self._display_frame(processed_frame_bottom, self.bottom_camera_label)
-                    
-                except Exception as e:
-                    log_error(SystemComponent.GUI, f"Error processing bottom camera frame: {str(e)}", e)
-                    self.bottom_camera_label.setText("Bottom Camera: Processing Error")
-            else:
-                self.bottom_camera_label.setText("Bottom Camera: Not Available")
+                        annotated_frame = top_frame
 
-            # Update other UI elements periodically
-            current_time = time.time()
-            if current_time - getattr(self, '_last_ui_update', 0) > 1.0:  # Update every second
-                self._last_ui_update = current_time
-                self.update_performance_metrics()
-                self.update_recent_activity()
-                
+                    # Always apply alignment overlay for ROI visualization
+                    try:
+                        alignment_result = self.detection_module.alignment_module.check_wood_alignment(annotated_frame, None)
+                        annotated_frame = self.detection_module.alignment_module.draw_alignment_overlay(annotated_frame, alignment_result)
+                    except Exception as e:
+                        self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
+
+                    # Check for ROI intersection and add alerts regardless of live detection status
+                    try:
+                        # Always run wood detection for ROI alerts and bounding boxes
+                        wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
+
+                        if wood_detected and wood_bbox:
+                            # Check if wood bbox intersects with any ROI
+                            wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "top")
+
+                            # Add red border and text if wood intersects ROI
+                            if wood_intersects_roi:
+                                self._add_misalignment_indicators(annotated_frame)
+                                print(f"DEBUG: Added misalignment indicators for top camera - wood bbox: {wood_bbox}")
+
+                            # Draw bounding boxes regardless of live detection status
+                            if self.wood_detection_checkbox.isChecked():
+                                # Draw wood bounding box
+                                x1, y1, x2, y2 = wood_bbox
+                                if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
+                                    # Choose color based on ROI intersection
+                                    box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
+
+                                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
+
+                                    # Add corner markers
+                                    corner_size = 25
+                                    cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
+                                    cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
+                                    cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
+                                    cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
+
+                                    # Add label
+                                    status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
+                                    cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
+                                               (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
+
+                                    print(f"DEBUG: Drew bounding box for top camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
+                    except Exception as e:
+                        self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
+                        print(f"DEBUG: Exception in top camera ROI system: {str(e)}")
+
+                    # Convert and display
+                    self.display_frame(annotated_frame, self.top_camera_label)
+
+            if bottom_frame is not None:
+                # Validate frame before processing
+                if not self._validate_frame(bottom_frame):
+                    self.display_message("Invalid frame data received from bottom camera", "warning")
+                    bottom_frame = None
+                else:
+                    # Run detection if live detection is enabled
+                    if self.live_detection_var:
+                        try:
+                            print(f"DEBUG: GUI calling detection_module.analyze_frame for bottom camera")
+                            annotated_frame, defects, defect_list, alignment_result = self.detection_module.analyze_frame(bottom_frame, "bottom")
+                            print(f"DEBUG: GUI received result from detection_module.analyze_frame for bottom camera")
+                            self.current_defects["bottom"] = {"defects": defects, "defect_list": defect_list}
+
+                            # Auto grade if enabled (combined with top camera results)
+                            if self.auto_grade_var:
+                                self.calculate_and_display_grade()
+                        except Exception as e:
+                            self.display_message(f"Detection error on bottom camera: {str(e)}", "error")
+                            print(f"DEBUG: Exception in GUI bottom camera detection: {str(e)}")
+                            import traceback
+                            traceback.print_exc()
+                            annotated_frame = bottom_frame
+                    else:
+                        annotated_frame = bottom_frame
+
+                    # Always apply alignment overlay for ROI visualization
+                    try:
+                        alignment_result = self.detection_module.alignment_module.check_wood_alignment(annotated_frame, None)
+                        annotated_frame = self.detection_module.alignment_module.draw_alignment_overlay(annotated_frame, alignment_result)
+                    except Exception as e:
+                        self.display_message(f"Error applying alignment overlay: {str(e)}", "warning")
+
+                    # Check for ROI intersection and add alerts regardless of live detection status
+                    try:
+                        # Always run wood detection for ROI alerts and bounding boxes
+                        wood_detected, wood_confidence, wood_bbox = self.detection_module.detect_wood_presence(annotated_frame)
+
+                        if wood_detected and wood_bbox:
+                            # Check if wood bbox intersects with any ROI
+                            wood_intersects_roi = self._check_wood_roi_intersection(wood_bbox, "bottom")
+
+                            # Add red border and text if wood intersects ROI
+                            if wood_intersects_roi:
+                                self._add_misalignment_indicators(annotated_frame)
+                                print(f"DEBUG: Added misalignment indicators for bottom camera - wood bbox: {wood_bbox}")
+
+                            # Draw bounding boxes regardless of live detection status
+                            if self.wood_detection_checkbox.isChecked():
+                                # Draw wood bounding box
+                                x1, y1, x2, y2 = wood_bbox
+                                if x1 < x2 and y1 < y2 and x1 >= 0 and y1 >= 0 and x2 <= annotated_frame.shape[1] and y2 <= annotated_frame.shape[0]:
+                                    # Choose color based on ROI intersection
+                                    box_color = (0, 0, 255) if wood_intersects_roi else (0, 255, 0)  # Red if intersects, Green if not
+
+                                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_color, 5)
+
+                                    # Add corner markers
+                                    corner_size = 25
+                                    cv2.line(annotated_frame, (x1, y1), (x1 + corner_size, y1), box_color, 4)
+                                    cv2.line(annotated_frame, (x1, y1), (x1, y1 + corner_size), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y1), (x2 - corner_size, y1), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y1), (x2, y1 + corner_size), box_color, 4)
+                                    cv2.line(annotated_frame, (x1, y2), (x1 + corner_size, y2), box_color, 4)
+                                    cv2.line(annotated_frame, (x1, y2), (x1, y2 - corner_size), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y2), (x2 - corner_size, y2), box_color, 4)
+                                    cv2.line(annotated_frame, (x2, y2), (x2, y2 - corner_size), box_color, 4)
+
+                                    # Add label
+                                    status_text = "NOT ALIGNED" if wood_intersects_roi else "ALIGNED"
+                                    cv2.putText(annotated_frame, f"WOOD DETECTED ({status_text}, Conf: {wood_confidence:.2f})",
+                                               (x1 + 10, y1 + 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, box_color, 3)
+
+                                    print(f"DEBUG: Drew bounding box for bottom camera - wood bbox: {wood_bbox}, intersects ROI: {wood_intersects_roi}")
+                    except Exception as e:
+                        self.display_message(f"Error in ROI alert system: {str(e)}", "warning")
+                        print(f"DEBUG: Exception in bottom camera ROI system: {str(e)}")
+
+                    # Convert and display
+                    self.display_frame(annotated_frame, self.bottom_camera_label)
+
+            # Update session duration
+            self.update_session_duration()
+            
+            # Process message queue
+            self.process_message_queue()
+
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error in update_feeds: {str(e)}", e)
-        
-        # Schedule next update
-        QTimer.singleShot(10, self.update_feeds)
+            self.display_message(f"Error in update_feeds: {str(e)}", "error")
 
-    def _should_run_defect_detection(self):
-        """Determine if defect detection should run based on current mode and state"""
-        if self.current_mode == "CONTINUOUS":
-            return self.live_detection_var
-        elif self.current_mode == "TRIGGER":
-            return self.auto_detection_active and self.wood_confirmed
-        else:  # IDLE
+    def _validate_frame(self, frame):
+        """Validate frame data to prevent processing corrupted frames."""
+        try:
+            # Check if frame is None
+            if frame is None:
+                return False
+
+            # Check if frame has valid shape
+            if not hasattr(frame, 'shape') or len(frame.shape) != 3:
+                return False
+
+            # Check dimensions
+            height, width, channels = frame.shape
+            if height <= 0 or width <= 0 or channels not in [1, 3, 4]:
+                return False
+
+            # Check reasonable size limits (prevent extremely large frames)
+            if width > 4096 or height > 4096 or width < 16 or height < 16:
+                return False
+
+            # Check data type
+            if hasattr(frame, 'dtype') and frame.dtype != 'uint8':
+                return False
+
+            # Check if frame data is accessible and contiguous
+            try:
+                # Try to access a small portion of the frame
+                _ = frame[0:1, 0:1]
+                # Check if frame is contiguous in memory
+                if not frame.flags['C_CONTIGUOUS']:
+                    # Try to make it contiguous
+                    frame = frame.copy()
+                    _ = frame[0:1, 0:1]
+            except:
+                return False
+
+            # Additional validation for OpenCV matrix operations
+            try:
+                # Test basic OpenCV operations that might fail
+                import cv2
+                # Test color conversion (this often fails with corrupted frames)
+                if channels == 3:
+                    test_frame = cv2.cvtColor(frame[0:10, 0:10], cv2.COLOR_BGR2RGB)
+                    if test_frame.shape != (10, 10, 3):
+                        return False
+            except:
+                return False
+
+            return True
+
+        except Exception as e:
+            self.display_message(f"Frame validation failed: {str(e)}", "warning")
             return False
 
-    def update_defect_details(self, camera_name, defect_dict, measurements):
-        """Update defect details display using the new live defect analysis panel"""
-        try:
-            if not defect_dict and not measurements:
-                # Update panel to show no defects
-                self.update_defect_analysis_panel(camera_name, {}, [])
-                return
-            
-            # Update the new live defect analysis panel (main display)
-            self.update_defect_analysis_panel(camera_name, defect_dict, measurements)
-            
-            # Also update the defect details tab for historical tracking
-            current_details = self.defect_details_text.toPlainText()
-            
-            timestamp = QDateTime.currentDateTime().toString("hh:mm:ss")
-            new_details = f"\n[{timestamp}] {camera_name.upper()} Camera:\n"
-            
-            if measurements:
-                for defect_type, size_mm, percentage in measurements:
-                    new_details += f"  • {defect_type}: {size_mm:.1f}mm ({percentage:.1f}%)\n"
-            elif defect_dict:
-                for defect_type, count in defect_dict.items():
-                    new_details += f"  • {defect_type}: {count} detected\n"
-            
-            # Limit text length
-            if len(current_details) > 2000:
-                lines = current_details.split('\n')
-                current_details = '\n'.join(lines[-20:])  # Keep last 20 lines
-                
-            self.defect_details_text.setText(current_details + new_details)
-            
-            # Auto-scroll to bottom
-            cursor = self.defect_details_text.textCursor()
-            cursor.movePosition(cursor.End)
-            self.defect_details_text.setTextCursor(cursor)
-            
-            # Handle grading if in appropriate mode
-            if (self.current_mode == "TRIGGER" and self.auto_detection_active and 
-                self.wood_confirmed and self.auto_grade_var):
-                
-                # This is a simplified grading - in a full implementation,
-                # you'd collect measurements from both cameras before grading
-                if measurements:
-                    grade_info = calculate_grade(defect_dict)
-                    log_info(SystemComponent.GUI, 
-                            f"Calculated grade for {camera_name}: {grade_info}")
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error updating defect details: {str(e)}", e)
+    def display_frame(self, frame, label_widget):
+        """Convert OpenCV frame to QPixmap and display in label"""
+        if frame is not None:
+            try:
+                print(f"DEBUG: Displaying frame with shape: {frame.shape}, dtype: {frame.dtype}")
 
-    def update_performance_metrics(self):
-        """Update performance metrics tab"""
-        try:
-            uptime = time.time() - self.session_start_time
-            
-            metrics_text = f"""Performance Metrics (Session Uptime: {uptime/3600:.1f} hours)
+                # Check if frame has valid data
+                if frame.size == 0:
+                    print("DEBUG: Frame has zero size")
+                    return
 
-Processing Statistics:
-• Total Pieces Processed: {self.total_pieces_processed}
-• Average Processing Rate: {self.total_pieces_processed / max(uptime/60, 1):.1f} pieces/minute
-
-Camera System:
-• Available Cameras: {len(self.camera_module.get_available_cameras())}/2
-• Camera Health: {self.camera_module.get_system_health().get('status', 'Unknown')}
-
-Arduino System:
-• Connection Status: {'Connected' if self.arduino_module.is_connected() else 'Disconnected'}
-
-Error Summary:
-{get_error_summary().get('total_errors', 0)} total errors this session
-"""
-            
-            self.performance_text.setText(metrics_text)
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error updating performance metrics: {str(e)}", e)
-
-    def update_live_stats_display(self):
-        """Update the live statistics display safely"""
-        try:
-            for grade_key, label in self.live_stats_labels.items():
-                count = self.live_stats.get(grade_key, 0)
-                label.setText(str(count))
-                
-            log_info(SystemComponent.GUI, f"Updated live stats: {self.live_stats}")
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error updating live stats display: {str(e)}", e)
-
-    def update_recent_activity(self):
-        """Update recent activity tab"""
-        try:
-            activity_lines = []
-            
-            # Add recent session log entries
-            for log_entry in self.session_log[-10:]:  # Last 10 entries
-                activity_lines.append(
-                    f"[{log_entry.get('timestamp', 'Unknown')}] "
-                    f"Piece #{log_entry.get('piece_number', '?')}: "
-                    f"Grade {log_entry.get('final_grade', 'Unknown')}"
-                )
-                
-                defects = log_entry.get('defects', [])
-                if defects:
-                    for defect in defects:
-                        activity_lines.append(
-                            f"    → {defect.get('type', 'Unknown')}: "
-                            f"{defect.get('count', 0)} defects, "
-                            f"sizes: {defect.get('sizes', 'N/A')}"
-                        )
+                # Ensure frame is in correct format
+                if len(frame.shape) == 3 and frame.shape[2] == 3:
+                    rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 else:
-                    activity_lines.append("    → No defects detected")
-                    
-            if not activity_lines:
-                activity_lines = ["No pieces processed in this session."]
-                
-            self.activity_text.setText("\n".join(activity_lines))
+                    print(f"DEBUG: Frame has unexpected shape: {frame.shape}")
+                    rgb_image = frame
+
+                h, w = rgb_image.shape[:2]
+                ch = rgb_image.shape[2] if len(rgb_image.shape) > 2 else 1
+
+                print(f"DEBUG: RGB image shape: {rgb_image.shape}, channels: {ch}")
+
+                if ch == 3:
+                    bytes_per_line = ch * w
+                    qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                elif ch == 1:
+                    bytes_per_line = w
+                    qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_Grayscale8)
+                else:
+                    print(f"DEBUG: Unsupported number of channels: {ch}")
+                    return
+
+                if qt_image.isNull():
+                    print("DEBUG: QImage is null")
+                    return
+
+                # Scale image to fit label while maintaining aspect ratio
+                pixmap = QPixmap.fromImage(qt_image)
+                if pixmap.isNull():
+                    print("DEBUG: QPixmap is null")
+                    return
+
+                scaled_pixmap = pixmap.scaled(label_widget.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                if scaled_pixmap.isNull():
+                    print("DEBUG: Scaled QPixmap is null")
+                    return
+
+                label_widget.setPixmap(scaled_pixmap)
+                print(f"DEBUG: Successfully set pixmap on label")
+            except Exception as e:
+                self.display_message(f"Error displaying frame: {str(e)}", "error")
+                print(f"DEBUG: Exception in display_frame: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # Clear the label on error
+                label_widget.clear()
+        else:
+            print("DEBUG: Frame is None")
+
+    def update_camera_status(self, camera_name, is_available):
+        """Update camera status display"""
+        status_text = "Connected" if is_available else "Disconnected"
+        color = "green" if is_available else "red"
+        
+        if camera_name == "top":
+            self.top_camera_status.setText(f"Top Camera: {status_text}")
+            self.top_camera_status.setStyleSheet(f"font-size: 12px; color: {color};")
+        else:
+            self.bottom_camera_status.setText(f"Bottom Camera: {status_text}")
+            self.bottom_camera_status.setStyleSheet(f"font-size: 12px; color: {color};")
+
+    def calculate_and_display_grade(self):
+        """Calculate grade from current defects and display results"""
+        try:
+            # Combine defects from both cameras
+            all_defects = {}
+            all_defect_lists = []
             
-            # Auto-scroll to bottom
-            cursor = self.activity_text.textCursor()
-            cursor.movePosition(cursor.End)
-            self.activity_text.setTextCursor(cursor)
+            for camera in ["top", "bottom"]:
+                if camera in self.current_defects:
+                    camera_defects = self.current_defects[camera]["defects"]
+                    camera_defect_list = self.current_defects[camera]["defect_list"]
+                    
+                    # Merge defect counts
+                    for defect_type, count in camera_defects.items():
+                        all_defects[defect_type] = all_defects.get(defect_type, 0) + count
+                    
+                    # Add defect details
+                    all_defect_lists.extend(camera_defect_list)
+
+            # Calculate grade
+            grade_info = calculate_grade(all_defects)
+            final_grade = determine_final_grade(grade_info)
+            
+            # Store current grade info
+            self.current_grade_info = {
+                'grade': final_grade,
+                'defects': all_defects,
+                'defect_list': all_defect_lists,
+                'grade_info': grade_info
+            }
+            
+            # Update grade display
+            grade_color = get_grade_color(final_grade)
+            self.current_grade_label.setText(f"Final Grade: {final_grade}")
+            self.current_grade_label.setStyleSheet(f"""
+                font-size: 18px; font-weight: bold; padding: 10px;
+                border: 2px solid {grade_color}; border-radius: 5px;
+                background-color: {grade_color}20; color: {grade_color};
+            """)
+
+            # Update wood classification
+            self.update_wood_classification()
+
+            # Update defect details
+            self.update_defect_details(all_defects, all_defect_lists, grade_info)
+
+            # Update detection state
+            self.update_detection_state("Grading")
             
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error updating recent activity: {str(e)}", e)
+            self.display_message(f"Error calculating grade: {str(e)}", "error")
 
-    def _display_frame(self, frame, label):
-        # Convert OpenCV image to QPixmap
-        rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
-        convert_to_qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        p = convert_to_qt_format.scaled(label.width(), label.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        label.setPixmap(QPixmap.fromImage(p))
+    def update_defect_details(self, defects, defect_list, grade_info):
+        """Update the defect details display"""
+        details_text = "=== DEFECT ANALYSIS ===\n\n"
+        
+        # Defect summary
+        if defects:
+            details_text += "Defect Summary:\n"
+            for defect_type, count in defects.items():
+                details_text += f"• {defect_type}: {count}\n"
+        else:
+            details_text += "No defects detected.\n"
+        
+        details_text += "\n=== GRADE CALCULATION ===\n\n"
+        
+        # Grade breakdown
+        if grade_info:
+            for grade, criteria in grade_info.items():
+                if criteria['meets_criteria']:
+                    details_text += f"✓ Grade {grade}: MEETS CRITERIA\n"
+                    details_text += f"  Max defects allowed: {criteria['max_defects']}\n"
+                    details_text += f"  Current defects: {criteria['current_defects']}\n\n"
+                else:
+                    details_text += f"✗ Grade {grade}: EXCEEDS LIMITS\n"
+                    details_text += f"  Max defects allowed: {criteria['max_defects']}\n"
+                    details_text += f"  Current defects: {criteria['current_defects']}\n\n"
+        
+        # Detailed defect list
+        if defect_list:
+            details_text += "=== DETAILED DEFECTS ===\n\n"
+            for i, (defect_type, x, y) in enumerate(defect_list, 1):
+                details_text += f"{i}. {defect_type} at ({x:.1f}, {y:.1f})\n"
+        
+        self.defect_details_text.setPlainText(details_text)
 
-    def set_continuous_mode(self):
-        """Set system to continuous mode with enhanced logging and checkbox activation"""
+    def update_session_duration(self):
+        """Update session duration display"""
+        if hasattr(self, 'session_start_time'):
+            current_time = QDateTime.currentMSecsSinceEpoch() / 1000
+            duration_seconds = int(current_time - self.session_start_time)
+            
+            hours = duration_seconds // 3600
+            minutes = (duration_seconds % 3600) // 60
+            seconds = duration_seconds % 60
+            
+            duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            self.session_duration_label.setText(duration_str)
+
+    def process_message_queue(self):
+        """Process messages from Arduino module"""
         try:
-            log_info(SystemComponent.GUI, "Setting Continuous Mode")
-            self.current_mode = "CONTINUOUS"
-            
-            # Block signals to prevent toggle functions from interfering
-            self.live_detect_checkbox.blockSignals(True)
-            self.auto_grade_checkbox.blockSignals(True)
-            
-            # Update checkbox states for Continuous mode (both enabled and checked)
-            self.live_detect_checkbox.setEnabled(True)
-            self.auto_grade_checkbox.setEnabled(True)
-            self.live_detect_checkbox.setChecked(True)
-            self.auto_grade_checkbox.setChecked(True)
-            
-            # Unblock signals
-            self.live_detect_checkbox.blockSignals(False)
-            self.auto_grade_checkbox.blockSignals(False)
-            
-            # Update internal state variables
-            self.live_detection_var = True
-            self.auto_grade_var = True
-            
-            self.status_label.setText("Status: CONTINUOUS MODE - Live detection & auto-grading enabled")
-            
-            # Reset IR-triggered state
-            self.ir_triggered = False
+            while not self.message_queue.empty():
+                message = self.message_queue.get_nowait()
+                self.handle_arduino_message(message)
+        except:
+            pass
+
+    def handle_arduino_message(self, message):
+        """Handle messages received from Arduino"""
+        try:
+            log_info(SystemComponent.GUI, f"Arduino message received: {message}")
+
+            if message == "B":
+                # IR beam broken - start wood detection workflow
+                self.handle_ir_beam_broken()
+            elif message.startswith("L:"):
+                # Length measurement received
+                try:
+                    duration_ms = int(message.split(":")[1])
+                    self.handle_length_measurement(duration_ms)
+                except (ValueError, IndexError) as e:
+                    log_error(SystemComponent.GUI, f"Invalid length message format: {message}", e)
+            else:
+                # Other Arduino messages
+                self.update_system_status(f"Arduino: {message}")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error handling Arduino message '{message}': {str(e)}", e)
+
+    def handle_ir_beam_broken(self):
+        """Handle IR beam broken event - start wood detection workflow"""
+        try:
+            log_info(SystemComponent.GUI, "IR beam broken - starting wood detection workflow")
+
+            # Only respond to IR triggers in TRIGGER mode
+            if self.current_mode == "TRIGGER":
+                if not self.auto_detection_active:
+                    log_info(SystemComponent.GUI, "✅ TRIGGER MODE: Starting detection...")
+                    self.live_detection_checkbox.setChecked(True)
+                    self.auto_grade_checkbox.setChecked(True)
+
+                    # Update internal state variables
+                    self.live_detection_var = True
+                    self.auto_grade_var = True
+
+                    # Update states
+                    self.ir_triggered = True
+                    self.wood_confirmed = False
+                    self.auto_detection_active = True
+
+                    self.update_system_status("Status: IR TRIGGERED - Motor should be running!")
+                    self.update_detection_state("Detecting")
+
+                else:
+                    log_warning(SystemComponent.GUI, "⚠️ IR beam broken but detection already active")
+            else:
+                # In IDLE or CONTINUOUS mode, just log the IR signal but don't act on it
+                log_info(SystemComponent.GUI, f"❌ IR beam broken received but system is in {self.current_mode} mode - ignoring trigger")
+                self.update_system_status(f"Status: IR signal ignored ({self.current_mode} mode)")
+                self.update_detection_state("Waiting")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error handling IR beam broken: {str(e)}", e)
+
+    def handle_length_measurement(self, duration_ms):
+        """Handle length measurement from Arduino - IR beam cleared, stop detection"""
+        try:
+            # Calculate estimated length based on conveyor speed
+            estimated_speed_mm_per_ms = 0.1  # Adjust this value based on testing
+            estimated_length_mm = duration_ms * estimated_speed_mm_per_ms
+
+            log_info(SystemComponent.GUI, f"Length measurement: {duration_ms}ms → ~{estimated_length_mm:.1f}mm")
+
+            # In TRIGGER mode, stop detection when beam clears (length message received)
+            if self.current_mode == "TRIGGER" and self.auto_detection_active:
+                log_info(SystemComponent.GUI, "IR beam cleared – stopping detection (TRIGGER MODE)")
+
+                # Deactivate the checkboxes
+                self.live_detection_checkbox.setChecked(False)
+                self.auto_grade_checkbox.setChecked(False)
+
+                # Update internal state variables
+                self.live_detection_var = False
+                self.auto_grade_var = False
+
+                # Stop detection session
+                self.auto_detection_active = False
+                self.ir_triggered = False
+
+                if self.wood_confirmed:
+                    # Wood was detected, process grading
+                    self.wood_confirmed = False
+                    self.update_system_status("Status: Processing results... → Ready for next trigger")
+                    self.update_detection_state("Processing")
+
+                    # Process any final grading if needed
+                    self.finalize_detection_session()
+
+                    # Return to ready state
+                    self.update_system_status("Status: TRIGGER MODE - Waiting for IR beam trigger")
+                    self.update_detection_state("Waiting")
+                else:
+                    # No wood detected, start 3-second buffer
+                    self.update_system_status("Status: Object passed - No wood detected, waiting 3 seconds...")
+                    self.update_detection_state("Waiting")
+                    if self.no_wood_timer is None:
+                        self.no_wood_timer = QTimer(self)
+                        self.no_wood_timer.setSingleShot(True)
+                        self.no_wood_timer.timeout.connect(self.mark_object_cleared)
+                        self.no_wood_timer.start(3000)  # 3 seconds
+
+            else:
+                log_info(SystemComponent.GUI, f"Length signal received (duration: {duration_ms}ms) but system is in {self.current_mode} mode or no detection active")
+                self.update_system_status(f"Status: Object length: ~{estimated_length_mm:.1f}mm")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error handling length measurement: {str(e)}", e)
+
+    def finalize_detection_session(self):
+        """Finalize the detection session and perform grading if needed"""
+        try:
+            # This method would contain the logic to finalize grading
+            # Based on accumulated detection data during the session
+            log_info(SystemComponent.GUI, "Finalizing detection session...")
+
+            # Increment counters and update statistics
+            if self.current_grade_info:
+                grade = self.current_grade_info['grade']
+                if grade in self.grade_counts:
+                    self.grade_counts[grade] += 1
+                    self.live_stats[f"grade{grade}"] += 1
+                    self.total_pieces_processed += 1
+
+                    # Update UI counters
+                    self.update_grade_counters()
+
+            # Log completion
+            log_info(SystemComponent.GUI, "Detection session finalized")
+
+        except Exception as e:
+            log_error(SystemComponent.GUI, f"Error finalizing detection session: {str(e)}", e)
+
+    def mark_object_cleared(self):
+        """Mark object as cleared after 3-second buffer for no wood detection"""
+        try:
+            self.update_system_status("Status: Object cleared - No wood detected")
             self.wood_confirmed = False
             self.auto_detection_active = False
-            
-            # Send command to Arduino
-            success = self.arduino_module.send_arduino_command('C')
-            if not success:
-                log_warning(SystemComponent.GUI, "Failed to send continuous mode command to Arduino")
-            else:
-                log_info(SystemComponent.GUI, "Continuous mode command sent to Arduino successfully")
-                
+            self.ir_triggered = False
+            if self.no_wood_timer:
+                self.no_wood_timer = None
+            log_info(SystemComponent.GUI, "Object marked as cleared - no wood detected")
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error setting continuous mode: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error marking object cleared: {str(e)}", e)
+
+    def update_performance_display(self, metrics):
+        """Update performance metrics display"""
+        if hasattr(self, 'performance_display'):
+            performance_text = "=== PERFORMANCE METRICS ===\n\n"
+            
+            for metric_name, metric_value in metrics.items():
+                if isinstance(metric_value, float):
+                    performance_text += f"{metric_name}: {metric_value:.2f}\n"
+                else:
+                    performance_text += f"{metric_name}: {metric_value}\n"
+            
+            self.performance_display.setPlainText(performance_text)
+
+    # Control Methods
+    def set_continuous_mode(self):
+        """Set system to continuous mode"""
+        self.current_mode = "CONTINUOUS"
+        self.display_message("System set to CONTINUOUS mode")
+        self.update_system_status("Status: CONTINUOUS MODE - Live detection & auto-grading enabled")
+        self.update_detection_state("Waiting")
+
+        # Reset IR-triggered state
+        self.ir_triggered = False
+        self.wood_confirmed = False
+        self.auto_detection_active = False
+
+        # Send command to Arduino
+        success = self.arduino_module.send_arduino_command('C')
+        if not success:
+            log_warning(SystemComponent.GUI, "Failed to send continuous mode command to Arduino")
 
     def set_trigger_mode(self):
-        """Set system to trigger mode with enhanced logging and checkbox deactivation"""
-        try:
-            log_info(SystemComponent.GUI, "Setting Trigger Mode")
-            self.current_mode = "TRIGGER"
-            
-            # Block signals to prevent toggle functions from interfering
-            self.live_detect_checkbox.blockSignals(True)
-            self.auto_grade_checkbox.blockSignals(True)
-            
-            # Update checkbox states for Trigger mode (both enabled but unchecked - will be activated by IR trigger)
-            self.live_detect_checkbox.setEnabled(True)
-            self.auto_grade_checkbox.setEnabled(True)
-            self.live_detect_checkbox.setChecked(False)
-            self.auto_grade_checkbox.setChecked(False)
-            
-            # Unblock signals
-            self.live_detect_checkbox.blockSignals(False)
-            self.auto_grade_checkbox.blockSignals(False)
-            
-            # Update internal state variables
-            self.live_detection_var = False
-            self.auto_grade_var = False
-            
-            # Reset state
-            self.ir_triggered = False
-            self.wood_confirmed = False
-            self.auto_detection_active = False
-            
-            self.status_label.setText("Status: TRIGGER MODE - Waiting for IR beam trigger")
-            
-            # Send command to Arduino
-            success = self.arduino_module.send_arduino_command('T')
-            if not success:
-                log_warning(SystemComponent.GUI, "Failed to send trigger mode command to Arduino")
-            else:
-                log_info(SystemComponent.GUI, "Trigger mode command sent to Arduino successfully")
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error setting trigger mode: {str(e)}", e)
+        """Set system to trigger mode"""
+        self.current_mode = "TRIGGER"
+        self.display_message("System set to TRIGGER mode")
+        self.update_system_status("Status: TRIGGER MODE - Waiting for IR beam trigger")
+        self.update_detection_state("Waiting")
+
+        # Reset state
+        self.ir_triggered = False
+        self.wood_confirmed = False
+        self.auto_detection_active = False
+
+        # Send command to Arduino
+        success = self.arduino_module.send_arduino_command('T')
+        if not success:
+            log_warning(SystemComponent.GUI, "Failed to send trigger mode command to Arduino")
 
     def set_idle_mode(self):
-        """Set system to idle mode with enhanced logging and checkbox deactivation"""
+        """Set system to idle mode"""
+        self.current_mode = "IDLE"
+        self.display_message("System set to IDLE mode")
+        self.update_system_status("Status: IDLE MODE - System disabled, conveyor stopped")
+        self.update_detection_state("Waiting")
+
+        # Reset state
+        self.ir_triggered = False
+        self.wood_confirmed = False
+        self.auto_detection_active = False
+
+        # Send command to Arduino
+        success = self.arduino_module.send_arduino_command('X')
+        if not success:
+            log_warning(SystemComponent.GUI, "Failed to send idle mode command to Arduino")
+
+    def toggle_live_detection(self, checked):
+        """Toggle live detection mode"""
+        self.live_detection_var = checked
+        status = "enabled" if checked else "disabled"
+        self.display_message(f"Live detection {status}")
+
+        # Update status display
+        if checked:
+            self.update_system_status(f"Status: {self.current_mode} MODE - Live detection ACTIVE")
+        else:
+            self.update_system_status(f"Status: {self.current_mode} MODE - Live detection DISABLED")
+
+    def toggle_auto_grade(self, checked):
+        """Toggle auto grading mode"""
+        self.auto_grade_var = checked
+        status = "enabled" if checked else "disabled"
+        self.display_message(f"Auto grading {status}")
+
+    def toggle_roi(self, checked):
+        """Toggle ROI selection"""
+        roi_status = "Active" if checked else "Disabled"
+        self.display_message(f"Top ROI {roi_status}")
+
+    def toggle_wood_detection(self, checked):
+        """Toggle wood detection visualization"""
+        detection_status = "enabled" if checked else "disabled"
+        self.display_message(f"Wood detection visualization {detection_status}")
+
+    def _check_wood_roi_intersection(self, wood_bbox, camera_name):
+        """Check if wood bounding box intersects with any ROI (both top and bottom ROIs)"""
         try:
-            log_info(SystemComponent.GUI, "Setting IDLE Mode")
-            self.current_mode = "IDLE"
-            
-            # Block signals to prevent toggle functions from interfering
-            self.live_detect_checkbox.blockSignals(True)
-            self.auto_grade_checkbox.blockSignals(True)
-            
-            # Update checkbox states for IDLE mode (both unchecked but still enabled)
-            self.live_detect_checkbox.setChecked(False)
-            self.auto_grade_checkbox.setChecked(False)
-            self.live_detect_checkbox.setEnabled(True)
-            self.auto_grade_checkbox.setEnabled(True)
-            
-            # Unblock signals
-            self.live_detect_checkbox.blockSignals(False)
-            self.auto_grade_checkbox.blockSignals(False)
-            
-            # Update internal state variables
-            self.live_detection_var = False
-            self.auto_grade_var = False
-            
-            # Reset state
-            self.ir_triggered = False
-            self.wood_confirmed = False
-            self.auto_detection_active = False
-            
-            self.status_label.setText("Status: IDLE MODE - System disabled, conveyor stopped")
-            
-            # Send command to Arduino
-            success = self.arduino_module.send_arduino_command('X')
-            if not success:
-                log_warning(SystemComponent.GUI, "Failed to send idle mode command to Arduino")
-            else:
-                log_info(SystemComponent.GUI, "IDLE mode command sent to Arduino successfully")
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error setting idle mode: {str(e)}", e)
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error setting trigger mode: {str(e)}", e)
+            if not wood_bbox:
+                return False
 
-    def finalize_grading(self, final_grade, all_measurements):
-        """Enhanced grading finalization with comprehensive logging"""
+            wx1, wy1, wx2, wy2 = wood_bbox
+            print(f"DEBUG: Checking ROI intersection for {camera_name} camera")
+            print(f"DEBUG: Wood bbox: [{wx1}, {wy1}, {wx2}, {wy2}]")
+
+            # Use hardcoded ROI coordinates based on the log output
+            # From log: "Top: (64,0) to (1216,108), Bottom: (64,612) to (1216,720)"
+            frame_height = 720
+            frame_width = 1280
+
+            # Check both ROIs regardless of camera
+            top_roi = (64, 0, 1216, 108)  # Top ROI: (64,0) to (1216,108)
+            bottom_roi = (64, 612, 1216, 720)  # Bottom ROI: (64,612) to (1216,720)
+
+            # Check intersection with top ROI
+            top_x_overlap = (wx1 < top_roi[2]) and (wx2 > top_roi[0])
+            top_y_overlap = (wy1 < top_roi[3]) and (wy2 > top_roi[1])
+            top_intersection = top_x_overlap and top_y_overlap
+
+            # Check intersection with bottom ROI
+            bottom_x_overlap = (wx1 < bottom_roi[2]) and (wx2 > bottom_roi[0])
+            bottom_y_overlap = (wy1 < bottom_roi[3]) and (wy2 > bottom_roi[1])
+            bottom_intersection = bottom_x_overlap and bottom_y_overlap
+
+            # Wood intersects ROI if it touches either top OR bottom ROI
+            intersection = top_intersection or bottom_intersection
+
+            print(f"DEBUG: Top ROI: {top_roi} - X overlap: {top_x_overlap}, Y overlap: {top_y_overlap}, Intersection: {top_intersection}")
+            print(f"DEBUG: Bottom ROI: {bottom_roi} - X overlap: {bottom_x_overlap}, Y overlap: {bottom_y_overlap}, Intersection: {bottom_intersection}")
+            print(f"DEBUG: Overall ROI intersection result: {intersection}")
+
+            return intersection
+
+        except Exception as e:
+            self.display_message(f"Error checking ROI intersection: {str(e)}", "warning")
+            print(f"DEBUG: Exception in ROI intersection check: {str(e)}")
+            return False
+
+    def _add_misalignment_indicators(self, frame):
+        """Add red border and 'Wood not aligned' text to frame"""
         try:
-            # Convert grade to Arduino command for sorting
-            arduino_command = self.arduino_module.convert_grade_to_arduino_command(final_grade)
+            height, width = frame.shape[:2]
 
-            # Increment piece count and create log entry
-            self.total_pieces_processed += 1
-            piece_number = self.total_pieces_processed
-            
-            # Log to reporting module
-            self.reporting_module.finalize_grading_log(final_grade, all_measurements, piece_number)
+            # Add red border around the entire frame
+            border_thickness = 8
+            cv2.rectangle(frame, (0, 0), (width-1, height-1), (0, 0, 255), border_thickness)
 
-            # Update UI statistics
-            self.grade_counts[arduino_command] += 1
-            self.live_stats[f"grade{arduino_command}"] += 1
-            self.update_live_stats_display()
+            # Add "Wood not aligned" text in the center
+            text = "WOOD NOT ALIGNED"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 2.0
+            font_thickness = 4
 
-            # Send command to Arduino if it's connected
-            if not self.dev_mode and self.arduino_module.is_connected():
-                success = self.arduino_module.send_grade_command(final_grade)
-                if not success:
-                    log_error(SystemComponent.GUI, f"Failed to send grade command for piece #{piece_number}")
-            else:
-                log_info(SystemComponent.GUI, f"DEV MODE: Mock Arduino command '{arduino_command}' for grade '{final_grade}'")
+            # Get text size
+            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
 
-            # Update status and log
-            status_text = f"Piece #{piece_number} Graded: {final_grade} (Cmd: {arduino_command})"
-            self.status_label.setText(f"Status: {status_text}")
-            
-            log_info(SystemComponent.GUI, f"Grading finalized - {status_text}")
-            self.reporting_module.log_action(f"Graded Piece #{piece_number} as {final_grade} -> Arduino Cmd: {arduino_command}")
-            
+            # Calculate text position (center of frame)
+            text_x = (width - text_width) // 2
+            text_y = (height + text_height) // 2
+
+            # Add black outline for better visibility
+            cv2.putText(frame, text, (text_x-2, text_y-2), font, font_scale, (0, 0, 0), font_thickness + 2)
+            cv2.putText(frame, text, (text_x+2, text_y-2), font, font_scale, (0, 0, 0), font_thickness + 2)
+            cv2.putText(frame, text, (text_x-2, text_y+2), font, font_scale, (0, 0, 0), font_thickness + 2)
+            cv2.putText(frame, text, (text_x+2, text_y+2), font, font_scale, (0, 0, 0), font_thickness + 2)
+
+            # Add red text
+            cv2.putText(frame, text, (text_x, text_y), font, font_scale, (0, 0, 255), font_thickness)
+
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error finalizing grading: {str(e)}", e)
+            self.display_message(f"Error adding misalignment indicators: {str(e)}", "warning")
 
-    def closeEvent(self, event):
-        """Enhanced cleanup on application close"""
+    def update_detection_state(self, state):
+        """Update the detection state label"""
         try:
-            log_info(SystemComponent.GUI, "Application closing - starting cleanup")
-            
-            # Stop error monitoring
-            self.error_monitoring_active = False
-            
-            # Release camera resources
-            self.camera_module.release_cameras()
-            
-            # Close Arduino connection
-            self.arduino_module.close_connection()
-            
-            # Generate final report if pieces were processed
-            if self.total_pieces_processed > 0:
-                log_info(SystemComponent.GUI, "Generating final report before shutdown")
-                self.reporting_module.generate_report()
-            
-            log_info(SystemComponent.GUI, "Application cleanup completed")
-            event.accept()
-            
+            state_colors = {
+                "Waiting": "#666",
+                "Detecting": "#f39c12",
+                "Grading": "#27ae60",
+                "Processing": "#3498db"
+            }
+            color = state_colors.get(state, "#666")
+            self.detection_state_label.setText(f"State: {state}")
+            self.detection_state_label.setStyleSheet(f"font-size: 12px; color: {color}; font-weight: bold;")
+            self.detection_state = state
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error during application cleanup: {str(e)}", e)
-            event.accept()  # Accept anyway to ensure app closes
+            log_error(SystemComponent.GUI, f"Error updating detection state: {str(e)}", e)
 
-    def toggle_roi(self):
-        """Toggle ROI for top camera with enhanced functionality"""
-        try:
-            roi_enabled = self.roi_checkbox.isChecked()
-            # Update detection module ROI settings
-            if hasattr(self.detection_module, 'set_roi_enabled'):
-                self.detection_module.set_roi_enabled("top", roi_enabled)
-            
-            log_info(SystemComponent.GUI, f"ROI for top camera: {'enabled' if roi_enabled else 'disabled'}")
-            
-            # Update status
-            roi_status = "Active" if roi_enabled else "Disabled"
-            self.status_label.setText(f"Status: {self.current_mode} MODE - ROI {roi_status}")
-            
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error toggling ROI: {str(e)}", e)
+    def update_wood_classification(self):
+        """Update wood classification display"""
+        # Mock wood classification - in real implementation this would come from detection module
+        wood_types = ["Pine", "Oak", "Maple", "Cedar", "Spruce"]
+        import random
+        self.wood_classification = random.choice(wood_types)
+        self.wood_classification_label.setText(f"Wood Classification: {self.wood_classification}")
+        self.wood_classification_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
 
-    def toggle_live_detection_mode(self):
-        """Toggle live detection mode with checkbox synchronization"""
-        try:
-            # Get state from checkbox
-            self.live_detection_var = self.live_detect_checkbox.isChecked()
-            log_info(SystemComponent.GUI, f"Live detection mode toggled: {self.live_detection_var}")
-            
-            # Update status display
-            if self.live_detection_var:
-                self.status_label.setText(f"Status: {self.current_mode} MODE - Live detection ACTIVE")
-            else:
-                self.status_label.setText(f"Status: {self.current_mode} MODE - Live detection DISABLED")
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error toggling live detection mode: {str(e)}", e)
+    def update_system_status(self, status_text):
+        """Update system status label"""
+        self.system_status_label.setText(status_text)
+        self.system_status_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
 
-    def toggle_auto_grade(self):
-        """Toggle auto grade mode with checkbox synchronization"""
+    def update_grade_counters(self):
+        """Update grade counters in the UI"""
         try:
-            # Get state from checkbox
-            self.auto_grade_var = self.auto_grade_checkbox.isChecked()
-            log_info(SystemComponent.GUI, f"Auto grade mode toggled: {self.auto_grade_var}")
-            
-            # Update status display
-            auto_grade_status = "ENABLED" if self.auto_grade_var else "DISABLED"
-            current_status = self.status_label.text()
-            
-            # Update status to show auto-grade state
-            if "Auto-grading" not in current_status:
-                self.status_label.setText(f"{current_status} - Auto-grading {auto_grade_status}")
-                
+            # Update individual grade counts
+            for grade in range(4):
+                count_label = getattr(self, f"grade_{grade}_count", None)
+                if count_label:
+                    count = self.live_stats.get(f"grade{grade}", 0)
+                    count_label.setText(str(count))
+
+            # Update total processed
+            if hasattr(self, 'total_processed_label'):
+                self.total_processed_label.setText(str(self.total_pieces_processed))
+
+            # Update percentages
+            total = sum(self.live_stats.values())
+            if total > 0:
+                for grade in range(4):
+                    percentage_label = getattr(self, f"grade_{grade}_percentage", None)
+                    if percentage_label:
+                        count = self.live_stats.get(f"grade{grade}", 0)
+                        percentage = (count / total) * 100
+                        percentage_label.setText(f"{percentage:.1f}%")
+
         except Exception as e:
-            log_error(SystemComponent.GUI, f"Error toggling auto grade mode: {str(e)}", e)
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error toggling live detection: {str(e)}", e)
+            log_error(SystemComponent.GUI, f"Error updating grade counters: {str(e)}", e)
 
     def manual_generate_report(self):
-        """Generate report manually with enhanced error handling"""
+        """Generate manual report with enhanced data"""
         try:
-            log_info(SystemComponent.GUI, "Manual report generation requested")
-            self.reporting_module.generate_report()
-            self.status_label.setText("Status: Report generated successfully")
-            
-            # Update last report label if possible
-            if hasattr(self.reporting_module, 'last_report_path') and self.reporting_module.last_report_path:
-                import os
-                report_name = os.path.basename(self.reporting_module.last_report_path)
-                self.last_report_label.setText(f"Last: {report_name}")
-                
-        except Exception as e:
-            log_error(SystemComponent.GUI, f"Error generating manual report: {str(e)}", e)
-            self.status_label.setText("Status: Report generation failed")
+            report_data = {
+                'timestamp': QDateTime.currentDateTime().toString(),
+                'total_processed': self.total_pieces_processed,
+                'grade_counts': self.grade_counts,
+                'session_duration': self.session_duration_label.text() if hasattr(self, 'session_duration_label') else "00:00:00",
+                'wood_classification': self.wood_classification,
+                'detection_state': self.detection_state,
+                'current_mode': self.current_mode,
+                'live_stats': self.live_stats
+            }
 
-    def update_live_stats_display(self):
-        """Update the live statistics display with enhanced tabbed interface and thread safety."""
-        # Skip update if currently in active inference to prevent UI conflicts
-        # (self._in_active_inference will be managed by the main processing loop)
-        # if getattr(self, '_in_active_inference', False):
-        #     return
-            
-        # Safety check to ensure all required attributes exist
-        if not hasattr(self, 'live_stats'):
-            self.live_stats = {"grade0": 0, "grade1": 0, "grade2": 0, "grade3": 0}
-        if not hasattr(self, 'live_stats_labels'):
-            return  # Skip update if labels aren't initialized yet
-            
-        # Update basic grade counts in the Grade Summary tab with error handling
-        try:
-            for grade_key, count in self.live_stats.items():
-                if grade_key in self.live_stats_labels: # No winfo_exists() in PyQt
-                    # Use after_idle to ensure UI updates happen on main thread
-                    self.live_stats_labels[grade_key].setText(str(count))
+            filename = self.reporting_module.generate_report(report_data)
+            self.display_message(f"Report generated: {filename}")
+            self.last_report_label.setText(f"Last: {filename}")
+
         except Exception as e:
-            print(f"Error updating live stats display: {e}")
-        
-        # Update other tabs with thread safety
+            self.display_message(f"Error generating report: {str(e)}", "error")
+
+    def export_log(self):
+        """Export system log to file"""
         try:
-            self.update_defect_details_tab()
-            self.update_performance_tab()
-            self.update_recent_activity_tab()
+            if hasattr(self, 'log_display'):
+                log_content = self.log_display.toPlainText()
+                timestamp = QDateTime.currentDateTime().toString('yyyy-MM-dd_hh-mm-ss')
+                filename = f"logs/system_log_{timestamp}.txt"
+                
+                with open(filename, 'w') as f:
+                    f.write(log_content)
+                
+                self.display_message(f"Log exported to: {filename}")
+            
         except Exception as e:
-            print(f"Error updating statistics tabs: {e}")
+            self.display_message(f"Error exporting log: {str(e)}", "error")
+
+def main():
+    """Main function to run the application"""
+    app = QApplication(sys.argv)
     
-    def _safe_update_label(self, grade_key, count):
-        """Safely update a label with error handling (PyQt version)."""
-        try:
-            if grade_key in self.live_stats_labels:
-                self.live_stats_labels[grade_key].setText(str(count))
-        except Exception as e:
-            print(f"Error updating label {grade_key}: {e}")
-
-    def update_defect_details_tab(self):
-        """Update the Defect Details tab with current defect information."""
-        # This will require access to live_measurements, which will be populated by detection_module
-        # For now, a placeholder.
-        print("Update Defect Details Tab (implemented later)")
-
-    def update_performance_tab(self):
-        """Update the Performance Metrics tab."""
-        # This will require access to total_pieces_processed, session_start_time, grade_counts
-        # For now, a placeholder.
-        print("Update Performance Tab (implemented later)")
-
-    def update_recent_activity_tab(self):
-        """Update the Recent Activity tab with widened summary and scrollable processing log."""
-        # This will require access to session_log, total_pieces_processed, session_start_time, grade_counts
-        # For now, a placeholder.
-        print("Update Recent Activity Tab (implemented later)")
-
-    def _generate_stats_content(self):
-        """Generate a string representation of current stats for change detection."""
-        content = f"processed:{getattr(self, 'total_pieces_processed', 0)}"
-        
-        grade_counts = getattr(self, 'grade_counts', {0: 0, 1: 0, 2: 0, 3: 0})
-        for grade, count in grade_counts.items():
-            content += f",g{grade}:{count}"
-        
-        # Include session log count for change detection
-        if hasattr(self, 'session_log'):
-            content += f",log_entries:{len(self.session_log)}"
-                
-        return content
+    # Create and show the main window
+    window = WoodSortingApp(dev_mode=False)  # Set to False to use webcam in production mode
+    window.show()
+    
+    # Start the application event loop
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    main_app = WoodSortingApp(dev_mode=True)
-    main_app.show()
-    sys.exit(app.exec_())
+    main()

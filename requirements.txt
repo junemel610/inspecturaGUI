@@ -15,6 +15,10 @@ psutil>=5.8.0
 # DeGirum AI Inference (for Hailo model support)
 # degirum  # Install separately based on your platform
 # degirum-tools  # Install separately based on your platform
+# ONNX Runtime for ONNX model inference
+onnxruntime>=1.15.0
+# Ultralytics for YOLOv8/YOLOE model support
+ultralytics>=8.0.0
 
 # PDF Report Generation
 reportlab>=3.6.0

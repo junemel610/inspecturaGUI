@@ -38,6 +38,18 @@ class SimpleConfig:
             'contrast': 50,
             'saturation': 50
         })()
+
+        # Alignment settings
+        self.alignment = type('obj', (object,), {
+            'top_roi_margin_percent': 0.15,  # 15% of frame height for top ROI
+            'bottom_roi_margin_percent': 0.15,  # 15% of frame height for bottom ROI
+            'min_overlap_threshold': 0.6,  # 60% overlap required for alignment
+            'alignment_tolerance_percent': 0.1,  # 10% tolerance for alignment checks
+            'enable_alignment_visualization': True,
+            'roi_display_color': (255, 255, 0),  # Yellow for ROI display
+            'aligned_color': (0, 255, 0),  # Green for aligned wood
+            'misaligned_color': (0, 0, 255)  # Red for misaligned wood
+        })()
         
     def get_config_summary(self):
         return """
