@@ -169,3 +169,91 @@
 2025-09-05 12:42:37,598 - WoodSortingSystem - INFO - [ARDUINO] Closing Arduino connection
 2025-09-05 12:42:37,599 - WoodSortingSystem - INFO - [ARDUINO] Arduino module shutdown complete
 2025-09-05 12:42:37,599 - WoodSortingSystem - INFO - [GUI] Application cleanup completed
+2025-09-26 02:20:07,244 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-26 02:20:07,522 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=False)
+2025-09-26 02:20:07,522 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-26 02:20:07,523 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=False)
+2025-09-26 02:20:07,600 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-26 02:20:07,600 - WoodSortingSystem - INFO - [CAMERA] Initializing top camera (index 0)
+2025-09-26 02:20:08,963 - WoodSortingSystem - INFO - [CAMERA] Top camera initialized successfully (Context: width=1280.0, height=720.0, index=0)
+2025-09-26 02:20:08,963 - WoodSortingSystem - INFO - [CAMERA] Initializing bottom camera (index 2)
+2025-09-26 02:20:09,664 - WoodSortingSystem - INFO - [CAMERA] Bottom camera initialized successfully (Context: width=1280.0, height=720.0, index=2)
+2025-09-26 02:20:09,665 - WoodSortingSystem - INFO - [CAMERA] Started camera connection monitoring
+2025-09-26 02:20:09,831 - WoodSortingSystem - INFO - [GUI] Error monitoring started
+2025-09-26 02:20:15,274 - WoodSortingSystem - INFO - [GUI] Application closing - starting cleanup
+2025-09-26 02:20:15,274 - WoodSortingSystem - INFO - [CAMERA] Releasing cameras and stopping monitoring
+2025-09-26 02:20:18,275 - WoodSortingSystem - INFO - [CAMERA] Top camera released
+2025-09-26 02:20:18,496 - WoodSortingSystem - INFO - [CAMERA] Bottom camera released
+2025-09-26 02:20:18,496 - WoodSortingSystem - INFO - [CAMERA] All cameras released and monitoring stopped
+2025-09-26 02:20:18,496 - WoodSortingSystem - INFO - [ARDUINO] Closing Arduino connection
+2025-09-26 02:20:18,496 - WoodSortingSystem - INFO - [ARDUINO] Arduino module shutdown complete
+2025-09-26 02:20:18,496 - WoodSortingSystem - INFO - [GUI] Application cleanup completed
+2025-09-26 02:25:59,777 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-26 02:26:00,505 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=False)
+2025-09-26 02:26:00,505 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-26 02:26:00,505 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=False)
+2025-09-26 02:26:00,541 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-26 02:26:00,541 - WoodSortingSystem - INFO - [CAMERA] Initializing top camera (index 0)
+2025-09-26 02:26:01,878 - WoodSortingSystem - INFO - [CAMERA] Top camera initialized successfully (Context: width=1280.0, height=720.0, index=0)
+2025-09-26 02:26:01,878 - WoodSortingSystem - INFO - [CAMERA] Initializing bottom camera (index 2)
+2025-09-26 02:26:02,594 - WoodSortingSystem - INFO - [CAMERA] Bottom camera initialized successfully (Context: width=1280.0, height=720.0, index=2)
+2025-09-26 02:26:02,594 - WoodSortingSystem - INFO - [CAMERA] Started camera connection monitoring
+2025-09-26 02:26:02,700 - WoodSortingSystem - INFO - [GUI] Error monitoring started
+2025-09-26 02:26:24,335 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: True
+2025-09-26 02:26:33,402 - WoodSortingSystem - INFO - [GUI] Auto grade mode toggled: True
+2025-09-26 02:26:34,908 - WoodSortingSystem - INFO - [GUI] Auto grade mode toggled: False
+2025-09-26 02:26:35,916 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: False
+2025-09-26 02:26:50,013 - WoodSortingSystem - INFO - [GUI] Application closing - starting cleanup
+2025-09-26 02:26:50,014 - WoodSortingSystem - INFO - [CAMERA] Releasing cameras and stopping monitoring
+2025-09-26 02:26:52,596 - WoodSortingSystem - INFO - [CAMERA] Top camera released
+2025-09-26 02:26:52,826 - WoodSortingSystem - INFO - [CAMERA] Bottom camera released
+2025-09-26 02:26:52,826 - WoodSortingSystem - INFO - [CAMERA] All cameras released and monitoring stopped
+2025-09-26 02:26:52,826 - WoodSortingSystem - INFO - [ARDUINO] Closing Arduino connection
+2025-09-26 02:26:52,826 - WoodSortingSystem - INFO - [ARDUINO] Arduino module shutdown complete
+2025-09-26 02:26:52,826 - WoodSortingSystem - INFO - [GUI] Application cleanup completed
+2025-09-26 02:29:19,588 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-26 02:29:20,241 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=False)
+2025-09-26 02:29:20,242 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-26 02:29:20,242 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=False)
+2025-09-26 02:29:20,275 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-26 02:29:20,275 - WoodSortingSystem - INFO - [CAMERA] Initializing top camera (index 0)
+2025-09-26 02:29:21,609 - WoodSortingSystem - INFO - [CAMERA] Top camera initialized successfully (Context: width=1280.0, height=720.0, index=0)
+2025-09-26 02:29:21,610 - WoodSortingSystem - INFO - [CAMERA] Initializing bottom camera (index 2)
+2025-09-26 02:29:22,316 - WoodSortingSystem - INFO - [CAMERA] Bottom camera initialized successfully (Context: width=1280.0, height=720.0, index=2)
+2025-09-26 02:29:22,316 - WoodSortingSystem - INFO - [CAMERA] Started camera connection monitoring
+2025-09-26 02:29:22,422 - WoodSortingSystem - INFO - [GUI] Error monitoring started
+2025-09-26 02:29:24,825 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: True
+2025-09-26 02:29:26,626 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: False
+2025-09-26 02:29:29,071 - WoodSortingSystem - INFO - [GUI] Application closing - starting cleanup
+2025-09-26 02:29:29,071 - WoodSortingSystem - INFO - [CAMERA] Releasing cameras and stopping monitoring
+2025-09-26 02:29:32,072 - WoodSortingSystem - INFO - [CAMERA] Top camera released
+2025-09-26 02:29:32,248 - WoodSortingSystem - INFO - [CAMERA] Bottom camera released
+2025-09-26 02:29:32,248 - WoodSortingSystem - INFO - [CAMERA] All cameras released and monitoring stopped
+2025-09-26 02:29:32,248 - WoodSortingSystem - INFO - [ARDUINO] Closing Arduino connection
+2025-09-26 02:29:32,248 - WoodSortingSystem - INFO - [ARDUINO] Arduino module shutdown complete
+2025-09-26 02:29:32,248 - WoodSortingSystem - INFO - [GUI] Application cleanup completed
+2025-09-26 02:35:05,849 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-26 02:35:06,481 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=False)
+2025-09-26 02:35:06,482 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-26 02:35:06,482 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=False)
+2025-09-26 02:35:06,520 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-26 02:35:06,520 - WoodSortingSystem - INFO - [CAMERA] Initializing top camera (index 0)
+2025-09-26 02:35:07,854 - WoodSortingSystem - INFO - [CAMERA] Top camera initialized successfully (Context: width=1280.0, height=720.0, index=0)
+2025-09-26 02:35:07,854 - WoodSortingSystem - INFO - [CAMERA] Initializing bottom camera (index 2)
+2025-09-26 02:35:08,489 - WoodSortingSystem - INFO - [CAMERA] Bottom camera initialized successfully (Context: width=1280.0, height=720.0, index=2)
+2025-09-26 02:35:08,490 - WoodSortingSystem - INFO - [CAMERA] Started camera connection monitoring
+2025-09-26 02:35:08,596 - WoodSortingSystem - INFO - [GUI] Error monitoring started
+2025-09-26 02:35:33,433 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: True
+2025-09-26 02:35:37,060 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: False
+2025-09-26 02:53:45,834 - WoodSortingSystem - INFO - Error handling system initialized
+2025-09-26 02:53:46,497 - WoodSortingSystem - INFO - [CAMERA] CameraModule initialized (dev_mode=False)
+2025-09-26 02:53:46,498 - WoodSortingSystem - INFO - [ARDUINO] ArduinoModule initialized
+2025-09-26 02:53:46,498 - WoodSortingSystem - INFO - [GUI] WoodSortingApp initialized (dev_mode=False)
+2025-09-26 02:53:46,534 - WoodSortingSystem - INFO - [GUI] Setting up module connections
+2025-09-26 02:53:46,534 - WoodSortingSystem - INFO - [CAMERA] Initializing top camera (index 0)
+2025-09-26 02:53:47,870 - WoodSortingSystem - INFO - [CAMERA] Top camera initialized successfully (Context: width=1280.0, height=720.0, index=0)
+2025-09-26 02:53:47,870 - WoodSortingSystem - INFO - [CAMERA] Initializing bottom camera (index 2)
+2025-09-26 02:53:48,646 - WoodSortingSystem - INFO - [CAMERA] Bottom camera initialized successfully (Context: width=1280.0, height=720.0, index=2)
+2025-09-26 02:53:48,647 - WoodSortingSystem - INFO - [CAMERA] Started camera connection monitoring
+2025-09-26 02:53:48,754 - WoodSortingSystem - INFO - [GUI] Error monitoring started
+2025-09-26 02:53:52,010 - WoodSortingSystem - INFO - [GUI] Live detection mode toggled: True

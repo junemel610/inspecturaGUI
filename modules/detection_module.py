@@ -16,8 +16,8 @@ class DetectionModule:
         self.inference_host_address = inference_host_address
         
         # Model paths for two-stage detection
-        self.wood_model_path = "/home/inspectura/Desktop/wood_sorting_app/models/Wood_Plank--640x640_quant_hailort_hailo8_2/Wood_Plank--640x640_quant_hailort_hailo8_2/Wood_Plank--640x640_quant_hailort_hailo8_2.hef"
-        self.defect_model_path = "/home/inspectura/Desktop/wood_sorting_app/models/Defect_Detection--640x640_quant_hailort_hailo8_1/Defect_Detection--640x640_quant_hailort_hailo8_1/Defect_Detection--640x640_quant_hailort_hailo8_1.hef"
+        self.wood_model_path = "/home/inspectura/Desktop/InspecturaGUI/models/Wood_Plank--640x640_quant_hailort_hailo8_2/Wood_Plank--640x640_quant_hailort_hailo8_2/Wood_Plank--640x640_quant_hailort_hailo8_2.hef"
+        self.defect_model_path = "/home/inspectura/Desktop/InspecturaGUI/models/V2DefectCombined--640x640_quant_hailort_hailo8_1/V2DefectCombined--640x640_quant_hailort_hailo8_1.hef"
         
         # Model instances
         self.wood_model = None
