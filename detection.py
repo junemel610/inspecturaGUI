@@ -198,7 +198,7 @@ STATS_WEIGHT = 1                   # Weight for statistics section
 
 # Camera display settings
 CAMERA_ASPECT_RATIO = "16:9"       # Target aspect ratio for camera displays
-CAMERA_DISPLAY_MARGIN = 100          # Margin around camera displays (pixels)
+CAMERA_DISPLAY_MARGIN = 3          # Margin around camera displays (pixels)
 
 # ------------------------------------------------------------------------------
 # UI BEHAVIOR SETTINGS
@@ -411,8 +411,8 @@ class App(tk.Tk):
         # --- Camera Feeds Section (Larger, cleaner design) ---
         cameras_container = ttk.Frame(main_frame)
         cameras_container.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
-        cameras_container.grid_columnconfigure(0, weight=1)
-        cameras_container.grid_columnconfigure(1, weight=1)
+        cameras_container.grid_columnconfigure(0, weight=1, uniform="camera")
+        cameras_container.grid_columnconfigure(1, weight=1, uniform="camera")
         cameras_container.grid_rowconfigure(0, weight=1)
 
         # Left Camera (Top Camera)
