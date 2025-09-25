@@ -101,16 +101,6 @@ INFERENCE_HOST_ADDRESS = "@local"  # Use local inference
 MODEL_ZOO_URL = "/home/inspectura/Desktop/InspecturaGUI/models/V2DefectCombined--640x640_quant_hailort_hailo8_1"
 MODEL_NAME = "V2DefectCombined--640x640_quant_hailort_hailo8_1"
 
-# -----------------------------------------------------------------------------
-# USER INTERFACE SETTINGS
-# Adjust display and interaction parameters
-# -----------------------------------------------------------------------------
-WINDOW_SCALE = 0.9               # Fraction of screen size for window (0.0-1.0)
-MIN_WINDOW_WIDTH = 800            # Minimum window width in pixels
-MIN_WINDOW_HEIGHT = 600           # Minimum window height in pixels
-
-# Font size calculation: base = max(8, min(12, screen_height / FONT_SIZE_DIVISOR))
-FONT_SIZE_DIVISOR = 80            # Divisor for responsive font sizing
 
 # -----------------------------------------------------------------------------
 # PERFORMANCE AND TIMING SETTINGS
@@ -136,6 +126,113 @@ ARDUINO_PORTS = [
 
 # =============================================================================
 # END OF CONFIGURATION SECTION
+# =============================================================================
+# UI CONFIGURATION SECTION - Customize the user interface appearance and behavior
+# =============================================================================
+
+# ------------------------------------------------------------------------------
+# WINDOW AND DISPLAY SETTINGS
+# Adjust window sizing and display parameters
+# ------------------------------------------------------------------------------
+WINDOW_SCALE = 0.9               # Fraction of screen size for window (0.0-1.0)
+MIN_WINDOW_WIDTH = 800            # Minimum window width in pixels
+MIN_WINDOW_HEIGHT = 600           # Minimum window height in pixels
+ENABLE_FULLSCREEN_STARTUP = False # Automatically start in fullscreen mode (for kiosks/RPi)
+
+# ------------------------------------------------------------------------------
+# FONT SETTINGS
+# Customize text appearance throughout the application
+# ------------------------------------------------------------------------------
+PRIMARY_FONT_FAMILY = "Helvetica"  # Primary font family for UI elements
+BUTTON_FONT_FAMILY = "Helvetica"   # Font family for buttons
+MONOSPACE_FONT_FAMILY = "Courier"  # Font family for code/logs
+
+FONT_SIZE_DIVISOR = 80            # Divisor for responsive font sizing (base = max(8, min(12, screen_height / FONT_SIZE_DIVISOR)))
+FONT_SIZE_BASE_MIN = 8             # Minimum base font size
+FONT_SIZE_BASE_MAX = 12            # Maximum base font size
+
+# ------------------------------------------------------------------------------
+# COLOR THEME SETTINGS
+# Customize the color scheme of the application
+# ------------------------------------------------------------------------------
+# Main application colors
+BACKGROUND_COLOR = "#f0f0f0"       # Main window background color
+FRAME_BACKGROUND_COLOR = "#ffffff" # Frame/panel background color
+TEXT_COLOR = "#000000"            # Primary text color
+SECONDARY_TEXT_COLOR = "#666666"  # Secondary/muted text color
+
+# Button colors
+BUTTON_BACKGROUND_COLOR = "#e0e0e0"  # Normal button background
+BUTTON_ACTIVE_COLOR = "#d0d0d0"       # Button pressed/active color
+BUTTON_TEXT_COLOR = "#000000"        # Button text color
+
+# Status and grade colors
+STATUS_READY_COLOR = "#28a745"      # Green for ready/active status
+STATUS_WARNING_COLOR = "#ffc107"    # Yellow for warning status
+STATUS_ERROR_COLOR = "#dc3545"      # Red for error status
+
+GRADE_PERFECT_COLOR = "#228B22"     # Dark green for perfect grade
+GRADE_GOOD_COLOR = "#32CD32"        # Green for good grade
+GRADE_FAIR_COLOR = "#FFA500"        # Orange for fair grade
+GRADE_POOR_COLOR = "#FF0000"        # Red for poor grade
+
+# Detection overlay colors
+DETECTION_BOX_COLOR = "#00FF00"     # Green for detection bounding boxes
+ROI_OVERLAY_COLOR = "#FFFF00"       # Yellow for ROI overlay
+
+# ------------------------------------------------------------------------------
+# LAYOUT AND SPACING SETTINGS
+# Adjust spacing, padding, and layout proportions
+# ------------------------------------------------------------------------------
+# Padding and margins (in pixels)
+MAIN_PADDING = 5                   # Main window padding
+FRAME_PADDING = 5                  # Frame/panel padding
+ELEMENT_PADDING_X = 2              # Horizontal padding between elements
+ELEMENT_PADDING_Y = 2              # Vertical padding between elements
+LABEL_PADDING = 5                  # Label padding
+
+# Grid layout weights (proportions)
+CAMERA_FEEDS_WEIGHT = 4            # Weight for camera feeds section (relative to controls and stats)
+CONTROLS_WEIGHT = 0                # Weight for controls section (compact)
+STATS_WEIGHT = 1                   # Weight for statistics section
+
+# Camera display settings
+CAMERA_ASPECT_RATIO = "16:9"       # Target aspect ratio for camera displays
+CAMERA_DISPLAY_MARGIN = 100          # Margin around camera displays (pixels)
+
+# ------------------------------------------------------------------------------
+# UI BEHAVIOR SETTINGS
+# Control interactive behavior and responsiveness
+# ------------------------------------------------------------------------------
+ENABLE_TOOLTIPS = True             # Show tooltips on hover
+ENABLE_ANIMATIONS = False          # Enable UI animations (may impact performance)
+AUTO_SCROLL_LOGS = True            # Automatically scroll logs to bottom
+SCROLL_SENSITIVITY = 3             # Mouse wheel scroll sensitivity (lines per scroll)
+
+# Update intervals (frames to skip between updates)
+UI_UPDATE_SKIP = 3                 # Update UI elements every Nth frame
+STATS_UPDATE_SKIP = 15             # Update statistics every Nth frame
+LOG_UPDATE_SKIP = 10               # Update logs when no detection every Nth frame
+
+# ------------------------------------------------------------------------------
+# ADVANCED UI SETTINGS
+# Fine-tune specific UI components
+# ------------------------------------------------------------------------------
+# Tabbed interface settings
+STATS_TAB_HEIGHT = 200             # Minimum height for statistics tabs (pixels)
+LOG_SCROLLABLE_HEIGHT = 200        # Height of scrollable log area (pixels)
+
+# Status bar settings
+STATUS_BAR_HEIGHT = 25             # Height of status bar (pixels)
+STATUS_UPDATE_INTERVAL = 100       # Status update interval (milliseconds)
+
+# Detection display settings
+DETECTION_DETAILS_HEIGHT = 150     # Height of detection details panels (pixels)
+MAX_DETECTION_ENTRIES = 50         # Maximum number of detection entries to keep in memory
+
+# =============================================================================
+# END OF UI CONFIGURATION SECTION
+# =============================================================================
 # =============================================================================
 
 class App(tk.Tk):
@@ -169,19 +266,30 @@ class App(tk.Tk):
         self.bind("<F11>", self.toggle_fullscreen)
         self.bind("<Escape>", self.exit_fullscreen)
         
-        # Auto-fullscreen for Raspberry Pi (you can enable this)
-        # Uncomment the next line if you want automatic fullscreen on startup
-        # self.after(100, self.auto_fullscreen_rpi)
+        # Auto-fullscreen for Raspberry Pi (configurable)
+        if ENABLE_FULLSCREEN_STARTUP:
+            self.after(100, self.auto_fullscreen_rpi)
         
         # Calculate responsive font sizes based on screen size
-        base_font_size = max(8, min(12, int(screen_height / FONT_SIZE_DIVISOR)))  # Reduced base size for better fit
-        self.font_small = ("Helvetica", base_font_size - 1)
-        self.font_normal = ("Helvetica", base_font_size)
-        self.font_large = ("Helvetica", base_font_size + 2, "bold")
-        self.font_button = ("Helvetica", base_font_size, "bold")  # Button font
+        base_font_size = max(FONT_SIZE_BASE_MIN, min(FONT_SIZE_BASE_MAX, int(screen_height / FONT_SIZE_DIVISOR)))  # Responsive base size
+        self.font_small = (PRIMARY_FONT_FAMILY, base_font_size - 1)
+        self.font_normal = (PRIMARY_FONT_FAMILY, base_font_size)
+        self.font_large = (PRIMARY_FONT_FAMILY, base_font_size + 2, "bold")
+        self.font_button = (BUTTON_FONT_FAMILY, base_font_size, "bold")  # Button font
 
         # Create message queue for thread communication
         self.message_queue = queue.Queue()
+
+        # Helper method for updating status label (Text widget)
+        def update_status_text(text, color=None):
+            self.status_label.config(state=tk.NORMAL)
+            self.status_label.delete(1.0, tk.END)
+            self.status_label.insert(1.0, text)
+            if color:
+                self.status_label.config(foreground=color)
+            self.status_label.config(state=tk.DISABLED)
+
+        self.update_status_text = update_status_text
 
         # Initialize variables that might be accessed early by message processing
         self.total_pieces_processed = 0
@@ -290,67 +398,73 @@ class App(tk.Tk):
         self.roi_coordinates = ROI_COORDINATES.copy()
 
         # Main layout - Clean design based on the image
-        main_frame = ttk.Frame(self, padding="5")
+        main_frame = ttk.Frame(self, padding=MAIN_PADDING)
         main_frame.pack(expand=True, fill=tk.BOTH)
-        
+
         # Configure grid weights for responsive layout
         main_frame.grid_columnconfigure(0, weight=1)  # Left camera
-        main_frame.grid_columnconfigure(1, weight=1)  # Right camera  
-        main_frame.grid_rowconfigure(0, weight=4)     # Camera feeds (most space)
-        main_frame.grid_rowconfigure(1, weight=0)     # Controls section (compact)
-        main_frame.grid_rowconfigure(2, weight=1)     # Bottom panel with grading & stats
+        main_frame.grid_columnconfigure(1, weight=1)  # Right camera
+        main_frame.grid_rowconfigure(0, weight=CAMERA_FEEDS_WEIGHT)     # Camera feeds (configurable weight)
+        main_frame.grid_rowconfigure(1, weight=CONTROLS_WEIGHT)         # Controls section (configurable weight)
+        main_frame.grid_rowconfigure(2, weight=STATS_WEIGHT)            # Bottom panel with grading & stats
 
         # --- Camera Feeds Section (Larger, cleaner design) ---
         cameras_container = ttk.Frame(main_frame)
-        cameras_container.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=2, pady=2)
+        cameras_container.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
         cameras_container.grid_columnconfigure(0, weight=1)
         cameras_container.grid_columnconfigure(1, weight=1)
         cameras_container.grid_rowconfigure(0, weight=1)
-        
+
         # Left Camera (Top Camera)
-        left_camera_frame = ttk.LabelFrame(cameras_container, text="Top Camera View", padding="5")
-        left_camera_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        left_camera_frame = ttk.LabelFrame(cameras_container, text="Top Camera View", padding=FRAME_PADDING)
+        left_camera_frame.grid(row=0, column=0, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
         left_camera_frame.grid_rowconfigure(0, weight=1)
         left_camera_frame.grid_columnconfigure(0, weight=1)
-        
+
         # Top camera live feed - larger display area
         self.top_live_feed = ttk.Label(left_camera_frame, background="black", text="Initializing Camera...")
-        self.top_live_feed.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        
+        self.top_live_feed.grid(row=0, column=0, sticky="nsew", padx=CAMERA_DISPLAY_MARGIN, pady=CAMERA_DISPLAY_MARGIN)
+
         # ROI status overlay
-        self.roi_status_label = ttk.Label(left_camera_frame, 
-                                         text="ROI: Active (150,80) to (1130,640)", 
-                                         font=self.font_small, foreground="orange")
+        self.roi_status_label = ttk.Label(left_camera_frame,
+                                         text="ROI: Active (150,80) to (1130,640)",
+                                         font=self.font_small, foreground=STATUS_WARNING_COLOR)
         self.roi_status_label.place(x=10, y=10)  # Position as overlay
-        
+
         # Right Camera (Bottom Camera)
-        right_camera_frame = ttk.LabelFrame(cameras_container, text="Bottom Camera View", padding="5")
-        right_camera_frame.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
+        right_camera_frame = ttk.LabelFrame(cameras_container, text="Bottom Camera View", padding=FRAME_PADDING)
+        right_camera_frame.grid(row=0, column=1, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
         right_camera_frame.grid_rowconfigure(0, weight=1)
         right_camera_frame.grid_columnconfigure(0, weight=1)
-        
+
         # Bottom camera live feed - larger display area
         self.bottom_live_feed = ttk.Label(right_camera_frame, background="black", text="Initializing Camera...")
-        self.bottom_live_feed.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.bottom_live_feed.grid(row=0, column=0, sticky="nsew", padx=CAMERA_DISPLAY_MARGIN, pady=CAMERA_DISPLAY_MARGIN)
 
         # --- System Controls Section ---
         controls_frame = ttk.Frame(main_frame)
-        controls_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        controls_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=MAIN_PADDING, pady=ELEMENT_PADDING_Y)
         controls_frame.grid_columnconfigure(0, weight=1)
-        controls_frame.grid_columnconfigure(1, weight=1) 
+        controls_frame.grid_columnconfigure(1, weight=1)
         controls_frame.grid_columnconfigure(2, weight=1)
         controls_frame.grid_columnconfigure(3, weight=1)
 
         # System Status
-        status_frame = ttk.LabelFrame(controls_frame, text="System Status", padding="5")
-        status_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
-        self.status_label = ttk.Label(status_frame, text="Status: Initializing...", 
-                                     font=self.font_normal, anchor="center", wraplength=150)
-        self.status_label.pack(pady=5)
+        status_frame = ttk.LabelFrame(controls_frame, text="System Status", padding=FRAME_PADDING)
+        status_frame.grid(row=0, column=0, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
+        # Get the background color from the ttk style to match the container
+        style = ttk.Style()
+        frame_bg = style.lookup("TLabelFrame", "background") or "#f0f0f0"
+
+        self.status_label = tk.Text(status_frame, font=self.font_normal, wrap=tk.WORD,
+                                   height=3, width=20, state=tk.DISABLED, relief="flat",
+                                   background=frame_bg)
+        self.status_label.pack(pady=LABEL_PADDING, fill="both", expand=True)
+        self.status_label.insert(1.0, "Status: Initializing...")
 
         # Conveyor Control
-        control_frame = ttk.LabelFrame(controls_frame, text="Conveyor Control", padding="5")
-        control_frame.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
+        control_frame = ttk.LabelFrame(controls_frame, text="Conveyor Control", padding=FRAME_PADDING)
+        control_frame.grid(row=0, column=1, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
         control_inner_frame = ttk.Frame(control_frame)
         control_inner_frame.pack(fill="both", expand=True)
         control_inner_frame.grid_columnconfigure(0, weight=1)
@@ -365,57 +479,57 @@ class App(tk.Tk):
                   command=self.set_idle_mode).grid(row=0, column=2, sticky="ew", padx=1, pady=1)
 
         # Detection Settings
-        detection_frame = ttk.LabelFrame(controls_frame, text="Detection", padding="5")
-        detection_frame.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
-        
+        detection_frame = ttk.LabelFrame(controls_frame, text="Detection", padding=FRAME_PADDING)
+        detection_frame.grid(row=0, column=2, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
+
         self.roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(detection_frame, text="Top ROI", variable=self.roi_var, 
+        ttk.Checkbutton(detection_frame, text="Top ROI", variable=self.roi_var,
                        command=self.toggle_roi).pack(anchor="w")
-        
+
         self.live_detection_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(detection_frame, text="Live Detect", variable=self.live_detection_var,
                        command=self.toggle_live_detection_mode).pack(anchor="w")
-        
+
         self.auto_grade_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(detection_frame, text="Auto Grade", variable=self.auto_grade_var).pack(anchor="w")
 
         # Reports
-        reports_frame = ttk.LabelFrame(controls_frame, text="Reports", padding="5")
-        reports_frame.grid(row=0, column=3, sticky="nsew", padx=2, pady=2)
-        
-        self.log_status_label = ttk.Label(reports_frame, text="Log: Ready", 
-                                         foreground="green", font=self.font_small)
+        reports_frame = ttk.LabelFrame(controls_frame, text="Reports", padding=FRAME_PADDING)
+        reports_frame.grid(row=0, column=3, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
+
+        self.log_status_label = ttk.Label(reports_frame, text="Log: Ready",
+                                         foreground=STATUS_READY_COLOR, font=self.font_small)
         self.log_status_label.pack()
-        
-        ttk.Button(reports_frame, text="Generate Report", 
-                  command=self.manual_generate_report).pack(pady=2)
-        
+
+        ttk.Button(reports_frame, text="Generate Report",
+                  command=self.manual_generate_report).pack(pady=ELEMENT_PADDING_Y)
+
         self.show_report_notification = tk.BooleanVar(value=True)
-        ttk.Checkbutton(reports_frame, text="Notifications", 
+        ttk.Checkbutton(reports_frame, text="Notifications",
                        variable=self.show_report_notification).pack()
-        
-        self.last_report_label = ttk.Label(reports_frame, text="Last: None", 
+
+        self.last_report_label = ttk.Label(reports_frame, text="Last: None",
                                           font=self.font_small, wraplength=100)
         self.last_report_label.pack()
 
         # --- Bottom Panel: Statistics (Full Width) ---
         bottom_panel = ttk.Frame(main_frame)
-        bottom_panel.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        bottom_panel.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=MAIN_PADDING, pady=ELEMENT_PADDING_Y)
         bottom_panel.grid_columnconfigure(0, weight=1)  # Statistics takes full width
         bottom_panel.grid_rowconfigure(0, weight=1)
 
         # Statistics Section - Full Width Tabbed Panel Design
-        stats_frame = ttk.LabelFrame(bottom_panel, text="Statistics", padding="5")
-        stats_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        stats_frame = ttk.LabelFrame(bottom_panel, text="Statistics", padding=FRAME_PADDING, height=STATS_TAB_HEIGHT)
+        stats_frame.grid(row=0, column=0, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
         stats_frame.grid_columnconfigure(0, weight=1)
         stats_frame.grid_rowconfigure(0, weight=1)
 
         # Create notebook for tabbed statistics
-        self.stats_notebook = ttk.Notebook(stats_frame)
+        self.stats_notebook = ttk.Notebook(stats_frame, height=STATS_TAB_HEIGHT - 40)  # Account for padding and tab headers
         self.stats_notebook.grid(row=0, column=0, sticky="nsew")
 
         # Tab 1: Grade Summary (Overview with Live Grading)
-        grade_summary_tab = ttk.Frame(self.stats_notebook)
+        grade_summary_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
         self.stats_notebook.add(grade_summary_tab, text="Grade Summary")
         
         # Grade counts in a clean grid with better sizing and spacing
@@ -430,10 +544,10 @@ class App(tk.Tk):
         # Initialize stats labels with consistent spacing and fonts
         self.live_stats_labels = {}
         grade_info = [
-            ("grade0", "Perfect\n(No Defects)", "dark green"),
-            ("grade1", "Good\n(G2-0)", "green"), 
-            ("grade2", "Fair\n(G2-1, G2-2, G2-3)", "orange"),
-            ("grade3", "Poor\n(G2-4)", "red")
+            ("grade0", "Perfect\n(No Defects)", GRADE_PERFECT_COLOR),
+            ("grade1", "Good\n(G2-0)", GRADE_GOOD_COLOR),
+            ("grade2", "Fair\n(G2-1, G2-2, G2-3)", GRADE_FAIR_COLOR),
+            ("grade3", "Poor\n(G2-4)", GRADE_POOR_COLOR)
         ]
         
         for i, (grade_key, label_text, color) in enumerate(grade_info):
@@ -488,7 +602,7 @@ class App(tk.Tk):
         self.combined_grade_label.pack(anchor="w")
 
         # Tab 2: Defect Details
-        defect_details_tab = ttk.Frame(self.stats_notebook)
+        defect_details_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
         self.stats_notebook.add(defect_details_tab, text="Defect Details")
         
         # Defect details content
@@ -496,7 +610,7 @@ class App(tk.Tk):
         self.defect_details_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Tab 3: Performance Metrics
-        performance_tab = ttk.Frame(self.stats_notebook)
+        performance_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
         self.stats_notebook.add(performance_tab, text="Performance")
         
         # Performance metrics content
@@ -504,7 +618,7 @@ class App(tk.Tk):
         self.performance_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Tab 4: Recent Activity
-        activity_tab = ttk.Frame(self.stats_notebook)
+        activity_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
         self.stats_notebook.add(activity_tab, text="Recent Activity")
         
         # Main container with two sections
@@ -525,7 +639,7 @@ class App(tk.Tk):
         log_container.grid_rowconfigure(0, weight=1)
 
         # Scrollable canvas for processing log
-        log_canvas = tk.Canvas(log_container, height=200)  # Set minimum height
+        log_canvas = tk.Canvas(log_container, height=LOG_SCROLLABLE_HEIGHT)  # Configurable height
         log_scrollbar = ttk.Scrollbar(log_container, orient="vertical", command=log_canvas.yview)
         self.processing_log_frame = ttk.Frame(log_canvas)
         
@@ -845,7 +959,7 @@ class App(tk.Tk):
         frame = ttk.LabelFrame(parent, text=title, padding="5")
         
         # Create canvas and scrollbar for scrolling
-        canvas = tk.Canvas(frame, height=150)
+        canvas = tk.Canvas(frame, height=DETECTION_DETAILS_HEIGHT)
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         
@@ -1404,10 +1518,10 @@ class App(tk.Tk):
             self._frame_counter = 0
 
         self._frame_counter += 1
-        if self._frame_counter % FRAME_SKIP_DASHBOARD_UPDATE == 0:
+        if self._frame_counter % STATS_UPDATE_SKIP == 0:
             # Update detection status
             self.update_detection_status_display()
-            
+
             # Only update details if not in active inference to prevent interference
             if not getattr(self, '_in_active_inference', False):
                 self.ensure_detection_details_updated()
@@ -1434,37 +1548,37 @@ class App(tk.Tk):
         """Update status display based on current detection state"""
         if hasattr(self, 'status_label'):
             if self.auto_detection_active:
-                total_detections = (len(self.detection_session_data["total_detections"]["top"]) + 
-                                  len(self.detection_session_data["total_detections"]["bottom"]))
-                self.status_label.config(
-                    text=f"Status: AUTO (IR) DETECTION ACTIVE 🔍 ({total_detections} detections)", 
-                    foreground="orange"
+                total_detections = (len(self.detection_session_data["total_detections"]["top"]) +
+                                   len(self.detection_session_data["total_detections"]["bottom"]))
+                self.update_status_text(
+                    f"Status: AUTO (IR) DETECTION ACTIVE 🔍 ({total_detections} detections)",
+                    STATUS_WARNING_COLOR
                 )
             elif self.live_detection_var.get():
-                self.status_label.config(
-                    text=f"Status: {self.current_mode} MODE - Live Detection ACTIVE",
-                    foreground="blue"
+                self.update_status_text(
+                    f"Status: {self.current_mode} MODE - Live Detection ACTIVE",
+                    STATUS_READY_COLOR
                 )
             elif self.current_mode == "IDLE":
-                self.status_label.config(
-                    text="Status: IDLE MODE - System disabled, no operations",
-                    foreground="gray"
+                self.update_status_text(
+                    "Status: IDLE MODE - System disabled, no operations",
+                    SECONDARY_TEXT_COLOR
                 )
             elif self.current_mode == "TRIGGER":
-                self.status_label.config(
-                    text="Status: TRIGGER MODE - Waiting for IR beam trigger", 
-                    foreground="green"
+                self.update_status_text(
+                    "Status: TRIGGER MODE - Waiting for IR beam trigger",
+                    STATUS_READY_COLOR
                 )
             elif self.current_mode == "CONTINUOUS":
-                self.status_label.config(
-                    text="Status: CONTINUOUS MODE - Live detection enabled", 
-                    foreground="blue"
+                self.update_status_text(
+                    "Status: CONTINUOUS MODE - Live detection enabled",
+                    STATUS_READY_COLOR
                 )
             else:
                 # Fallback for unknown states
-                self.status_label.config(
-                    text=f"Status: {self.current_mode} MODE - Ready", 
-                    foreground="green"
+                self.update_status_text(
+                    f"Status: {self.current_mode} MODE - Ready",
+                    STATUS_READY_COLOR
                 )
 
     def toggle_live_detection_mode(self):
@@ -1792,7 +1906,7 @@ class App(tk.Tk):
                     self.update_dashboard_display(camera_name, defect_dict, measurements)
 
                 # Update the live grading display at configured intervals
-                if self._detection_frame_skip[camera_name] % FRAME_SKIP_UI_UPDATE == 0:
+                if self._detection_frame_skip[camera_name] % UI_UPDATE_SKIP == 0:
                     self.update_live_grading_display()
                 
                 cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
@@ -1809,7 +1923,7 @@ class App(tk.Tk):
                     if hasattr(self, 'live_measurements'):
                         self.live_measurements[camera_name] = []
                     # Update dashboard at configured interval when no detection
-                    if self._detection_frame_skip[camera_name] % FRAME_SKIP_NO_DETECTION_UPDATE == 0:
+                    if self._detection_frame_skip[camera_name] % LOG_UPDATE_SKIP == 0:
                         self.update_dashboard_display(camera_name, {}, [])
                         self.update_live_grading_display()
             
@@ -2204,15 +2318,15 @@ class App(tk.Tk):
                     self.arduino_thread.start()
             
             if hasattr(self, 'status_label'):
-                self.status_label.config(text="Status: Arduino connected. Ready for automatic detection.")
+                self.update_status_text("Status: Arduino connected. Ready for automatic detection.")
                 # Start with auto detection ready status
-                self.status_label.config(text="Status: Ready - Waiting for IR beam trigger", foreground="green")
+                self.update_status_text("Status: Ready - Waiting for IR beam trigger", STATUS_READY_COLOR)
             
         except serial.SerialException as e:
             self.ser = None
             print(f"Arduino connection failed: {e}")
             if hasattr(self, 'status_label'):
-                self.status_label.config(text="Status: Arduino not found. Running in manual mode.")
+                self.update_status_text("Status: Arduino not found. Running in manual mode.", STATUS_WARNING_COLOR)
 
     def process_message_queue(self):
         """Process messages from background threads safely in the main thread"""
@@ -2233,8 +2347,8 @@ class App(tk.Tk):
                                 print("🔧 Arduino should now set motorActiveForTrigger = true")
                                 print("⚡ Stepper motor should start running NOW!")
                                 if hasattr(self, 'status_label'):
-                                    self.status_label.config(
-                                        text="Status: IR TRIGGERED - Motor should be running!", foreground="orange"
+                                    self.update_status_text(
+                                        "Status: IR TRIGGERED - Motor should be running!", STATUS_WARNING_COLOR
                                     )
                                 self.start_automatic_detection()
                             else:
@@ -2254,13 +2368,13 @@ class App(tk.Tk):
                             if self.current_mode == "TRIGGER" and self.auto_detection_active:
                                 print("IR beam cleared – stopping detection (TRIGGER MODE)")
                                 if hasattr(self, 'status_label'):
-                                    self.status_label.config(
-                                        text="Status: Processing results...", foreground="red"
+                                    self.update_status_text(
+                                        "Status: Processing results...", STATUS_ERROR_COLOR
                                     )
                                 self.stop_automatic_detection_and_grade()
                                 if hasattr(self, 'status_label'):
-                                    self.status_label.config(
-                                        text="Status: Ready - Waiting for IR beam trigger", foreground="green"
+                                    self.update_status_text(
+                                        "Status: Ready - Waiting for IR beam trigger", STATUS_READY_COLOR
                                     )
                             else:
                                 print(f"Length signal received (duration: {duration_ms}ms) but system is in {self.current_mode} mode or no detection active")
@@ -2272,11 +2386,11 @@ class App(tk.Tk):
                     else:
                         print(f"Arduino message received: '{message}'")
                         if hasattr(self, 'status_label'):
-                            self.status_label.config(text=f"Status: Arduino: {message}")
+                            self.update_status_text(f"Status: Arduino: {message}")
 
                 elif msg_type == "status_update":
                     if hasattr(self, 'status_label'):
-                        self.status_label.config(text=f"Status: {data}")
+                        self.update_status_text(f"Status: {data}")
                     
         except queue.Empty:
             pass
@@ -2420,12 +2534,12 @@ class App(tk.Tk):
             else:
                 print("❌ Cannot send command: Arduino not connected.")
                 if hasattr(self, 'status_label'):
-                    self.status_label.config(text="Status: Arduino not connected.")
+                    self.update_status_text("Status: Arduino not connected.", STATUS_ERROR_COLOR)
                     
         except (serial.SerialException, OSError, TypeError) as e:
             print(f"🔥 Error sending Arduino command '{command}': {e}")
             if hasattr(self, 'status_label'):
-                self.status_label.config(text="Status: Arduino communication error - attempting reconnect...")
+                self.update_status_text("Status: Arduino communication error - attempting reconnect...", STATUS_ERROR_COLOR)
             
             # Try to reconnect only if not shutting down
             if not (hasattr(self, '_shutting_down') and self._shutting_down):
@@ -2461,7 +2575,7 @@ class App(tk.Tk):
         self.send_arduino_command('X')  # Send stop command to Arduino
         self.live_detection_var.set(False)
         self.auto_grade_var.set(False)
-        self.status_label.config(text="Status: IDLE - Conveyor Stopped", foreground="gray")
+        self.update_status_text("Status: IDLE - Conveyor Stopped", SECONDARY_TEXT_COLOR)
 
     def finalize_grading(self, final_grade, all_measurements):
         """Central function to log piece details, update stats, and send Arduino command."""
@@ -2513,7 +2627,7 @@ class App(tk.Tk):
         # 5. Update status label and console
         status_text = f"Piece #{piece_number} Graded: {final_grade} (Cmd: {arduino_command})"
         print(f"✅ Grading Finalized - {status_text}")
-        self.status_label.config(text=f"Status: {status_text}", foreground="darkgreen")
+        self.update_status_text(f"Status: {status_text}", STATUS_READY_COLOR)
         self.log_action(f"Graded Piece #{piece_number} as {final_grade} -> Arduino Cmd: {arduino_command}")
 
     def _execute_manual_grade(self):
@@ -2535,7 +2649,7 @@ class App(tk.Tk):
             self.finalize_grading(final_grade, all_measurements)
         else:
             print("Manual grade trigger - No wood currently detected")
-            self.status_label.config(text="Status: Manual grade - no wood detected")
+            self.update_status_text("Status: Manual grade - no wood detected")
 
     def analyze_frame(self, frame, camera_name="top", run_defect_model=True):
         """Analyze frame using DeGirum model for defect detection with size measurement"""
@@ -2881,7 +2995,7 @@ class App(tk.Tk):
             print(f"Wood piece length calculated: {length_cm:.2f} cm")
 
         except ValueError:
-            self.status_label.config(text="Status: Invalid speed value!")
+            self.update_status_text("Status: Invalid speed value!")
 
     def on_closing(self):
         print("Releasing resources...")
@@ -2978,10 +3092,10 @@ class App(tk.Tk):
             with open(log_filename, 'a') as f:
                 f.write(log_entry)
             print(f"Entry added to log file: {log_filename}")
-            self.log_status_label.config(text="Log: Updated", foreground="blue")
+            self.log_status_label.config(text="Log: Updated", foreground=STATUS_READY_COLOR)
         except Exception as e:
             print(f"Error updating log file: {e}")
-            self.log_status_label.config(text="Log: Error", foreground="red")
+            self.log_status_label.config(text="Log: Error", foreground=STATUS_ERROR_COLOR)
 
         # Generate PDF Report
         try:
@@ -3053,7 +3167,7 @@ class App(tk.Tk):
     def manual_generate_report(self):
         """Manually generate a report"""
         self.generate_report()
-        self.log_status_label.config(text="Log: Manual report generated", foreground="green")
+        self.log_status_label.config(text="Log: Manual report generated", foreground=STATUS_READY_COLOR)
 
     def toggle_fullscreen(self, event=None):
         """Toggle fullscreen mode (F11 key)"""
