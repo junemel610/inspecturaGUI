@@ -192,13 +192,14 @@ ELEMENT_PADDING_Y = 2              # Vertical padding between elements
 LABEL_PADDING = 5                  # Label padding
 
 # Grid layout weights (proportions)
-CAMERA_FEEDS_WEIGHT = 4            # Weight for camera feeds section (relative to controls and stats)
+CAMERA_FEEDS_WEIGHT = 1            # Weight for camera feeds section (relative to controls and stats)
 CONTROLS_WEIGHT = 0                # Weight for controls section (compact)
-STATS_WEIGHT = 1                   # Weight for statistics section
+STATS_WEIGHT = 2                   # Weight for statistics section
 
 # Camera display settings
 CAMERA_ASPECT_RATIO = "16:9"       # Target aspect ratio for camera displays
 CAMERA_DISPLAY_MARGIN = 3          # Margin around camera displays (pixels)
+CAMERA_FEED_MARGIN = 0             # White margin between and around camera feeds (pixels)
 
 # ------------------------------------------------------------------------------
 # UI BEHAVIOR SETTINGS
@@ -276,6 +277,19 @@ class App(tk.Tk):
         self.font_normal = (PRIMARY_FONT_FAMILY, base_font_size)
         self.font_large = (PRIMARY_FONT_FAMILY, base_font_size + 2, "bold")
         self.font_button = (BUTTON_FONT_FAMILY, base_font_size, "bold")  # Button font
+
+        # Configure styles for white margins and custom button colors
+        style = ttk.Style()
+        style.configure("White.TFrame", background="white")
+
+        # Configure custom button style with colors from UI config
+        style.configure("Custom.TButton",
+                       background=BUTTON_BACKGROUND_COLOR,
+                       foreground=BUTTON_TEXT_COLOR,
+                       font=self.font_button)
+        style.map("Custom.TButton",
+                 background=[("active", BUTTON_ACTIVE_COLOR),
+                           ("pressed", BUTTON_ACTIVE_COLOR)])
 
         # Create message queue for thread communication
         self.message_queue = queue.Queue()
@@ -401,45 +415,45 @@ class App(tk.Tk):
         main_frame = ttk.Frame(self, padding=MAIN_PADDING)
         main_frame.pack(expand=True, fill=tk.BOTH)
 
-        # Configure grid weights for responsive layout
+        # Configure grid weights for responsive layout - ensure everything fits within window
         main_frame.grid_columnconfigure(0, weight=1)  # Left camera
         main_frame.grid_columnconfigure(1, weight=1)  # Right camera
-        main_frame.grid_rowconfigure(0, weight=CAMERA_FEEDS_WEIGHT)     # Camera feeds (configurable weight)
-        main_frame.grid_rowconfigure(1, weight=CONTROLS_WEIGHT)         # Controls section (configurable weight)
-        main_frame.grid_rowconfigure(2, weight=STATS_WEIGHT)            # Bottom panel with grading & stats
+        main_frame.grid_rowconfigure(0, weight=1)     # Camera feeds (reduced height)
+        main_frame.grid_rowconfigure(1, weight=1)     # Controls section (compact, fixed height)
+        main_frame.grid_rowconfigure(2, weight=3)     # Bottom panel with grading & stats (more space)
 
         # --- Camera Feeds Section (Larger, cleaner design) ---
-        cameras_container = ttk.Frame(main_frame)
-        cameras_container.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
+        cameras_container = ttk.Frame(main_frame, style="White.TFrame")
+        cameras_container.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=CAMERA_FEED_MARGIN, pady=CAMERA_FEED_MARGIN)
         cameras_container.grid_columnconfigure(0, weight=1, uniform="camera")
         cameras_container.grid_columnconfigure(1, weight=1, uniform="camera")
         cameras_container.grid_rowconfigure(0, weight=1)
 
         # Left Camera (Top Camera)
         left_camera_frame = ttk.LabelFrame(cameras_container, text="Top Camera View", padding=FRAME_PADDING)
-        left_camera_frame.grid(row=0, column=0, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
+        left_camera_frame.grid(row=0, column=0, sticky="nsew", padx=CAMERA_FEED_MARGIN, pady=0)
         left_camera_frame.grid_rowconfigure(0, weight=1)
         left_camera_frame.grid_columnconfigure(0, weight=1)
 
-        # Top camera live feed - larger display area
+        # Top camera live feed - fill entire container
         self.top_live_feed = ttk.Label(left_camera_frame, background="black", text="Initializing Camera...")
-        self.top_live_feed.grid(row=0, column=0, sticky="nsew", padx=CAMERA_DISPLAY_MARGIN, pady=CAMERA_DISPLAY_MARGIN)
+        self.top_live_feed.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
         # ROI status overlay
         self.roi_status_label = ttk.Label(left_camera_frame,
-                                         text="ROI: Active (150,80) to (1130,640)",
-                                         font=self.font_small, foreground=STATUS_WARNING_COLOR)
+                                          text="ROI: Active (150,80) to (1130,640)",
+                                          font=self.font_small, foreground=STATUS_WARNING_COLOR)
         self.roi_status_label.place(x=10, y=10)  # Position as overlay
 
         # Right Camera (Bottom Camera)
         right_camera_frame = ttk.LabelFrame(cameras_container, text="Bottom Camera View", padding=FRAME_PADDING)
-        right_camera_frame.grid(row=0, column=1, sticky="nsew", padx=ELEMENT_PADDING_X, pady=ELEMENT_PADDING_Y)
+        right_camera_frame.grid(row=0, column=1, sticky="nsew", padx=CAMERA_FEED_MARGIN, pady=0)
         right_camera_frame.grid_rowconfigure(0, weight=1)
         right_camera_frame.grid_columnconfigure(0, weight=1)
 
-        # Bottom camera live feed - larger display area
+        # Bottom camera live feed - fill entire container
         self.bottom_live_feed = ttk.Label(right_camera_frame, background="black", text="Initializing Camera...")
-        self.bottom_live_feed.grid(row=0, column=0, sticky="nsew", padx=CAMERA_DISPLAY_MARGIN, pady=CAMERA_DISPLAY_MARGIN)
+        self.bottom_live_feed.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
         # --- System Controls Section ---
         controls_frame = ttk.Frame(main_frame)
@@ -457,9 +471,9 @@ class App(tk.Tk):
         frame_bg = style.lookup("TLabelFrame", "background") or "#f0f0f0"
 
         self.status_label = tk.Text(status_frame, font=self.font_normal, wrap=tk.WORD,
-                                   height=3, width=20, state=tk.DISABLED, relief="flat",
+                                   height=3, width=25, state=tk.DISABLED, relief="flat",
                                    background=frame_bg)
-        self.status_label.pack(pady=LABEL_PADDING, fill="both", expand=True)
+        self.status_label.pack(pady=LABEL_PADDING, fill="x", expand=False)
         self.status_label.insert(1.0, "Status: Initializing...")
 
         # Conveyor Control
@@ -471,12 +485,18 @@ class App(tk.Tk):
         control_inner_frame.grid_columnconfigure(1, weight=1)
         control_inner_frame.grid_columnconfigure(2, weight=1)
 
-        ttk.Button(control_inner_frame, text="Continuous", 
-                  command=self.set_continuous_mode).grid(row=0, column=0, sticky="ew", padx=1, pady=1)
-        ttk.Button(control_inner_frame, text="Trigger", 
-                  command=self.set_trigger_mode).grid(row=0, column=1, sticky="ew", padx=1, pady=1)
-        ttk.Button(control_inner_frame, text="IDLE", 
-                  command=self.set_idle_mode).grid(row=0, column=2, sticky="ew", padx=1, pady=1)
+        tk.Button(control_inner_frame, text="Continuous",
+                 command=self.set_continuous_mode, bg=BUTTON_BACKGROUND_COLOR,
+                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
+                 font=self.font_button, relief="raised", borderwidth=2).grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        tk.Button(control_inner_frame, text="Trigger",
+                 command=self.set_trigger_mode, bg=BUTTON_BACKGROUND_COLOR,
+                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
+                 font=self.font_button, relief="raised", borderwidth=2).grid(row=0, column=1, sticky="ew", padx=1, pady=1)
+        tk.Button(control_inner_frame, text="IDLE",
+                 command=self.set_idle_mode, bg=BUTTON_BACKGROUND_COLOR,
+                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
+                 font=self.font_button, relief="raised", borderwidth=2).grid(row=0, column=2, sticky="ew", padx=1, pady=1)
 
         # Detection Settings
         detection_frame = ttk.LabelFrame(controls_frame, text="Detection", padding=FRAME_PADDING)
@@ -501,8 +521,10 @@ class App(tk.Tk):
                                          foreground=STATUS_READY_COLOR, font=self.font_small)
         self.log_status_label.pack()
 
-        ttk.Button(reports_frame, text="Generate Report",
-                  command=self.manual_generate_report).pack(pady=ELEMENT_PADDING_Y)
+        tk.Button(reports_frame, text="Generate Report",
+                 command=self.manual_generate_report, bg=BUTTON_BACKGROUND_COLOR,
+                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
+                 font=self.font_button, relief="raised", borderwidth=2).pack(pady=ELEMENT_PADDING_Y)
 
         self.show_report_notification = tk.BooleanVar(value=True)
         ttk.Checkbutton(reports_frame, text="Notifications",
@@ -532,15 +554,57 @@ class App(tk.Tk):
         grade_summary_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
         self.stats_notebook.add(grade_summary_tab, text="Grade Summary")
         
-        # Grade counts in a clean grid with better sizing and spacing
-        grade_counts_frame = ttk.Frame(grade_summary_tab)
-        grade_counts_frame.pack(fill="x", pady=10, padx=10)
-        
-        # Configure 4 columns for grade statistics with equal weight and minimum size
-        for i in range(4):
-            grade_counts_frame.grid_columnconfigure(i, weight=1, minsize=120)
-        grade_counts_frame.grid_rowconfigure(0, weight=1, minsize=80)
-        
+
+        # Live Grading Section (includes both individual grades and grade counts)
+        live_grading_frame = ttk.LabelFrame(grade_summary_tab, text="Live Grading Results", padding="10")
+        live_grading_frame.pack(fill="both", expand=True, pady=(10, 5), padx=10)
+
+        # Configure grid for the live grading frame
+        live_grading_frame.grid_columnconfigure(0, weight=1)
+        live_grading_frame.grid_columnconfigure(1, weight=1)
+        live_grading_frame.grid_columnconfigure(2, weight=1)
+        live_grading_frame.grid_rowconfigure(0, weight=0)  # Individual grades row
+        live_grading_frame.grid_rowconfigure(1, weight=1)  # Grade counts row
+
+        # Row 0: Individual camera grades (horizontal layout)
+        individual_grades_frame = ttk.Frame(live_grading_frame)
+        individual_grades_frame.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+        individual_grades_frame.grid_columnconfigure(0, weight=1)
+        individual_grades_frame.grid_columnconfigure(1, weight=1)
+        individual_grades_frame.grid_columnconfigure(2, weight=2)
+
+        # Individual camera grades (horizontal layout)
+        top_grade_container = ttk.Frame(individual_grades_frame)
+        top_grade_container.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
+        ttk.Label(top_grade_container, text="Top Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.top_grade_label = ttk.Label(top_grade_container, text="No wood detected",
+                                        foreground="gray", font=self.font_small)
+        self.top_grade_label.pack(anchor="w")
+
+        bottom_grade_container = ttk.Frame(individual_grades_frame)
+        bottom_grade_container.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
+        ttk.Label(bottom_grade_container, text="Bottom Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.bottom_grade_label = ttk.Label(bottom_grade_container, text="No wood detected",
+                                           foreground="gray", font=self.font_small)
+        self.bottom_grade_label.pack(anchor="w")
+
+        # Combined grade (prominent display, takes more space)
+        combined_container = ttk.Frame(individual_grades_frame)
+        combined_container.grid(row=0, column=2, sticky="ew", padx=5, pady=2)
+        ttk.Label(combined_container, text="Final Grade:", font=("Arial", 12, "bold")).pack(anchor="w")
+        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected",
+                                             font=("Arial", 11, "bold"), foreground="gray")
+        self.combined_grade_label.pack(anchor="w")
+
+        # Row 1: Grade counts (moved inside live grading results container)
+        grade_counts_container = ttk.Frame(live_grading_frame)
+        grade_counts_container.grid(row=1, column=0, columnspan=3, sticky="nsew")
+        grade_counts_container.grid_columnconfigure(0, weight=1, uniform="grade_counts")
+        grade_counts_container.grid_columnconfigure(1, weight=1, uniform="grade_counts")
+        grade_counts_container.grid_columnconfigure(2, weight=1, uniform="grade_counts")
+        grade_counts_container.grid_columnconfigure(3, weight=1, uniform="grade_counts")
+        grade_counts_container.grid_rowconfigure(0, weight=1, minsize=80)
+
         # Initialize stats labels with consistent spacing and fonts
         self.live_stats_labels = {}
         grade_info = [
@@ -549,57 +613,27 @@ class App(tk.Tk):
             ("grade2", "Fair\n(G2-1, G2-2, G2-3)", GRADE_FAIR_COLOR),
             ("grade3", "Poor\n(G2-4)", GRADE_POOR_COLOR)
         ]
-        
+
         for i, (grade_key, label_text, color) in enumerate(grade_info):
-            grade_container = ttk.Frame(grade_counts_frame, relief="solid", borderwidth=2)
+            grade_container = ttk.Frame(grade_counts_container, relief="solid", borderwidth=2)
             grade_container.grid(row=0, column=i, sticky="nsew", padx=6, pady=5, ipadx=8, ipady=8)
             grade_container.grid_columnconfigure(0, weight=1)
             grade_container.grid_rowconfigure(0, weight=1)
             grade_container.grid_rowconfigure(1, weight=1)
-            
+
             # Create a consistent inner frame for better control
             inner_frame = ttk.Frame(grade_container)
             inner_frame.grid(row=0, column=0, sticky="nsew", rowspan=2)
-            
+
             # Title label with fixed font
-            title_label = ttk.Label(inner_frame, text=label_text, font=("Arial", 9, "bold"), 
+            title_label = ttk.Label(inner_frame, text=label_text, font=("Arial", 9, "bold"),
                                    justify="center")
             title_label.pack(expand=True, pady=(8, 2))
-            
+
             # Count label with fixed font and consistent positioning
-            self.live_stats_labels[grade_key] = ttk.Label(inner_frame, text="0", 
+            self.live_stats_labels[grade_key] = ttk.Label(inner_frame, text="0",
                                                          foreground=color, font=("Arial", 16, "bold"))
             self.live_stats_labels[grade_key].pack(expand=True, pady=(2, 8))
-
-        # Live Grading Section (horizontal layout in Grade Summary tab)
-        live_grading_frame = ttk.LabelFrame(grade_summary_tab, text="Live Grading Results", padding="10")
-        live_grading_frame.pack(fill="x", pady=(10, 5), padx=10)
-        live_grading_frame.grid_columnconfigure(0, weight=1)
-        live_grading_frame.grid_columnconfigure(1, weight=1)
-        live_grading_frame.grid_columnconfigure(2, weight=2)
-
-        # Individual camera grades (horizontal layout)
-        top_grade_container = ttk.Frame(live_grading_frame)
-        top_grade_container.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
-        ttk.Label(top_grade_container, text="Top Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.top_grade_label = ttk.Label(top_grade_container, text="No wood detected", 
-                                        foreground="gray", font=self.font_small)
-        self.top_grade_label.pack(anchor="w")
-
-        bottom_grade_container = ttk.Frame(live_grading_frame)
-        bottom_grade_container.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
-        ttk.Label(bottom_grade_container, text="Bottom Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.bottom_grade_label = ttk.Label(bottom_grade_container, text="No wood detected", 
-                                           foreground="gray", font=self.font_small)
-        self.bottom_grade_label.pack(anchor="w")
-
-        # Combined grade (prominent display, takes more space)
-        combined_container = ttk.Frame(live_grading_frame)
-        combined_container.grid(row=0, column=2, sticky="ew", padx=5, pady=2)
-        ttk.Label(combined_container, text="Final Grade:", font=("Arial", 12, "bold")).pack(anchor="w")
-        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected", 
-                                             font=("Arial", 11, "bold"), foreground="gray")
-        self.combined_grade_label.pack(anchor="w")
 
         # Tab 2: Defect Details
         defect_details_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
@@ -1793,11 +1827,7 @@ class App(tk.Tk):
             if self._memory_cleanup_counter % MEMORY_CLEANUP_INTERVAL == 0:
                 import gc
                 gc.collect()  # Force garbage collection
-                
-                # Clear cached dimensions periodically to handle window resizing
-                if hasattr(self, '_label_dimensions'):
-                    self._label_dimensions.clear()
-                    
+
                 print(f"Memory cleanup performed at frame {self._memory_cleanup_counter}")
             
             # Process detection based on automatic IR beam OR live detection toggle
