@@ -43,6 +43,13 @@ BOTTOM_CAMERA_PIXEL_TO_MM = 0.3   # mm per pixel for bottom camera at 29cm dista
 # Wood pallet specifications
 WOOD_PALLET_WIDTH_MM = 115        # Actual width of wood pallet in mm (11.5cm = 115mm)
 
+# Bounding box alignment offsets (adjust these to fine-tune positioning)
+BOX_OFFSET_X = 125      # Pixels to add to x coordinates (positive moves right)
+BOX_OFFSET_Y =0      # Pixels to add to y coordinates (positive moves down)
+
+# Detection confidence threshold (0.0 to 1.0)
+DETECTION_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for defect detection
+
 # -----------------------------------------------------------------------------
 # CAMERA HARDWARE SETTINGS
 # Adjust resolution and frame rate based on your camera capabilities
@@ -58,14 +65,14 @@ CAMERA_FPS = 30                  # Camera frame rate (frames per second)
 # -----------------------------------------------------------------------------
 ROI_COORDINATES = {
     "top": {
-        "x1": 150,  # Left boundary - exclude left equipment
-        "y1": 80,   # Top boundary - exclude top area
-        "x2": 1280, # Right boundary - exclude right equipment
+        "x1": 400,  # Left boundary - exclude left equipment
+        "y1": 0,   # Top boundary - exclude top area
+        "x2": 850, # Right boundary - exclude right equipment
         "y2": 720   # Bottom boundary - focus on wood area
     },
     "bottom": {
         "x1": 150,    # Full frame for bottom camera (no ROI)
-        "y1": 80,
+        "y1": 0,
         "x2": CAMERA_WIDTH,   # Use configured camera width
         "y2": CAMERA_HEIGHT   # Use configured camera height
     }
@@ -1719,6 +1726,61 @@ class App(tk.Tk):
         
         return roi_frame, roi_info
 
+    def draw_bounding_boxes_on_canvas(self, canvas, detections, camera_name):
+        """Draw bounding boxes for detections on canvas, accounting for ROI and stretching"""
+        # Get effective ROI coordinates (if ROI disabled, use full frame)
+        if self.roi_enabled.get(camera_name, False):
+            roi_coords = self.roi_coordinates.get(camera_name, {})
+            roi_x1 = roi_coords.get("x1", 0)
+            roi_y1 = roi_coords.get("y1", 0)
+            roi_x2 = roi_coords.get("x2", 1280)
+            roi_y2 = roi_coords.get("y2", 720)
+        else:
+            # No ROI, use full frame
+            roi_x1 = 0
+            roi_y1 = 0
+            roi_x2 = 1280
+            roi_y2 = 720
+
+        roi_width = roi_x2 - roi_x1
+        roi_height = roi_y2 - roi_y1
+
+        # Stretching factors applied during resize to 640x640
+        stretch_x = 640.0 / roi_width
+        stretch_y = 640.0 / roi_height
+
+        for det in detections:
+            bbox = det.get('bbox', [])
+            if len(bbox) >= 4:
+                x1, y1, x2, y2 = bbox[:4]
+                # Assume bbox are in pixels 0-640 relative to model input
+                # Correct for stretching to get back to original ROI coordinates
+                x1_roi = x1 / stretch_x
+                y1_roi = y1 / stretch_y
+                x2_roi = x2 / stretch_x
+                y2_roi = y2 / stretch_y
+
+                # Add ROI offset to get full frame coordinates
+                x1_frame = roi_x1 + x1_roi
+                y1_frame = roi_y1 + y1_roi
+                x2_frame = roi_x1 + x2_roi
+                y2_frame = roi_y1 + y2_roi
+
+                # Map to canvas coordinates (full frame scaled)
+                offset_x = BOX_OFFSET_X if camera_name == "top" else 0
+                offset_y = BOX_OFFSET_Y if camera_name == "top" else 0
+                x1_canvas = x1_frame * (self.canvas_width / 1280.0) + offset_x
+                y1_canvas = y1_frame * (self.canvas_height / 720.0) + offset_y
+                x2_canvas = x2_frame * (self.canvas_width / 1280.0) + offset_x
+                y2_canvas = y2_frame * (self.canvas_height / 720.0) + offset_y
+
+                # Draw rectangle
+                canvas.create_rectangle(x1_canvas, y1_canvas, x2_canvas, y2_canvas,
+                                      outline="red", width=3, tags="bbox")
+
+        # Keep boxes on top
+        canvas.tag_raise("bbox")
+
     def draw_roi_on_canvas(self, canvas):
         """Draw ROI overlay on top camera canvas"""
         if not self.roi_enabled.get("top", False):
@@ -1728,14 +1790,21 @@ class App(tk.Tk):
         canvas.delete("roi")
         canvas.delete("roi_label")
 
-        # Scale ROI coordinates based on canvas size (originally for 640x360)
-        scale_x = canvas.winfo_width() / 640
-        scale_y = canvas.winfo_height() / 360
+        # Get ROI coordinates
+        roi_coords = self.roi_coordinates.get("top", {})
+        roi_x1 = roi_coords.get("x1", 150)
+        roi_y1 = roi_coords.get("y1", 80)
+        roi_x2 = roi_coords.get("x2", 1280)
+        roi_y2 = roi_coords.get("y2", 720)
 
-        x1 = int(60 * scale_x)
-        y1 = int(40 * scale_y)
-        x2 = int(580 * scale_x)
-        y2 = int(320 * scale_y)
+        # Scale ROI coordinates to canvas
+        scale_x = self.canvas_width / 1280.0
+        scale_y = self.canvas_height / 720.0
+
+        x1 = roi_x1 * scale_x
+        y1 = roi_y1 * scale_y
+        x2 = roi_x2 * scale_x
+        y2 = roi_y2 * scale_y
 
         # Draw ROI rectangle (yellow border)
         canvas.create_rectangle(x1, y1, x2, y2, outline="yellow", width=3, tags="roi")
@@ -1769,11 +1838,13 @@ class App(tk.Tk):
                 result = self.analyze_frame(detection_frame, camera_name, run_defect_model=True)
 
                 # Handle return formats
-                if len(result) == 3:
-                    annotated_frame, defect_dict, measurements = result
+                if len(result) >= 3:
+                    annotated_frame, defect_dict, measurements = result[:3]
+                    detections = result[3] if len(result) > 3 else []
                 else:
                     annotated_frame, defect_dict = result
                     measurements = []
+                    detections = []
 
                 # Resize annotated frame to canvas size for display
                 if annotated_frame.shape[:2] != (self.canvas_height, self.canvas_width):
@@ -1867,12 +1938,17 @@ class App(tk.Tk):
 
             # Update canvas safely
             canvas.delete('cam_img')  # Remove previous camera image
+            canvas.delete('bbox')     # Remove previous bounding boxes
             if camera_name == "top":
                 self._top_photo = photo
                 canvas.create_image(0, 0, anchor='nw', image=self._top_photo, tags='cam_img')
             else:
                 self._bottom_photo = photo
                 canvas.create_image(0, 0, anchor='nw', image=self._bottom_photo, tags='cam_img')
+
+            # Draw bounding boxes if detections exist (only when detecting)
+            if should_detect and 'detections' in locals() and detections:
+                self.draw_bounding_boxes_on_canvas(canvas, detections, camera_name)
 
             # Draw ROI on top camera if enabled (ensures it's on top)
             if camera_name == "top":
@@ -2575,7 +2651,7 @@ class App(tk.Tk):
                 else:
                     final_defect_dict[standard_defect_type] = 1
 
-            return annotated_frame, final_defect_dict, defect_measurements
+            return annotated_frame, final_defect_dict, defect_measurements, detections
 
         except Exception as e:
             print(f"Error during DeGirum inference on {camera_name} camera: {e}")
