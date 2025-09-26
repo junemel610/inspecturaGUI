@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import time
 from modules.utils_module import calculate_defect_size, map_model_output_to_standard
 
 try:
@@ -15,9 +16,11 @@ class DetectionModule:
         self.dev_mode = dev_mode
         self.inference_host_address = inference_host_address
         
-        # Model paths for two-stage detection
-        self.wood_model_path = "/home/inspectura/Desktop/InspecturaGUI/models/Wood_Plank--640x640_quant_hailort_hailo8_2/Wood_Plank--640x640_quant_hailort_hailo8_2/Wood_Plank--640x640_quant_hailort_hailo8_2.hef"
-        self.defect_model_path = "/home/inspectura/Desktop/InspecturaGUI/models/V2DefectCombined--640x640_quant_hailort_hailo8_1/V2DefectCombined--640x640_quant_hailort_hailo8_1.hef"
+        # Model zoo URLs and names for two-stage detection
+        self.wood_zoo_url = "/home/inspectura/Desktop/InspecturaGUI/models/Wood_Plank--640x640_quant_hailort_hailo8_2"
+        self.wood_model_name = "Wood_Plank--640x640_quant_hailort_hailo8_2"
+        self.defect_zoo_url = "/home/inspectura/Desktop/InspecturaGUI/models/V2DefectCombined--640x640_quant_hailort_hailo8_1"
+        self.defect_model_name = "V2DefectCombined--640x640_quant_hailort_hailo8_1"
         
         # Model instances
         self.wood_model = None
@@ -41,15 +44,17 @@ class DetectionModule:
         try:
             # Load wood detection model
             self.wood_model = dg.load_model(
-                model_name=self.wood_model_path,
-                inference_host_address=self.inference_host_address
+                model_name=self.wood_model_name,
+                inference_host_address=self.inference_host_address,
+                zoo_url=self.wood_zoo_url
             )
             print("Wood detection model loaded successfully.")
-            
+
             # Load defect detection model
             self.defect_model = dg.load_model(
-                model_name=self.defect_model_path,
-                inference_host_address=self.inference_host_address
+                model_name=self.defect_model_name,
+                inference_host_address=self.inference_host_address,
+                zoo_url=self.defect_zoo_url
             )
             print("Defect detection model loaded successfully.")
             
@@ -142,9 +147,25 @@ class DetectionModule:
                 defect_x = x1 + (x2 - x1) // 3
                 defect_y = y1 + (y2 - y1) // 3
                 cv2.rectangle(annotated_frame, (defect_x, defect_y), (defect_x + 50, defect_y + 30), (0, 0, 255), 2)
-                cv2.putText(annotated_frame, "Mock Defect", (defect_x + 5, defect_y + 20), 
+                cv2.putText(annotated_frame, "Mock Defect", (defect_x + 5, defect_y + 20),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-            
+
+            # Debug prints for defect detection (dev mode)
+            mock_defect_dict = {"Unsound_Knot": 1}
+            mock_defect_measurements = [("Unsound_Knot", 15.0, 8.0)]
+            total_defects = sum(mock_defect_dict.values())
+            print(f"Number of defects detected (dev mode): {total_defects}")
+            print("Defect summary by type:")
+            for defect_type, count in mock_defect_dict.items():
+                print(f"  {defect_type}: {count}")
+            print("Defect details:")
+            for defect_type, size_mm, percentage in mock_defect_measurements:
+                print(f"  {defect_type}: size {size_mm}mm, {percentage}%")
+
+            # Debug: Save annotated frame to check bounding boxes
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            cv2.imwrite(f"detection_logs/debug_annotated_frame_dev_{timestamp}.jpg", annotated_frame)
+
             return annotated_frame, {"Unsound_Knot": 1}, [("Unsound_Knot", 15.0, 8.0)]
 
         if self.defect_model is None:
@@ -220,7 +241,21 @@ class DetectionModule:
                     final_defect_dict[standard_defect_type] += 1
                 else:
                     final_defect_dict[standard_defect_type] = 1
-            
+
+            # Debug prints for defect detection
+            total_defects = sum(final_defect_dict.values())
+            print(f"Number of defects detected: {total_defects}")
+            print("Defect summary by type:")
+            for defect_type, count in final_defect_dict.items():
+                print(f"  {defect_type}: {count}")
+            print("Defect details:")
+            for defect_type, size_mm, percentage in defect_measurements:
+                print(f"  {defect_type}: size {size_mm}mm, {percentage}%")
+
+            # Debug: Save annotated frame to check bounding boxes
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            cv2.imwrite(f"detection_logs/debug_annotated_frame_{timestamp}.jpg", annotated_frame)
+
             return annotated_frame, final_defect_dict, defect_measurements
             
         except Exception as e:
@@ -231,20 +266,20 @@ class DetectionModule:
         """
         Main analysis function implementing two-stage detection:
         1. Detect wood presence
-        2. If wood detected, analyze for defects
+        2. Always analyze for defects, regardless of wood detection status
         """
         # Stage 1: Wood detection
         wood_detected, wood_confidence, wood_bbox = self.detect_wood_presence(frame)
-        
+
+        # Stage 2: Defect detection (always performed)
+        annotated_frame, defect_dict, defect_measurements = self.detect_defects_in_wood_region(frame, wood_bbox, camera_name)
+
         if not wood_detected:
-            # No wood detected, return original frame
-            annotated_frame = frame.copy()
-            cv2.putText(annotated_frame, "No Wood Detected", (50, 50), 
+            # Add "No Wood Detected" text to the annotated frame
+            cv2.putText(annotated_frame, "No Wood Detected", (50, 50),
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            return annotated_frame, {}, []
-        
-        # Stage 2: Defect detection in wood region
-        return self.detect_defects_in_wood_region(frame, wood_bbox, camera_name)
+
+        return annotated_frame, defect_dict, defect_measurements
 
     def detect_wood(self, frame):
         """

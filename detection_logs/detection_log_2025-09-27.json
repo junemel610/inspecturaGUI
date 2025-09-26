@@ -1,0 +1,3690 @@
+{
+  "detections": [
+    {
+      "timestamp": "2025-09-27T03:05:14.719196",
+      "camera": "top",
+      "piece_number": 0,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 49.97,
+          "percentage_of_width": 43.45,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.8,
+          "percentage_of_width": 12.87,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:15.229162",
+      "camera": "top",
+      "piece_number": 1,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 18.11,
+          "percentage_of_width": 15.75,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.94,
+          "percentage_of_width": 39.95,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.8,
+          "percentage_of_width": 12.87,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:16.138254",
+      "camera": "top",
+      "piece_number": 2,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.4,
+          "percentage_of_width": 38.61,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.55,
+          "percentage_of_width": 12.65,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:16.737204",
+      "camera": "top",
+      "piece_number": 3,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.53,
+          "percentage_of_width": 38.72,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.12,
+          "percentage_of_width": 12.28,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:17.345147",
+      "camera": "top",
+      "piece_number": 4,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.34,
+          "percentage_of_width": 39.42,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.07,
+          "percentage_of_width": 12.24,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:18.040013",
+      "camera": "top",
+      "piece_number": 5,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.37,
+          "percentage_of_width": 39.45,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.13,
+          "percentage_of_width": 12.29,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:18.642687",
+      "camera": "top",
+      "piece_number": 6,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 18.61,
+          "percentage_of_width": 16.18,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 52.34,
+          "percentage_of_width": 45.52,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.34,
+          "percentage_of_width": 12.47,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:19.246437",
+      "camera": "top",
+      "piece_number": 7,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.55,
+          "percentage_of_width": 13.52,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 53.07,
+          "percentage_of_width": 46.15,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.68,
+          "percentage_of_width": 12.77,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:19.752835",
+      "camera": "top",
+      "piece_number": 8,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 19.01,
+          "percentage_of_width": 16.53,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.05,
+          "percentage_of_width": 39.17,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.3,
+          "percentage_of_width": 12.44,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:20.354507",
+      "camera": "top",
+      "piece_number": 9,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.36,
+          "percentage_of_width": 41.18,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.26,
+          "percentage_of_width": 12.4,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:20.983211",
+      "camera": "top",
+      "piece_number": 10,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-4",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 50.59,
+          "percentage_of_width": 43.99,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.85,
+          "percentage_of_width": 12.04,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:21.472549",
+      "camera": "top",
+      "piece_number": 11,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.11,
+          "percentage_of_width": 13.14,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 47.97,
+          "percentage_of_width": 41.72,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.33,
+          "percentage_of_width": 12.46,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:22.068906",
+      "camera": "top",
+      "piece_number": 12,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.48,
+          "percentage_of_width": 38.67,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 15.02,
+          "percentage_of_width": 13.06,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:22.770479",
+      "camera": "top",
+      "piece_number": 13,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.5,
+          "percentage_of_width": 41.31,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.6,
+          "percentage_of_width": 12.7,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:23.378953",
+      "camera": "top",
+      "piece_number": 14,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.76,
+          "percentage_of_width": 41.53,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.23,
+          "percentage_of_width": 12.37,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:24.180252",
+      "camera": "top",
+      "piece_number": 15,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.06,
+          "percentage_of_width": 40.92,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.03,
+          "percentage_of_width": 12.2,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:24.692054",
+      "camera": "top",
+      "piece_number": 16,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.89,
+          "percentage_of_width": 41.64,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.93,
+          "percentage_of_width": 12.11,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:25.192561",
+      "camera": "top",
+      "piece_number": 17,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-4",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 52.23,
+          "percentage_of_width": 45.42,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.91,
+          "percentage_of_width": 12.97,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:25.797782",
+      "camera": "top",
+      "piece_number": 18,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.78,
+          "percentage_of_width": 39.81,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.39,
+          "percentage_of_width": 11.64,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:26.301692",
+      "camera": "top",
+      "piece_number": 19,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.47,
+          "percentage_of_width": 12.58,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.83,
+          "percentage_of_width": 39.85,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.62,
+          "percentage_of_width": 12.71,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:26.907408",
+      "camera": "top",
+      "piece_number": 20,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.59,
+          "percentage_of_width": 42.25,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.88,
+          "percentage_of_width": 12.07,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:27.512452",
+      "camera": "top",
+      "piece_number": 21,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.17,
+          "percentage_of_width": 39.28,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.1,
+          "percentage_of_width": 12.26,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:28.206259",
+      "camera": "top",
+      "piece_number": 22,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.16,
+          "percentage_of_width": 41.88,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.5,
+          "percentage_of_width": 12.61,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:28.809888",
+      "camera": "top",
+      "piece_number": 23,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-4",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 50.95,
+          "percentage_of_width": 44.3,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:29.335561",
+      "camera": "top",
+      "piece_number": 24,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 46.67,
+          "percentage_of_width": 40.58,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.0,
+          "percentage_of_width": 12.17,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:29.986243",
+      "camera": "top",
+      "piece_number": 25,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.25,
+          "percentage_of_width": 41.09,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 15.26,
+          "percentage_of_width": 13.27,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:30.470808",
+      "camera": "top",
+      "piece_number": 26,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.74,
+          "percentage_of_width": 39.78,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.35,
+          "percentage_of_width": 12.48,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:30.930040",
+      "camera": "top",
+      "piece_number": 27,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 43.86,
+          "percentage_of_width": 38.14,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.07,
+          "percentage_of_width": 12.23,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:31.432698",
+      "camera": "top",
+      "piece_number": 28,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 49.18,
+          "percentage_of_width": 42.77,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.7,
+          "percentage_of_width": 12.78,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:32.035504",
+      "camera": "top",
+      "piece_number": 29,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.53,
+          "percentage_of_width": 39.59,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.6,
+          "percentage_of_width": 11.82,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:32.743233",
+      "camera": "top",
+      "piece_number": 30,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 46.26,
+          "percentage_of_width": 40.23,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.85,
+          "percentage_of_width": 12.91,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:33.360059",
+      "camera": "top",
+      "piece_number": 31,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-4",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 50.73,
+          "percentage_of_width": 44.11,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.15,
+          "percentage_of_width": 12.31,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:33.948113",
+      "camera": "top",
+      "piece_number": 32,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.27,
+          "percentage_of_width": 12.4,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.25,
+          "percentage_of_width": 39.34,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.34,
+          "percentage_of_width": 12.47,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:34.758924",
+      "camera": "top",
+      "piece_number": 33,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.79,
+          "percentage_of_width": 42.42,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.75,
+          "percentage_of_width": 11.95,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:35.254839",
+      "camera": "top",
+      "piece_number": 34,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.83,
+          "percentage_of_width": 42.46,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.2,
+          "percentage_of_width": 12.35,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:35.861991",
+      "camera": "top",
+      "piece_number": 35,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 46.17,
+          "percentage_of_width": 40.14,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.98,
+          "percentage_of_width": 12.15,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:36.566713",
+      "camera": "top",
+      "piece_number": 36,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.5,
+          "percentage_of_width": 41.31,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.76,
+          "percentage_of_width": 11.96,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:37.171414",
+      "camera": "top",
+      "piece_number": 37,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.69,
+          "percentage_of_width": 38.86,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.88,
+          "percentage_of_width": 12.07,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:37.970717",
+      "camera": "top",
+      "piece_number": 38,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.71,
+          "percentage_of_width": 42.36,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.31,
+          "percentage_of_width": 12.45,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:38.681781",
+      "camera": "top",
+      "piece_number": 39,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 46.95,
+          "percentage_of_width": 40.83,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.92,
+          "percentage_of_width": 12.11,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:39.423674",
+      "camera": "top",
+      "piece_number": 40,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.05,
+          "percentage_of_width": 41.78,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.33,
+          "percentage_of_width": 11.59,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:40.192801",
+      "camera": "top",
+      "piece_number": 41,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.98,
+          "percentage_of_width": 39.99,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.3,
+          "percentage_of_width": 12.43,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:40.708618",
+      "camera": "top",
+      "piece_number": 42,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.09,
+          "percentage_of_width": 38.34,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.24,
+          "percentage_of_width": 12.38,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:41.359088",
+      "camera": "top",
+      "piece_number": 43,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 18.73,
+          "percentage_of_width": 16.29,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 51.04,
+          "percentage_of_width": 44.39,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.87,
+          "percentage_of_width": 12.06,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T03:05:41.901518",
+      "camera": "top",
+      "piece_number": 44,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.13,
+          "percentage_of_width": 40.98,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 15.07,
+          "percentage_of_width": 13.1,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:02.703991",
+      "camera": "top",
+      "piece_number": 0,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.63,
+          "percentage_of_width": 12.73,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 46.24,
+          "percentage_of_width": 40.21,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.0,
+          "percentage_of_width": 12.17,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:03.354772",
+      "camera": "top",
+      "piece_number": 1,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.12,
+          "percentage_of_width": 40.98,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.27,
+          "percentage_of_width": 12.41,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:03.972159",
+      "camera": "top",
+      "piece_number": 2,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.24,
+          "percentage_of_width": 13.26,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 44.86,
+          "percentage_of_width": 39.01,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.4,
+          "percentage_of_width": 12.52,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:04.648677",
+      "camera": "top",
+      "piece_number": 3,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.03,
+          "percentage_of_width": 13.07,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.17,
+          "percentage_of_width": 39.28,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.14,
+          "percentage_of_width": 12.29,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:05.232970",
+      "camera": "top",
+      "piece_number": 4,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 49.15,
+          "percentage_of_width": 42.74,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.23,
+          "percentage_of_width": 12.38,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:06.481539",
+      "camera": "top",
+      "piece_number": 5,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.17,
+          "percentage_of_width": 38.41,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:06.992829",
+      "camera": "top",
+      "piece_number": 6,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 49.48,
+          "percentage_of_width": 43.02,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.69,
+          "percentage_of_width": 11.91,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:07.773537",
+      "camera": "top",
+      "piece_number": 7,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.27,
+          "percentage_of_width": 12.41,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 44.07,
+          "percentage_of_width": 38.32,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.61,
+          "percentage_of_width": 12.7,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:08.396263",
+      "camera": "top",
+      "piece_number": 8,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 16.06,
+          "percentage_of_width": 13.97,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 44.89,
+          "percentage_of_width": 39.03,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.86,
+          "percentage_of_width": 12.05,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:09.197976",
+      "camera": "top",
+      "piece_number": 9,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 13.97,
+          "percentage_of_width": 12.15,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.17,
+          "percentage_of_width": 39.28,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.58,
+          "percentage_of_width": 12.68,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:10.106233",
+      "camera": "top",
+      "piece_number": 10,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-4",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 52.75,
+          "percentage_of_width": 45.87,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 14.09,
+          "percentage_of_width": 12.25,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:10.720064",
+      "camera": "top",
+      "piece_number": 11,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.23,
+          "percentage_of_width": 41.94,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.85,
+          "percentage_of_width": 12.04,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:11.418927",
+      "camera": "top",
+      "piece_number": 12,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.86,
+          "percentage_of_width": 12.92,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 44.82,
+          "percentage_of_width": 38.98,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.97,
+          "percentage_of_width": 12.15,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:12.319483",
+      "camera": "top",
+      "piece_number": 13,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.51,
+          "percentage_of_width": 12.61,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 58.23,
+          "percentage_of_width": 50.63,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.4,
+          "percentage_of_width": 11.66,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:15:13.023453",
+      "camera": "top",
+      "piece_number": 14,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 46.63,
+          "percentage_of_width": 40.55,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.73,
+          "percentage_of_width": 11.94,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:12.545562",
+      "camera": "top",
+      "piece_number": 0,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.8,
+          "percentage_of_width": 12.87,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 48.0,
+          "percentage_of_width": 41.74,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.56,
+          "percentage_of_width": 11.79,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:13.155772",
+      "camera": "top",
+      "piece_number": 1,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.59,
+          "percentage_of_width": 12.69,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 44.47,
+          "percentage_of_width": 38.67,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.35,
+          "percentage_of_width": 11.61,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:14.184256",
+      "camera": "top",
+      "piece_number": 2,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 17.56,
+          "percentage_of_width": 15.27,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 52.64,
+          "percentage_of_width": 45.77,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.97,
+          "percentage_of_width": 12.15,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:15.295259",
+      "camera": "top",
+      "piece_number": 3,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-4",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 51.31,
+          "percentage_of_width": 44.62,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.1,
+          "percentage_of_width": 11.39,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:16.002725",
+      "camera": "top",
+      "piece_number": 4,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 16.17,
+          "percentage_of_width": 14.06,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 48.89,
+          "percentage_of_width": 42.51,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.64,
+          "percentage_of_width": 11.86,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:16.923331",
+      "camera": "top",
+      "piece_number": 5,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.55,
+          "percentage_of_width": 13.53,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 55.71,
+          "percentage_of_width": 48.44,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.0,
+          "percentage_of_width": 12.17,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:17.614686",
+      "camera": "top",
+      "piece_number": 6,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.52,
+          "percentage_of_width": 12.63,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 46.85,
+          "percentage_of_width": 40.74,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.3,
+          "percentage_of_width": 12.44,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:18.345120",
+      "camera": "top",
+      "piece_number": 7,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.46,
+          "percentage_of_width": 13.44,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 45.63,
+          "percentage_of_width": 39.68,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.33,
+          "percentage_of_width": 11.59,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:19.125797",
+      "camera": "top",
+      "piece_number": 8,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 13.92,
+          "percentage_of_width": 12.11,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 47.61,
+          "percentage_of_width": 41.4,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.45,
+          "percentage_of_width": 11.69,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:19.769710",
+      "camera": "top",
+      "piece_number": 9,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.52,
+          "percentage_of_width": 39.58,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.85,
+          "percentage_of_width": 12.05,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:20.388189",
+      "camera": "top",
+      "piece_number": 10,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.19,
+          "percentage_of_width": 13.21,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 51.22,
+          "percentage_of_width": 44.54,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 14.21,
+          "percentage_of_width": 12.36,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:20.990666",
+      "camera": "top",
+      "piece_number": 11,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.36,
+          "percentage_of_width": 13.36,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 46.41,
+          "percentage_of_width": 40.36,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.32,
+          "percentage_of_width": 11.58,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:21.579580",
+      "camera": "top",
+      "piece_number": 12,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.54,
+          "percentage_of_width": 38.73,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.87,
+          "percentage_of_width": 12.06,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:22.646065",
+      "camera": "top",
+      "piece_number": 13,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 14.08,
+          "percentage_of_width": 12.25,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 54.95,
+          "percentage_of_width": 47.78,
+          "individual_grade": "G2-4",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": ">50mm and >25%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.84,
+          "percentage_of_width": 12.03,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:23.451606",
+      "camera": "top",
+      "piece_number": 14,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 44.85,
+          "percentage_of_width": 39.0,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.73,
+          "percentage_of_width": 11.94,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:24.357319",
+      "camera": "top",
+      "piece_number": 15,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 17.92,
+          "percentage_of_width": 15.58,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 46.29,
+          "percentage_of_width": 40.26,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.97,
+          "percentage_of_width": 12.15,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:24.986466",
+      "camera": "top",
+      "piece_number": 16,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.47,
+          "percentage_of_width": 39.54,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:25.726477",
+      "camera": "top",
+      "piece_number": 17,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 45.31,
+          "percentage_of_width": 39.4,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.6,
+          "percentage_of_width": 11.83,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:26.651380",
+      "camera": "top",
+      "piece_number": 18,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 15.06,
+          "percentage_of_width": 13.1,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 48.07,
+          "percentage_of_width": 41.8,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 13.82,
+          "percentage_of_width": 12.02,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:27.379479",
+      "camera": "top",
+      "piece_number": 19,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 48.43,
+          "percentage_of_width": 42.11,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.79,
+          "percentage_of_width": 11.99,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:40:28.077056",
+      "camera": "top",
+      "piece_number": 20,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-3",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 47.72,
+          "percentage_of_width": 41.5,
+          "individual_grade": "G2-3",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226450mm or \u226425%",
+          "threshold_grade": "G2-3"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 13.91,
+          "percentage_of_width": 12.1,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:01.327618",
+      "camera": "top",
+      "piece_number": 0,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 22.3,
+          "percentage_of_width": 19.39,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:02.038613",
+      "camera": "top",
+      "piece_number": 1,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 24.27,
+          "percentage_of_width": 21.1,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 6.82,
+          "percentage_of_width": 5.93,
+          "individual_grade": "G2-0",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u22647mm or \u22643.5%",
+          "threshold_grade": "G2-0"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 12.41,
+          "percentage_of_width": 10.8,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:02.463945",
+      "camera": "top",
+      "piece_number": 2,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 23.93,
+          "percentage_of_width": 20.81,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:02.941977",
+      "camera": "top",
+      "piece_number": 3,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 22.52,
+          "percentage_of_width": 19.58,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:05.754798",
+      "camera": "top",
+      "piece_number": 4,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 23.2,
+          "percentage_of_width": 20.17,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 7.18,
+          "percentage_of_width": 6.25,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:06.417482",
+      "camera": "top",
+      "piece_number": 5,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 7.81,
+          "percentage_of_width": 6.79,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 23.71,
+          "percentage_of_width": 20.61,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 6.75,
+          "percentage_of_width": 5.87,
+          "individual_grade": "G2-0",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u22647mm or \u22643.5%",
+          "threshold_grade": "G2-0"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:06.830399",
+      "camera": "top",
+      "piece_number": 6,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 8.26,
+          "percentage_of_width": 7.18,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 24.33,
+          "percentage_of_width": 21.16,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 12.84,
+          "percentage_of_width": 11.16,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:07.269534",
+      "camera": "top",
+      "piece_number": 7,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 7.5,
+          "percentage_of_width": 6.52,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 22.62,
+          "percentage_of_width": 19.67,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:07.777134",
+      "camera": "top",
+      "piece_number": 8,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 21.6,
+          "percentage_of_width": 18.78,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:08.466035",
+      "camera": "top",
+      "piece_number": 9,
+      "test_case": null,
+      "total_defects": 3,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 7.8,
+          "percentage_of_width": 6.78,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 24.34,
+          "percentage_of_width": 21.16,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 3,
+          "type": "Unsound_Knot",
+          "size_mm": 7.83,
+          "percentage_of_width": 6.81,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:08.885752",
+      "camera": "top",
+      "piece_number": 10,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 23.66,
+          "percentage_of_width": 20.57,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:09.583757",
+      "camera": "top",
+      "piece_number": 11,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 23.56,
+          "percentage_of_width": 20.49,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 8.05,
+          "percentage_of_width": 7.0,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:10.439382",
+      "camera": "top",
+      "piece_number": 12,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 23.89,
+          "percentage_of_width": 20.78,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:10.861731",
+      "camera": "top",
+      "piece_number": 13,
+      "test_case": null,
+      "total_defects": 2,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 23.82,
+          "percentage_of_width": 20.71,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        },
+        {
+          "defect_id": 2,
+          "type": "Unsound_Knot",
+          "size_mm": 11.5,
+          "percentage_of_width": 10.0,
+          "individual_grade": "G2-1",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226420mm or \u226410%",
+          "threshold_grade": "G2-1"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    },
+    {
+      "timestamp": "2025-09-27T04:54:11.284571",
+      "camera": "top",
+      "piece_number": 14,
+      "test_case": null,
+      "total_defects": 1,
+      "final_grade": "G2-2",
+      "defects": [
+        {
+          "defect_id": 1,
+          "type": "Unsound_Knot",
+          "size_mm": 21.89,
+          "percentage_of_width": 19.03,
+          "individual_grade": "G2-2",
+          "grading_standard": "SS-EN 1611-1",
+          "applied_threshold": "\u226435mm or \u226417.5%",
+          "threshold_grade": "G2-2"
+        }
+      ],
+      "camera_info": {
+        "distance_cm": 37,
+        "pixel_to_mm": 0.4,
+        "wood_width_mm": 115
+      },
+      "grading_reason": "\u22642 defects detected - Based on individual grades (SS-EN 1611-1)"
+    }
+  ]
+}

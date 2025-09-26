@@ -37,7 +37,7 @@ class WoodSortingApp(QMainWindow):
         self.setWindowTitle("Wood Sorting Application - Enhanced (1080p Maximized)")
         
         # Set minimum window size for 1080p display but allow maximizing
-        self.setMinimumSize(self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
+        self.setMinimumSize(400, 225)
         
         # Maximize the window to fill the screen if configured
         if self.config.gui.maximize_on_startup:
@@ -142,7 +142,7 @@ class WoodSortingApp(QMainWindow):
         top_camera_layout.setContentsMargins(5, 15, 5, 5)
         self.top_camera_label = QLabel("Initializing Camera...")
         self.top_camera_label.setAlignment(Qt.AlignCenter)
-        self.top_camera_label.setMinimumSize(400, 225)  # Minimum 16:9 ratio
+        self.top_camera_label.setMinimumSize(400, 225)  # Increased minimum size for better visibility
         self.top_camera_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.top_camera_label.setStyleSheet("background-color: black; border: 1px solid gray;")
         top_camera_layout.addWidget(self.top_camera_label)
@@ -155,7 +155,7 @@ class WoodSortingApp(QMainWindow):
         bottom_camera_layout.setContentsMargins(5, 15, 5, 5)
         self.bottom_camera_label = QLabel("Initializing Camera...")
         self.bottom_camera_label.setAlignment(Qt.AlignCenter)
-        self.bottom_camera_label.setMinimumSize(400, 225)  # Minimum 16:9 ratio
+        self.bottom_camera_label.setMinimumSize(400, 225)  # Increased minimum size for better visibility
         self.bottom_camera_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.bottom_camera_label.setStyleSheet("background-color: black; border: 1px solid gray;")
         bottom_camera_layout.addWidget(self.bottom_camera_label)
@@ -1042,7 +1042,7 @@ System Status: {'OPTIMAL' if metrics.fps > 25 and metrics.cpu_usage_percent < 80
         current_time = QDateTime.currentDateTime().toString(Qt.DefaultLocaleLongDate)
         dummy_image = QImage(self.camera_module.camera_width, self.camera_module.camera_height, QImage.Format_RGB32)
         dummy_image.fill(Qt.darkGray)
-        
+
         painter = QPainter(dummy_image)
         painter.setPen(Qt.white)
         painter.setFont(QFont("Arial", 24))
@@ -1050,8 +1050,8 @@ System Status: {'OPTIMAL' if metrics.fps > 25 and metrics.cpu_usage_percent < 80
         painter.end()
 
         pixmap = QPixmap.fromImage(dummy_image)
-        self.top_camera_label.setPixmap(pixmap.scaled(self.top_camera_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.bottom_camera_label.setPixmap(pixmap.scaled(self.bottom_camera_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.top_camera_label.setPixmap(pixmap.scaled(self.top_camera_label.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+        self.bottom_camera_label.setPixmap(pixmap.scaled(self.bottom_camera_label.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
 
     def update_feeds(self):
         """Enhanced camera feed update with integrated wood detection and error handling"""
@@ -1281,7 +1281,7 @@ Error Summary:
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
         convert_to_qt_format = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        p = convert_to_qt_format.scaled(label.width(), label.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        p = convert_to_qt_format.scaled(label.width(), label.height(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
         label.setPixmap(QPixmap.fromImage(p))
 
     def set_continuous_mode(self):
