@@ -403,13 +403,13 @@ class App(tk.Tk):
         self.roi_coordinates = ROI_COORDINATES.copy()
 
         # Create canvases for camera feeds taking full width
-        canvas_width = screen_width // 2 - 25
-        canvas_height = 360
-        self.top_canvas = tk.Canvas(self, width=canvas_width, height=canvas_height, bg='black')
-        self.top_canvas.place(x=25, y=25, width=canvas_width, height=canvas_height)
+        self.canvas_width = screen_width // 2 - 25
+        self.canvas_height = 360
+        self.top_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
+        self.top_canvas.place(x=25, y=25, width=self.canvas_width, height=self.canvas_height)
 
-        self.bottom_canvas = tk.Canvas(self, width=canvas_width, height=canvas_height, bg='black')
-        self.bottom_canvas.place(x=canvas_width + 25, y=25, width=canvas_width, height=canvas_height)
+        self.bottom_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
+        self.bottom_canvas.place(x=self.canvas_width + 25, y=25, width=self.canvas_width, height=self.canvas_height)
 
         # Initialize canvas images
         self._top_photo = None
@@ -1752,9 +1752,7 @@ class App(tk.Tk):
         ret, frame = cap.read()
         if ret:
             # Resize frame to fit the canvas size
-            canvas_width = canvas.winfo_width()
-            canvas_height = canvas.winfo_height()
-            frame = cv2.resize(frame, (canvas_width, canvas_height))
+            frame = cv2.resize(frame, (self.canvas_width, self.canvas_height))
 
             # Skip detection processing if frame rate is too high
             if not hasattr(self, '_detection_frame_skip'):
@@ -1777,9 +1775,23 @@ class App(tk.Tk):
                     annotated_frame, defect_dict = result
                     measurements = []
 
+                # Resize annotated frame to canvas size for display
+                if annotated_frame.shape[:2] != (self.canvas_height, self.canvas_width):
+                    annotated_frame = cv2.resize(annotated_frame, (self.canvas_width, self.canvas_height))
+
                 # If ROI was applied, place back into full frame
                 if roi_info is not None:
-                    frame[roi_info["y1"]:roi_info["y2"], roi_info["x1"]:roi_info["x2"]] = annotated_frame
+                    # Resize the full frame to canvas size first
+                    frame_resized = cv2.resize(frame, (self.canvas_width, self.canvas_height))
+                    # Calculate ROI coordinates scaled to canvas size
+                    scale_x = self.canvas_width / frame.shape[1]
+                    scale_y = self.canvas_height / frame.shape[0]
+                    roi_x1 = int(roi_info["x1"] * scale_x)
+                    roi_y1 = int(roi_info["y1"] * scale_y)
+                    roi_x2 = int(roi_info["x2"] * scale_x)
+                    roi_y2 = int(roi_info["y2"] * scale_y)
+                    frame_resized[roi_y1:roi_y2, roi_x1:roi_x2] = annotated_frame[roi_y1:roi_y2, roi_x1:roi_x2]
+                    annotated_frame = frame_resized
 
                 # Store detection results
                 self.live_detections[camera_name] = defect_dict
@@ -2522,42 +2534,49 @@ class App(tk.Tk):
         """Analyze frame using DeGirum model for defect detection with size measurement"""
         if self.model is None:
             return frame, {}, []
-        
+
         try:
+            # Resize frame to model's expected input size (640x640) and convert to RGB
+            model_input = cv2.cvtColor(cv2.resize(frame, (640, 640)), cv2.COLOR_BGR2RGB)
+            print(f"Debug: Running inference on {camera_name} camera, input shape: {model_input.shape}")
+
             # Run inference using DeGirum
-            inference_result = self.model(frame)
-            
+            inference_result = self.model(model_input)
+            print(f"Debug: Inference successful on {camera_name} camera")
+
             # Get annotated frame
             annotated_frame = inference_result.image_overlay
-            
+
             # Process detections to count defects and measure sizes
             final_defect_dict = {}
             defect_measurements = []  # Store detailed measurements for grading
             detections = inference_result.results
-            
+
             for det in detections:
                 model_label = det['label']
-                
+
                 # Map model output to standard defect types
                 standard_defect_type = self.map_model_output_to_standard(model_label)
-                
+
                 # Extract bounding box for size calculation
                 bbox_info = {'bbox': det['bbox']}
-                
+
                 # Calculate defect size in mm and percentage using camera-specific calibration
+                # Note: bbox is in 640x640 coordinates, but we calculate size as if it was in original frame
+                # This is approximate since the model may have resized internally
                 size_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
-                
+
                 # Store detailed measurement for sophisticated grading
                 defect_measurements.append((standard_defect_type, size_mm, percentage))
-                
+
                 # Count defects by standardized label (for simple display)
                 if standard_defect_type in final_defect_dict:
                     final_defect_dict[standard_defect_type] += 1
                 else:
                     final_defect_dict[standard_defect_type] = 1
-            
+
             return annotated_frame, final_defect_dict, defect_measurements
-            
+
         except Exception as e:
             print(f"Error during DeGirum inference on {camera_name} camera: {e}")
             return frame, {}, []
