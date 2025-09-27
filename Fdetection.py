@@ -16,231 +16,45 @@ from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 import numpy as np
 
-# =============================================================================
-# CONFIGURATION SECTION - Fine-tune these parameters for your setup
-# =============================================================================
-
 # SS-EN 1611-1 Grading Standards Implementation
-# Grade constants (do not modify)
+# Grade constants
 GRADE_G2_0 = "G2-0"
 GRADE_G2_1 = "G2-1"
 GRADE_G2_2 = "G2-2"
 GRADE_G2_3 = "G2-3"
 GRADE_G2_4 = "G2-4"
 
-# -----------------------------------------------------------------------------
-# CAMERA CALIBRATION SETTINGS
-# Adjust these based on your camera distances and actual measurements
-# -----------------------------------------------------------------------------
-# Camera distances from wood surface (in cm)
-TOP_CAMERA_DISTANCE_CM = 37      # Distance of top camera from wood surface
-BOTTOM_CAMERA_DISTANCE_CM = 29    # Distance of bottom camera from wood surface
+# Camera-specific calibration based on your setup
+# Top camera: 37cm distance, Bottom camera: 29cm distance
+# Assuming 1280x720 resolution with typical camera FOV
+TOP_CAMERA_DISTANCE_CM = 37
+BOTTOM_CAMERA_DISTANCE_CM = 29
 
-# Pixel-to-millimeter conversion factors (calibrate with known reference objects)
-TOP_CAMERA_PIXEL_TO_MM = 0.4     # mm per pixel for top camera at 37cm distance
-BOTTOM_CAMERA_PIXEL_TO_MM = 0.3   # mm per pixel for bottom camera at 29cm distance
+# Estimated pixel-to-millimeter factors (will be refined with actual measurements)
+# These are calculated based on typical camera FOV at your distances
+TOP_CAMERA_PIXEL_TO_MM = 0.4  # Adjusted for 37cm distance
+BOTTOM_CAMERA_PIXEL_TO_MM = 0.3  # Adjusted for 29cm distance (closer = smaller pixels)
 
-# Wood pallet specifications
-WOOD_PALLET_WIDTH_MM = 115        # Actual width of wood pallet in mm (11.5cm = 115mm)
+# Your actual wood pallet width
+WOOD_PALLET_WIDTH_MM = 115  # 11.5cm = 115mm
 
-
-# Detection confidence threshold (0.0 to 1.0)
-DETECTION_CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for defect detection
-
-# -----------------------------------------------------------------------------
-# CAMERA HARDWARE SETTINGS
-# Adjust resolution and frame rate based on your camera capabilities
-# -----------------------------------------------------------------------------
-CAMERA_WIDTH = 1280              # Camera capture width in pixels
-CAMERA_HEIGHT = 720              # Camera capture height in pixels
-CAMERA_FPS = 30                  # Camera frame rate (frames per second)
-
-# -----------------------------------------------------------------------------
-# REGION OF INTEREST (ROI) SETTINGS
-# Define areas to focus detection on (crop out irrelevant areas)
-# Coordinates are in pixels: (x1, y1) to (x2, y2)
-# -----------------------------------------------------------------------------
-ROI_COORDINATES = {
-    "top": {
-        "x1": 400,  # Left boundary - exclude left equipment
-        "y1": 0,   # Top boundary - exclude top area
-        "x2": 850, # Right boundary - exclude right equipment
-        "y2": 720   # Bottom boundary - focus on wood area
-    },
-    "bottom": {
-        "x1": 150,    # Full frame for bottom camera (no ROI)
-        "y1": 0,
-        "x2": CAMERA_WIDTH,   # Use configured camera width
-        "y2": CAMERA_HEIGHT   # Use configured camera height
-    }
-}
-
-# -----------------------------------------------------------------------------
-# SS-EN 1611-1 GRADING THRESHOLDS
-# Thresholds for defect size limits: (max_mm, max_percentage_of_width)
-# Adjust these if your grading standards differ
-# -----------------------------------------------------------------------------
+# SS-EN 1611-1 Grading thresholds for each defect type
 GRADING_THRESHOLDS = {
     "Sound_Knot": {  # Live knots
-        GRADE_G2_0: (10, 5),      # (mm, percentage) - Perfect grade
-        GRADE_G2_1: (30, 15),     # Good grade
-        GRADE_G2_2: (50, 25),     # Fair grade
-        GRADE_G2_3: (70, 35),     # Lower fair grade
-        GRADE_G2_4: (float('inf'), float('inf'))  # Poor grade (no limit)
+        GRADE_G2_0: (10, 5),      # (mm, percentage)
+        GRADE_G2_1: (30, 15),
+        GRADE_G2_2: (50, 25),
+        GRADE_G2_3: (70, 35),
+        GRADE_G2_4: (float('inf'), float('inf'))
     },
     "Unsound_Knot": {  # Dead knots, missing knots, knots with cracks
-        GRADE_G2_0: (7, 3.5),     # Stricter limits for unsound knots
+        GRADE_G2_0: (7, 3.5),
         GRADE_G2_1: (20, 10),
         GRADE_G2_2: (35, 17.5),
         GRADE_G2_3: (50, 25),
         GRADE_G2_4: (float('inf'), float('inf'))
     }
 }
-
-# -----------------------------------------------------------------------------
-# DEEP LEARNING MODEL SETTINGS
-# Configure the AI model for defect detection
-# -----------------------------------------------------------------------------
-INFERENCE_HOST_ADDRESS = "@local"  # Use local inference
-MODEL_ZOO_URL = "/home/inspectura/Desktop/InspecturaGUI/models/V2DefectCombined--640x640_quant_hailort_hailo8_1"
-MODEL_NAME = "V2DefectCombined--640x640_quant_hailort_hailo8_1"
-
-
-# -----------------------------------------------------------------------------
-# PERFORMANCE AND TIMING SETTINGS
-# Adjust for system performance and responsiveness
-# -----------------------------------------------------------------------------
-FRAME_SKIP_DETECTION = 5          # Process detection every Nth frame (reduce CPU load)
-FRAME_SKIP_UI_UPDATE = 3          # Update UI every Nth frame
-FRAME_SKIP_DASHBOARD_UPDATE = 15  # Update dashboard every Nth frame (reduce load)
-FRAME_SKIP_NO_DETECTION_UPDATE = 10  # Update when no detection every Nth frame
-MEMORY_CLEANUP_INTERVAL = 300     # Force garbage collection every N frames
-
-# -----------------------------------------------------------------------------
-# ARDUINO/CONVEYOR SETTINGS
-# Serial ports to try for Arduino connection (in order of preference)
-# -----------------------------------------------------------------------------
-ARDUINO_PORTS = [
-    '/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2', '/dev/ttyACM3',  # Native USB
-    '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3',  # FTDI/CH340
-    '/dev/ttyUSB01', '/dev/ttyACM01',  # Reassigned ports
-    '/dev/ttyAMA0', '/dev/ttyAMA1', '/dev/ttyAMA10',  # Other Linux
-    'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'  # Windows
-]
-
-# =============================================================================
-# END OF CONFIGURATION SECTION
-# =============================================================================
-# UI CONFIGURATION SECTION - Customize the user interface appearance and behavior
-# =============================================================================
-
-# ------------------------------------------------------------------------------
-# WINDOW AND DISPLAY SETTINGS
-# Adjust window sizing and display parameters
-# ------------------------------------------------------------------------------
-WINDOW_SCALE = 0.65              # Fraction of screen size for window (further reduced for smaller containers)
-MIN_WINDOW_WIDTH = 800            # Minimum window width in pixels
-MIN_WINDOW_HEIGHT = 600           # Minimum window height in pixels
-ENABLE_FULLSCREEN_STARTUP = True # Automatically start in fullscreen mode (for kiosks/RPi)
-
-# ------------------------------------------------------------------------------
-# FONT SETTINGS
-# Customize text appearance throughout the application
-# ------------------------------------------------------------------------------
-PRIMARY_FONT_FAMILY = "Helvetica"  # Primary font family for UI elements
-BUTTON_FONT_FAMILY = "Helvetica"   # Font family for buttons
-MONOSPACE_FONT_FAMILY = "Courier"  # Font family for code/logs
-
-FONT_SIZE_DIVISOR = 80            # Divisor for responsive font sizing (base = max(8, min(12, screen_height / FONT_SIZE_DIVISOR)))
-FONT_SIZE_BASE_MIN = 8             # Minimum base font size
-FONT_SIZE_BASE_MAX = 12            # Maximum base font size
-
-# ------------------------------------------------------------------------------
-# COLOR THEME SETTINGS
-# Customize the color scheme of the application
-# ------------------------------------------------------------------------------
-# Main application colors
-BACKGROUND_COLOR = "#f0f0f0"       # Main window background color
-FRAME_BACKGROUND_COLOR = "#ffffff" # Frame/panel background color
-TEXT_COLOR = "#000000"            # Primary text color
-SECONDARY_TEXT_COLOR = "#666666"  # Secondary/muted text color
-
-# Button colors
-BUTTON_BACKGROUND_COLOR = "#e0e0e0"  # Normal button background
-BUTTON_ACTIVE_COLOR = "#d0d0d0"       # Button pressed/active color
-BUTTON_TEXT_COLOR = "#000000"        # Button text color
-
-# Status and grade colors
-STATUS_READY_COLOR = "#28a745"      # Green for ready/active status
-STATUS_WARNING_COLOR = "#ffc107"    # Yellow for warning status
-STATUS_ERROR_COLOR = "#dc3545"      # Red for error status
-
-GRADE_PERFECT_COLOR = "#228B22"     # Dark green for perfect grade
-GRADE_GOOD_COLOR = "#32CD32"        # Green for good grade
-GRADE_FAIR_COLOR = "#FFA500"        # Orange for fair grade
-GRADE_POOR_COLOR = "#FF0000"        # Red for poor grade
-
-# Detection overlay colors
-DETECTION_BOX_COLOR = "#00FF00"     # Green for detection bounding boxes
-ROI_OVERLAY_COLOR = "#FFFF00"       # Yellow for ROI overlay
-
-# ------------------------------------------------------------------------------
-# LAYOUT AND SPACING SETTINGS
-# Adjust spacing, padding, and layout proportions
-# ------------------------------------------------------------------------------
-# Padding and margins (in pixels)
-MAIN_PADDING = 5                   # Main window padding
-FRAME_PADDING = 2                   # Frame/panel padding
-CAMERA_FRAME_PADDING = 1            # Camera feed LabelFrame padding
-ELEMENT_PADDING_X = 2              # Horizontal padding between elements
-ELEMENT_PADDING_Y = 2              # Vertical padding between elements
-LABEL_PADDING = 5                  # Label padding
-
-# Grid layout weights (proportions)
-CAMERA_FEEDS_WEIGHT = 0            # Weight for camera feeds section (relative to controls and stats)
-CONTROLS_WEIGHT = 0                # Weight for controls section (compact)
-STATS_WEIGHT = 1                   # Weight for statistics section
-CAMERA_FEED_HEIGHT_WEIGHT = 0      # Weight for camera feeds row height (minimized for compact layout)
- 
-# Camera display settings
-CAMERA_ASPECT_RATIO = "16:9"       # Target aspect ratio for camera displays
-CAMERA_DISPLAY_MARGIN = -35          # Margin around camera displays (pixels)
-CAMERA_FEED_MARGIN = 0             # White margin between and around camera feeds (pixels)
-
-# ------------------------------------------------------------------------------
-# UI BEHAVIOR SETTINGS
-# Control interactive behavior and responsiveness
-# ------------------------------------------------------------------------------
-ENABLE_TOOLTIPS = True             # Show tooltips on hover
-ENABLE_ANIMATIONS = False          # Enable UI animations (may impact performance)
-AUTO_SCROLL_LOGS = True            # Automatically scroll logs to bottom
-SCROLL_SENSITIVITY = 3             # Mouse wheel scroll sensitivity (lines per scroll)
-
-# Update intervals (frames to skip between updates)
-UI_UPDATE_SKIP = 3                 # Update UI elements every Nth frame
-STATS_UPDATE_SKIP = 15             # Update statistics every Nth frame
-LOG_UPDATE_SKIP = 10               # Update logs when no detection every Nth frame
-
-# ------------------------------------------------------------------------------
-# ADVANCED UI SETTINGS
-# Fine-tune specific UI components
-# ------------------------------------------------------------------------------
-# Tabbed interface settings
-STATS_TAB_HEIGHT = 200             # Minimum height for statistics tabs (pixels)
-LOG_SCROLLABLE_HEIGHT = 200        # Height of scrollable log area (pixels)
-
-# Status bar settings
-STATUS_BAR_HEIGHT = 25             # Height of status bar (pixels)
-STATUS_UPDATE_INTERVAL = 100       # Status update interval (milliseconds)
-
-# Detection display settings
-DETECTION_DETAILS_HEIGHT = 150     # Height of detection details panels (pixels)
-MAX_DETECTION_ENTRIES = 50         # Maximum number of detection entries to keep in memory
-
-# =============================================================================
-# END OF UI CONFIGURATION SECTION
-# =============================================================================
-# =============================================================================
 
 class App(tk.Tk):
     def __init__(self):
@@ -251,54 +65,41 @@ class App(tk.Tk):
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
         
-        # Set to fullscreen
-        self.attributes("-fullscreen", True)
+        # Calculate window size (90% of screen size for windowed mode)
+        window_width = int(screen_width * 0.9)
+        window_height = int(screen_height * 0.9)
+        
+        # Center the window on screen
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        
+        # Set geometry with calculated dimensions
+        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Make window resizable
+        self.resizable(True, True)
         
         # Set minimum size to prevent too small windows
-        self.minsize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+        self.minsize(800, 600)
         
         # For Raspberry Pi - detect if running in fullscreen environment
         self.is_fullscreen = False
         self.bind("<F11>", self.toggle_fullscreen)
         self.bind("<Escape>", self.exit_fullscreen)
         
-        # Auto-fullscreen for Raspberry Pi (configurable)
-        if ENABLE_FULLSCREEN_STARTUP:
-            self.after(100, self.auto_fullscreen_rpi)
+        # Auto-fullscreen for Raspberry Pi (you can enable this)
+        # Uncomment the next line if you want automatic fullscreen on startup
+        # self.after(100, self.auto_fullscreen_rpi)
         
         # Calculate responsive font sizes based on screen size
-        base_font_size = max(FONT_SIZE_BASE_MIN, min(FONT_SIZE_BASE_MAX, int(screen_height / FONT_SIZE_DIVISOR)))  # Responsive base size
-        self.font_small = (PRIMARY_FONT_FAMILY, base_font_size - 1)
-        self.font_normal = (PRIMARY_FONT_FAMILY, base_font_size)
-        self.font_large = (PRIMARY_FONT_FAMILY, base_font_size + 2, "bold")
-        self.font_button = (BUTTON_FONT_FAMILY, base_font_size, "bold")  # Button font
-
-        # Configure styles for white margins and custom button colors
-        style = ttk.Style()
-        style.configure("White.TFrame", background="white")
-
-        # Configure custom button style with colors from UI config
-        style.configure("Custom.TButton",
-                       background=BUTTON_BACKGROUND_COLOR,
-                       foreground=BUTTON_TEXT_COLOR,
-                       font=self.font_button)
-        style.map("Custom.TButton",
-                 background=[("active", BUTTON_ACTIVE_COLOR),
-                           ("pressed", BUTTON_ACTIVE_COLOR)])
+        base_font_size = max(8, min(12, int(screen_height / 80)))  # Reduced base size for better fit
+        self.font_small = ("Helvetica", base_font_size - 1)
+        self.font_normal = ("Helvetica", base_font_size)
+        self.font_large = ("Helvetica", base_font_size + 2, "bold")
+        self.font_button = ("Helvetica", base_font_size, "bold")  # Button font
 
         # Create message queue for thread communication
         self.message_queue = queue.Queue()
-
-        # Helper method for updating status label (Text widget)
-        def update_status_text(text, color=None):
-            self.status_label.config(state=tk.NORMAL)
-            self.status_label.delete(1.0, tk.END)
-            self.status_label.insert(1.0, text)
-            if color:
-                self.status_label.config(foreground=color)
-            self.status_label.config(state=tk.DISABLED)
-
-        self.update_status_text = update_status_text
 
         # Initialize variables that might be accessed early by message processing
         self.total_pieces_processed = 0
@@ -350,9 +151,9 @@ class App(tk.Tk):
 
         # --- DeGirum Model and Camera Initialization ---
         # DeGirum Configuration
-        self.inference_host_address = INFERENCE_HOST_ADDRESS
-        self.zoo_url = MODEL_ZOO_URL
-        self.model_name = MODEL_NAME
+        self.inference_host_address = "@local"
+        self.zoo_url = "/home/inspectura/Desktop/WoodSortingApplication/models/V2DefectCombined--640x640_quant_hailort_hailo8_1"
+        self.model_name = "V2DefectCombined--640x640_quant_hailort_hailo8_1"
         
         # Load DeGirum model
         try:
@@ -371,20 +172,20 @@ class App(tk.Tk):
         self.cap_top = cv2.VideoCapture(0)
         self.cap_bottom = cv2.VideoCapture(2)
         
-        # Set camera resolution (configurable values)
-        camera_width = CAMERA_WIDTH  # Desired width
-        camera_height = CAMERA_HEIGHT  # Desired height
-
+        # Set camera resolution (you can adjust these values)
+        camera_width = 1280  # Desired width
+        camera_height = 720  # Desired height
+        
         # Configure top camera
         self.cap_top.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
         self.cap_top.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-        self.cap_top.set(cv2.CAP_PROP_FPS, CAMERA_FPS)  # Set FPS
-
+        self.cap_top.set(cv2.CAP_PROP_FPS, 30)  # Set FPS
+        
         # Configure bottom camera
         self.cap_bottom.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
         self.cap_bottom.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
-        self.cap_bottom.set(cv2.CAP_PROP_FPS, CAMERA_FPS)  # Set FPS
-
+        self.cap_bottom.set(cv2.CAP_PROP_FPS, 30)  # Set FPS
+        
         # Store camera resolution for display scaling
         self.camera_width = camera_width
         self.camera_height = camera_height
@@ -404,192 +205,221 @@ class App(tk.Tk):
 
         # ROI (Region of Interest) settings
         self.roi_enabled = {"top": True, "bottom": False}  # Enable ROI for top camera by default
-        self.roi_coordinates = ROI_COORDINATES.copy()
+        self.roi_coordinates = {
+            "top": {
+                "x1": 150,  # Left boundary - exclude left equipment
+                "y1": 80,   # Top boundary - exclude top area
+                "x2": 1130, # Right boundary - exclude right equipment  
+                "y2": 640   # Bottom boundary - focus on wood area
+            },
+            "bottom": {
+                "x1": 0,    # No ROI for bottom camera
+                "y1": 0,
+                "x2": 1280,
+                "y2": 720
+            }
+        }
 
-        # Create canvases for camera feeds taking full width
-        self.canvas_width = screen_width // 2 - 25
-        self.canvas_height = 360
-        self.top_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
-        self.top_canvas.place(x=25, y=25, width=self.canvas_width, height=self.canvas_height)
+        # Main layout - Clean design based on the image
+        main_frame = ttk.Frame(self, padding="5")
+        main_frame.pack(expand=True, fill=tk.BOTH)
+        
+        # Configure grid weights for responsive layout
+        main_frame.grid_columnconfigure(0, weight=1)  # Left camera
+        main_frame.grid_columnconfigure(1, weight=1)  # Right camera  
+        main_frame.grid_rowconfigure(0, weight=4)     # Camera feeds (most space)
+        main_frame.grid_rowconfigure(1, weight=0)     # Controls section (compact)
+        main_frame.grid_rowconfigure(2, weight=1)     # Bottom panel with grading & stats
 
-        self.bottom_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
-        self.bottom_canvas.place(x=self.canvas_width + 25, y=25, width=self.canvas_width, height=self.canvas_height)
+        # --- Camera Feeds Section (Larger, cleaner design) ---
+        cameras_container = ttk.Frame(main_frame)
+        cameras_container.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=2, pady=2)
+        cameras_container.grid_columnconfigure(0, weight=1)
+        cameras_container.grid_columnconfigure(1, weight=1)
+        cameras_container.grid_rowconfigure(0, weight=1)
+        
+        # Left Camera (Top Camera)
+        left_camera_frame = ttk.LabelFrame(cameras_container, text="Top Camera View", padding="5")
+        left_camera_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        left_camera_frame.grid_rowconfigure(0, weight=1)
+        left_camera_frame.grid_columnconfigure(0, weight=1)
+        
+        # Top camera live feed - larger display area
+        self.top_live_feed = ttk.Label(left_camera_frame, background="black", text="Initializing Camera...")
+        self.top_live_feed.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # ROI status overlay
+        self.roi_status_label = ttk.Label(left_camera_frame, 
+                                         text="ROI: Active (150,80) to (1130,640)", 
+                                         font=self.font_small, foreground="orange")
+        self.roi_status_label.place(x=10, y=10)  # Position as overlay
+        
+        # Right Camera (Bottom Camera)
+        right_camera_frame = ttk.LabelFrame(cameras_container, text="Bottom Camera View", padding="5")
+        right_camera_frame.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
+        right_camera_frame.grid_rowconfigure(0, weight=1)
+        right_camera_frame.grid_columnconfigure(0, weight=1)
+        
+        # Bottom camera live feed - larger display area
+        self.bottom_live_feed = ttk.Label(right_camera_frame, background="black", text="Initializing Camera...")
+        self.bottom_live_feed.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
-        # Initialize canvas images
-        self._top_photo = None
-        self._bottom_photo = None
+        # --- System Controls Section ---
+        controls_frame = ttk.Frame(main_frame)
+        controls_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        controls_frame.grid_columnconfigure(0, weight=1)
+        controls_frame.grid_columnconfigure(1, weight=1) 
+        controls_frame.grid_columnconfigure(2, weight=1)
+        controls_frame.grid_columnconfigure(3, weight=1)
 
-        # Place control frames at specific positions
-        # Status panel under top camera
-        status_frame = ttk.LabelFrame(self, text="System Status", padding=FRAME_PADDING)
-        status_frame.place(x=25, y=415, width=640, height=125)
-    
-        style = ttk.Style()
-        frame_bg = style.lookup("TLabelFrame", "background") or "#f0f0f0"
-        self.status_label = tk.Text(status_frame, font=self.font_normal, wrap=tk.WORD,
-                                   height=3, width=25, state=tk.DISABLED, relief="flat",
-                                   background=frame_bg)
-        self.status_label.pack(pady=LABEL_PADDING, fill="x", expand=False)
-        self.status_label.insert(1.0, "Status: Initializing...")
+        # System Status
+        status_frame = ttk.LabelFrame(controls_frame, text="System Status", padding="5")
+        status_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
+        self.status_label = ttk.Label(status_frame, text="Status: Initializing...", 
+                                     font=self.font_normal, anchor="center", wraplength=150)
+        self.status_label.pack(pady=5)
 
-        # Detection panel under bottom camera
-        detection_frame = ttk.LabelFrame(self, text="Detection", padding=FRAME_PADDING)
-        detection_frame.place(x=675, y=415, width=250, height=125)
-
-        self.roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(detection_frame, text="Top ROI", variable=self.roi_var,
-                       command=self.toggle_roi).pack(anchor="w")
-
-        self.live_detection_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(detection_frame, text="Live Detect", variable=self.live_detection_var,
-                       command=self.toggle_live_detection_mode).pack(anchor="w")
-
-        self.auto_grade_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(detection_frame, text="Auto Grade", variable=self.auto_grade_var).pack(anchor="w")
-
-        # Conveyor Control (place next to detection)
-        control_frame = ttk.LabelFrame(self, text="Conveyor Control", padding=FRAME_PADDING)
-        control_frame.place(x=935, y=415, width=655, height=125)
-
+        # Conveyor Control
+        control_frame = ttk.LabelFrame(controls_frame, text="Conveyor Control", padding="5")
+        control_frame.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
         control_inner_frame = ttk.Frame(control_frame)
         control_inner_frame.pack(fill="both", expand=True)
         control_inner_frame.grid_columnconfigure(0, weight=1)
         control_inner_frame.grid_columnconfigure(1, weight=1)
         control_inner_frame.grid_columnconfigure(2, weight=1)
 
-        tk.Button(control_inner_frame, text="Continuous",
-                 command=self.set_continuous_mode, bg=BUTTON_BACKGROUND_COLOR,
-                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                 font=self.font_button, relief="raised", borderwidth=2).grid(row=0, column=0, sticky="ew", padx=1, pady=1)
-        tk.Button(control_inner_frame, text="Trigger",
-                 command=self.set_trigger_mode, bg=BUTTON_BACKGROUND_COLOR,
-                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                 font=self.font_button, relief="raised", borderwidth=2).grid(row=0, column=1, sticky="ew", padx=1, pady=1)
-        tk.Button(control_inner_frame, text="IDLE",
-                 command=self.set_idle_mode, bg=BUTTON_BACKGROUND_COLOR,
-                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                 font=self.font_button, relief="raised", borderwidth=2).grid(row=0, column=2, sticky="ew", padx=1, pady=1)
+        ttk.Button(control_inner_frame, text="Continuous", 
+                  command=self.set_continuous_mode).grid(row=0, column=0, sticky="ew", padx=1, pady=1)
+        ttk.Button(control_inner_frame, text="Trigger", 
+                  command=self.set_trigger_mode).grid(row=0, column=1, sticky="ew", padx=1, pady=1)
+        ttk.Button(control_inner_frame, text="IDLE", 
+                  command=self.set_idle_mode).grid(row=0, column=2, sticky="ew", padx=1, pady=1)
 
-        # Reports panel at fixed position (no overlap)
-        REPORT_W, REPORT_H = 300, 125
-        REPORT_X, REPORT_Y = 1600, 415
-        reports_frame = ttk.LabelFrame(self, text="Reports", padding=FRAME_PADDING)
-        reports_frame.place(x=REPORT_X, y=REPORT_Y, width=REPORT_W, height=REPORT_H)
+        # Detection Settings
+        detection_frame = ttk.LabelFrame(controls_frame, text="Detection", padding="5")
+        detection_frame.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
+        
+        self.roi_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(detection_frame, text="Top ROI", variable=self.roi_var, 
+                       command=self.toggle_roi).pack(anchor="w")
+        
+        self.live_detection_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(detection_frame, text="Live Detect", variable=self.live_detection_var,
+                       command=self.toggle_live_detection_mode).pack(anchor="w")
+        
+        self.auto_grade_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(detection_frame, text="Auto Grade", variable=self.auto_grade_var).pack(anchor="w")
 
-        self.log_status_label = ttk.Label(reports_frame, text="Log: Ready",
-                                         foreground=STATUS_READY_COLOR, font=self.font_small)
+        # Reports
+        reports_frame = ttk.LabelFrame(controls_frame, text="Reports", padding="5")
+        reports_frame.grid(row=0, column=3, sticky="nsew", padx=2, pady=2)
+        
+        self.log_status_label = ttk.Label(reports_frame, text="Log: Ready", 
+                                         foreground="green", font=self.font_small)
         self.log_status_label.pack()
-
-        tk.Button(reports_frame, text="Generate Report",
-                 command=self.manual_generate_report, bg=BUTTON_BACKGROUND_COLOR,
-                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                 font=self.font_button, relief="raised", borderwidth=2).pack(pady=ELEMENT_PADDING_Y)
-
+        
+        ttk.Button(reports_frame, text="Generate Report", 
+                  command=self.manual_generate_report).pack(pady=2)
+        
         self.show_report_notification = tk.BooleanVar(value=True)
-        ttk.Checkbutton(reports_frame, text="Notifications",
+        ttk.Checkbutton(reports_frame, text="Notifications", 
                        variable=self.show_report_notification).pack()
-
-        self.last_report_label = ttk.Label(reports_frame, text="Last: None",
+        
+        self.last_report_label = ttk.Label(reports_frame, text="Last: None", 
                                           font=self.font_small, wraplength=100)
         self.last_report_label.pack()
 
-        # Statistics section full width at bottom
-        stats_frame = ttk.LabelFrame(self, text="Statistics", padding=FRAME_PADDING)
-        stats_frame.place(x=0, y=screen_height - 500, width=screen_width, height=500)
+        # --- Bottom Panel: Statistics (Full Width) ---
+        bottom_panel = ttk.Frame(main_frame)
+        bottom_panel.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
+        bottom_panel.grid_columnconfigure(0, weight=1)  # Statistics takes full width
+        bottom_panel.grid_rowconfigure(0, weight=1)
+
+        # Statistics Section - Full Width Tabbed Panel Design
+        stats_frame = ttk.LabelFrame(bottom_panel, text="Statistics", padding="5")
+        stats_frame.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
         stats_frame.grid_columnconfigure(0, weight=1)
         stats_frame.grid_rowconfigure(0, weight=1)
 
         # Create notebook for tabbed statistics
-        self.stats_notebook = ttk.Notebook(stats_frame, height=STATS_TAB_HEIGHT - 40)  # Account for padding and tab headers
+        self.stats_notebook = ttk.Notebook(stats_frame)
         self.stats_notebook.grid(row=0, column=0, sticky="nsew")
 
         # Tab 1: Grade Summary (Overview with Live Grading)
-        grade_summary_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
+        grade_summary_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(grade_summary_tab, text="Grade Summary")
         
-
-        # Live Grading Section (includes both individual grades and grade counts)
-        live_grading_frame = ttk.LabelFrame(grade_summary_tab, text="Live Grading Results", padding="10")
-        live_grading_frame.pack(fill="both", expand=True, pady=(10, 5), padx=10)
-
-        # Configure grid for the live grading frame
-        live_grading_frame.grid_columnconfigure(0, weight=1)
-        live_grading_frame.grid_columnconfigure(1, weight=1)
-        live_grading_frame.grid_columnconfigure(2, weight=1)
-        live_grading_frame.grid_rowconfigure(0, weight=0)  # Individual grades row
-        live_grading_frame.grid_rowconfigure(1, weight=1)  # Grade counts row
-
-        # Row 0: Individual camera grades (horizontal layout)
-        individual_grades_frame = ttk.Frame(live_grading_frame)
-        individual_grades_frame.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 10))
-        individual_grades_frame.grid_columnconfigure(0, weight=1)
-        individual_grades_frame.grid_columnconfigure(1, weight=1)
-        individual_grades_frame.grid_columnconfigure(2, weight=2)
-
-        # Individual camera grades (horizontal layout)
-        top_grade_container = ttk.Frame(individual_grades_frame)
-        top_grade_container.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
-        ttk.Label(top_grade_container, text="Top Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.top_grade_label = ttk.Label(top_grade_container, text="No wood detected",
-                                        foreground="gray", font=self.font_small)
-        self.top_grade_label.pack(anchor="w")
-
-        bottom_grade_container = ttk.Frame(individual_grades_frame)
-        bottom_grade_container.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
-        ttk.Label(bottom_grade_container, text="Bottom Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.bottom_grade_label = ttk.Label(bottom_grade_container, text="No wood detected",
-                                           foreground="gray", font=self.font_small)
-        self.bottom_grade_label.pack(anchor="w")
-
-        # Combined grade (prominent display, takes more space)
-        combined_container = ttk.Frame(individual_grades_frame)
-        combined_container.grid(row=0, column=2, sticky="ew", padx=5, pady=2)
-        ttk.Label(combined_container, text="Final Grade:", font=("Arial", 12, "bold")).pack(anchor="w")
-        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected",
-                                             font=("Arial", 11, "bold"), foreground="gray")
-        self.combined_grade_label.pack(anchor="w")
-
-        # Row 1: Grade counts (moved inside live grading results container)
-        grade_counts_container = ttk.Frame(live_grading_frame)
-        grade_counts_container.grid(row=1, column=0, columnspan=3, sticky="nsew")
-        grade_counts_container.grid_columnconfigure(0, weight=1, uniform="grade_counts")
-        grade_counts_container.grid_columnconfigure(1, weight=1, uniform="grade_counts")
-        grade_counts_container.grid_columnconfigure(2, weight=1, uniform="grade_counts")
-        grade_counts_container.grid_columnconfigure(3, weight=1, uniform="grade_counts")
-        grade_counts_container.grid_rowconfigure(0, weight=1, minsize=80)
-
+        # Grade counts in a clean grid with better sizing and spacing
+        grade_counts_frame = ttk.Frame(grade_summary_tab)
+        grade_counts_frame.pack(fill="x", pady=10, padx=10)
+        
+        # Configure 4 columns for grade statistics with equal weight and minimum size
+        for i in range(4):
+            grade_counts_frame.grid_columnconfigure(i, weight=1, minsize=120)
+        grade_counts_frame.grid_rowconfigure(0, weight=1, minsize=80)
+        
         # Initialize stats labels with consistent spacing and fonts
         self.live_stats_labels = {}
         grade_info = [
-            ("grade0", "Perfect\n(No Defects)", GRADE_PERFECT_COLOR),
-            ("grade1", "Good\n(G2-0)", GRADE_GOOD_COLOR),
-            ("grade2", "Fair\n(G2-1, G2-2, G2-3)", GRADE_FAIR_COLOR),
-            ("grade3", "Poor\n(G2-4)", GRADE_POOR_COLOR)
+            ("grade0", "Perfect\n(No Defects)", "dark green"),
+            ("grade1", "Good\n(G2-0)", "green"), 
+            ("grade2", "Fair\n(G2-1, G2-2, G2-3)", "orange"),
+            ("grade3", "Poor\n(G2-4)", "red")
         ]
-
+        
         for i, (grade_key, label_text, color) in enumerate(grade_info):
-            grade_container = ttk.Frame(grade_counts_container, relief="solid", borderwidth=2)
+            grade_container = ttk.Frame(grade_counts_frame, relief="solid", borderwidth=2)
             grade_container.grid(row=0, column=i, sticky="nsew", padx=6, pady=5, ipadx=8, ipady=8)
             grade_container.grid_columnconfigure(0, weight=1)
             grade_container.grid_rowconfigure(0, weight=1)
             grade_container.grid_rowconfigure(1, weight=1)
-
+            
             # Create a consistent inner frame for better control
             inner_frame = ttk.Frame(grade_container)
             inner_frame.grid(row=0, column=0, sticky="nsew", rowspan=2)
-
+            
             # Title label with fixed font
-            title_label = ttk.Label(inner_frame, text=label_text, font=("Arial", 9, "bold"),
+            title_label = ttk.Label(inner_frame, text=label_text, font=("Arial", 9, "bold"), 
                                    justify="center")
             title_label.pack(expand=True, pady=(8, 2))
-
+            
             # Count label with fixed font and consistent positioning
-            self.live_stats_labels[grade_key] = ttk.Label(inner_frame, text="0",
+            self.live_stats_labels[grade_key] = ttk.Label(inner_frame, text="0", 
                                                          foreground=color, font=("Arial", 16, "bold"))
             self.live_stats_labels[grade_key].pack(expand=True, pady=(2, 8))
 
+        # Live Grading Section (horizontal layout in Grade Summary tab)
+        live_grading_frame = ttk.LabelFrame(grade_summary_tab, text="Live Grading Results", padding="10")
+        live_grading_frame.pack(fill="x", pady=(10, 5), padx=10)
+        live_grading_frame.grid_columnconfigure(0, weight=1)
+        live_grading_frame.grid_columnconfigure(1, weight=1)
+        live_grading_frame.grid_columnconfigure(2, weight=2)
+
+        # Individual camera grades (horizontal layout)
+        top_grade_container = ttk.Frame(live_grading_frame)
+        top_grade_container.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
+        ttk.Label(top_grade_container, text="Top Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.top_grade_label = ttk.Label(top_grade_container, text="No wood detected", 
+                                        foreground="gray", font=self.font_small)
+        self.top_grade_label.pack(anchor="w")
+
+        bottom_grade_container = ttk.Frame(live_grading_frame)
+        bottom_grade_container.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
+        ttk.Label(bottom_grade_container, text="Bottom Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.bottom_grade_label = ttk.Label(bottom_grade_container, text="No wood detected", 
+                                           foreground="gray", font=self.font_small)
+        self.bottom_grade_label.pack(anchor="w")
+
+        # Combined grade (prominent display, takes more space)
+        combined_container = ttk.Frame(live_grading_frame)
+        combined_container.grid(row=0, column=2, sticky="ew", padx=5, pady=2)
+        ttk.Label(combined_container, text="Final Grade:", font=("Arial", 12, "bold")).pack(anchor="w")
+        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected", 
+                                             font=("Arial", 11, "bold"), foreground="gray")
+        self.combined_grade_label.pack(anchor="w")
+
         # Tab 2: Defect Details
-        defect_details_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
+        defect_details_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(defect_details_tab, text="Defect Details")
         
         # Defect details content
@@ -597,7 +427,7 @@ class App(tk.Tk):
         self.defect_details_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Tab 3: Performance Metrics
-        performance_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
+        performance_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(performance_tab, text="Performance")
         
         # Performance metrics content
@@ -605,7 +435,7 @@ class App(tk.Tk):
         self.performance_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Tab 4: Recent Activity
-        activity_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
+        activity_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(activity_tab, text="Recent Activity")
         
         # Main container with two sections
@@ -626,7 +456,7 @@ class App(tk.Tk):
         log_container.grid_rowconfigure(0, weight=1)
 
         # Scrollable canvas for processing log
-        log_canvas = tk.Canvas(log_container, height=LOG_SCROLLABLE_HEIGHT)  # Configurable height
+        log_canvas = tk.Canvas(log_container, height=200)  # Set minimum height
         log_scrollbar = ttk.Scrollbar(log_container, orient="vertical", command=log_canvas.yview)
         self.processing_log_frame = ttk.Frame(log_canvas)
         
@@ -946,7 +776,7 @@ class App(tk.Tk):
         frame = ttk.LabelFrame(parent, text=title, padding="5")
         
         # Create canvas and scrollbar for scrolling
-        canvas = tk.Canvas(frame, height=DETECTION_DETAILS_HEIGHT)
+        canvas = tk.Canvas(frame, height=150)
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         
@@ -1496,19 +1326,19 @@ class App(tk.Tk):
                                             foreground="gray")
 
     def update_feeds(self):
-        self.update_single_feed(self.cap_top, self.top_canvas, "top")
-        self.update_single_feed(self.cap_bottom, self.bottom_canvas, "bottom")
+        self.update_single_feed(self.cap_top, self.top_live_feed, "top")
+        self.update_single_feed(self.cap_bottom, self.bottom_live_feed, "bottom")
         
         # Reduce update frequency for non-critical components to prevent UI lag
-        # Update dashboard at configured interval to reduce load
+        # Only update every 15th frame (~4.4 FPS for dashboard updates) to reduce load
         if not hasattr(self, '_frame_counter'):
             self._frame_counter = 0
-
+        
         self._frame_counter += 1
-        if self._frame_counter % STATS_UPDATE_SKIP == 0:
+        if self._frame_counter % 15 == 0:
             # Update detection status
             self.update_detection_status_display()
-
+            
             # Only update details if not in active inference to prevent interference
             if not getattr(self, '_in_active_inference', False):
                 self.ensure_detection_details_updated()
@@ -1535,37 +1365,37 @@ class App(tk.Tk):
         """Update status display based on current detection state"""
         if hasattr(self, 'status_label'):
             if self.auto_detection_active:
-                total_detections = (len(self.detection_session_data["total_detections"]["top"]) +
-                                   len(self.detection_session_data["total_detections"]["bottom"]))
-                self.update_status_text(
-                    f"Status: AUTO (IR) DETECTION ACTIVE 🔍 ({total_detections} detections)",
-                    STATUS_WARNING_COLOR
+                total_detections = (len(self.detection_session_data["total_detections"]["top"]) + 
+                                  len(self.detection_session_data["total_detections"]["bottom"]))
+                self.status_label.config(
+                    text=f"Status: AUTO (IR) DETECTION ACTIVE 🔍 ({total_detections} detections)", 
+                    foreground="orange"
                 )
             elif self.live_detection_var.get():
-                self.update_status_text(
-                    f"Status: {self.current_mode} MODE - Live Detection ACTIVE",
-                    STATUS_READY_COLOR
+                self.status_label.config(
+                    text=f"Status: {self.current_mode} MODE - Live Detection ACTIVE",
+                    foreground="blue"
                 )
             elif self.current_mode == "IDLE":
-                self.update_status_text(
-                    "Status: IDLE MODE - System disabled, no operations",
-                    SECONDARY_TEXT_COLOR
+                self.status_label.config(
+                    text="Status: IDLE MODE - System disabled, no operations",
+                    foreground="gray"
                 )
             elif self.current_mode == "TRIGGER":
-                self.update_status_text(
-                    "Status: TRIGGER MODE - Waiting for IR beam trigger",
-                    STATUS_READY_COLOR
+                self.status_label.config(
+                    text="Status: TRIGGER MODE - Waiting for IR beam trigger", 
+                    foreground="green"
                 )
             elif self.current_mode == "CONTINUOUS":
-                self.update_status_text(
-                    "Status: CONTINUOUS MODE - Live detection enabled",
-                    STATUS_READY_COLOR
+                self.status_label.config(
+                    text="Status: CONTINUOUS MODE - Live detection enabled", 
+                    foreground="blue"
                 )
             else:
                 # Fallback for unknown states
-                self.update_status_text(
-                    f"Status: {self.current_mode} MODE - Ready",
-                    STATUS_READY_COLOR
+                self.status_label.config(
+                    text=f"Status: {self.current_mode} MODE - Ready", 
+                    foreground="green"
                 )
 
     def toggle_live_detection_mode(self):
@@ -1696,7 +1526,20 @@ class App(tk.Tk):
         """Toggle ROI for top camera"""
         self.roi_enabled["top"] = self.roi_var.get()
         status = "enabled" if self.roi_enabled["top"] else "disabled"
-
+        
+        # Update ROI status label
+        if self.roi_enabled["top"]:
+            roi_coords = self.roi_coordinates["top"]
+            self.roi_status_label.config(
+                text=f"ROI: Active ({roi_coords['x1']},{roi_coords['y1']}) to ({roi_coords['x2']},{roi_coords['y2']})",
+                foreground="orange"
+            )
+        else:
+            self.roi_status_label.config(
+                text="ROI: Disabled (Full Frame Detection)",
+                foreground="gray"
+            )
+        
         print(f"ROI for top camera {status}")
 
     def apply_roi(self, frame, camera_name):
@@ -1723,178 +1566,115 @@ class App(tk.Tk):
         
         return roi_frame, roi_info
 
-    def bbox_intersects_roi(self, bbox, camera_name):
-        """Check if bounding box intersects with ROI"""
+    def draw_roi_overlay(self, frame, camera_name):
+        """Draw ROI rectangle overlay on frame for visualization"""
         if not self.roi_enabled.get(camera_name, False):
-            return True  # No ROI means all detections count
-
-        # Scale bbox from model coordinates (640x640) to original frame coordinates (1280x720)
-        x1, y1, x2, y2 = bbox[:4]
-        scale_x = 1280.0 / 640.0  # Original width / model width
-        scale_y = 720.0 / 640.0   # Original height / model height
-
-        x1_orig = x1 * scale_x
-        y1_orig = y1 * scale_y
-        x2_orig = x2 * scale_x
-        y2_orig = y2 * scale_y
-
+            return frame
+        
         roi_coords = self.roi_coordinates.get(camera_name, {})
-        roi_x1 = roi_coords.get("x1", 0)
-        roi_y1 = roi_coords.get("y1", 0)
-        roi_x2 = roi_coords.get("x2", 1280)
-        roi_y2 = roi_coords.get("y2", 720)
-
-        # Check for intersection between scaled bounding box and ROI
-        return not (x2_orig < roi_x1 or x1_orig > roi_x2 or y2_orig < roi_y1 or y1_orig > roi_y2)
-
-    def draw_bounding_boxes_on_canvas(self, canvas, detections, camera_name):
-        """Draw bounding boxes for detections on canvas with ROI-based coloring and labels"""
-        for det in detections:
-            bbox = det.get('bbox', [])
-            if len(bbox) >= 4:
-                x1, y1, x2, y2 = bbox[:4]
-
-                # Scale from model coordinates (640x640) to canvas coordinates
-                x1_canvas = x1 * (self.canvas_width / 640.0)
-                y1_canvas = y1 * (self.canvas_height / 640.0)
-                x2_canvas = x2 * (self.canvas_width / 640.0)
-                y2_canvas = y2 * (self.canvas_height / 640.0)
-
-                # Check if bounding box intersects with ROI
-                intersects_roi = self.bbox_intersects_roi(bbox, camera_name)
-
-                # Color based on ROI intersection: green = counted, red = not counted
-                box_color = "green" if intersects_roi else "red"
-                label_color = "white" if intersects_roi else "yellow"
-
-                # Draw rectangle with appropriate color
-                canvas.create_rectangle(x1_canvas, y1_canvas, x2_canvas, y2_canvas,
-                                      outline=box_color, width=3, tags="bbox")
-
-                # Add defect type label above the bounding box on the left side
-                defect_label = det.get('label', 'Unknown')
-                # Position label slightly above the top-left corner of the box
-                label_x = x1_canvas
-                label_y = y1_canvas - 15  # 15 pixels above the box
-
-                # Ensure label doesn't go off the top of canvas
-                if label_y < 5:
-                    label_y = y1_canvas + 5  # Put it inside the box if too high
-
-                canvas.create_text(label_x, label_y, text=defect_label,
-                                 fill=label_color, font=("Arial", 10, "bold"),
-                                 anchor="sw", tags="bbox_label")  # Left-aligned above box
-
-        # Keep boxes and labels on top
-        canvas.tag_raise("bbox")
-        canvas.tag_raise("bbox_label")
-
-    def draw_roi_on_canvas(self, canvas):
-        """Draw ROI overlay on top camera canvas"""
-        if not self.roi_enabled.get("top", False):
-            return
-
-        # Clear previous ROI
-        canvas.delete("roi")
-        canvas.delete("roi_label")
-
-        # Get ROI coordinates
-        roi_coords = self.roi_coordinates.get("top", {})
-        roi_x1 = roi_coords.get("x1", 150)
-        roi_y1 = roi_coords.get("y1", 80)
-        roi_x2 = roi_coords.get("x2", 1280)
-        roi_y2 = roi_coords.get("y2", 720)
-
-        # Scale ROI coordinates to canvas
-        scale_x = self.canvas_width / 1280.0
-        scale_y = self.canvas_height / 720.0
-
-        x1 = roi_x1 * scale_x
-        y1 = roi_y1 * scale_y
-        x2 = roi_x2 * scale_x
-        y2 = roi_y2 * scale_y
-
+        if not roi_coords:
+            return frame
+        
+        frame_copy = frame.copy()
+        x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
+        x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
+        
+        # Ensure coordinates are within frame bounds
+        x1 = max(0, min(x1, frame.shape[1]))
+        y1 = max(0, min(y1, frame.shape[0]))
+        x2 = max(x1, min(x2, frame.shape[1]))
+        y2 = max(y1, min(y2, frame.shape[0]))
+        
         # Draw ROI rectangle (yellow border)
-        canvas.create_rectangle(x1, y1, x2, y2, outline="yellow", width=3, tags="roi")
-
+        cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 255), 3)
+        
         # Add ROI label
-        canvas.create_text(x1 + 10, y1 + 30, text="ROI - TOP",
-                          fill="yellow", font=("Helvetica", 12, "bold"), anchor="nw", tags="roi_label")
+        cv2.putText(frame_copy, f"ROI - {camera_name.upper()}", 
+                   (x1 + 10, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+        
+        return frame_copy
 
-        # Keep ROI on top
-        canvas.tag_raise("roi")
-        canvas.tag_raise("roi_label")
-
-    def update_single_feed(self, cap, canvas, camera_name):
+    def update_single_feed(self, cap, label, camera_name):
         ret, frame = cap.read()
         if ret:
-            # Resize frame to fit the canvas size
-            frame = cv2.resize(frame, (self.canvas_width, self.canvas_height))
-
             # Skip detection processing if frame rate is too high
             if not hasattr(self, '_detection_frame_skip'):
                 self._detection_frame_skip = {"top": 0, "bottom": 0}
-
+            
+            # Initialize memory management counter
+            if not hasattr(self, '_memory_cleanup_counter'):
+                self._memory_cleanup_counter = 0
+            
+            # Perform memory cleanup every 300 frames (~24 seconds at 125 FPS)
+            self._memory_cleanup_counter += 1
+            if self._memory_cleanup_counter % 300 == 0:
+                import gc
+                gc.collect()  # Force garbage collection
+                
+                # Clear cached dimensions periodically to handle window resizing
+                if hasattr(self, '_label_dimensions'):
+                    self._label_dimensions.clear()
+                    
+                print(f"Memory cleanup performed at frame {self._memory_cleanup_counter}")
+            
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or self.live_detection_var.get()
-
+            
             if should_detect:
-                # Run detection on the full frame (ROI-independent)
-                result = self.analyze_frame(frame, camera_name, run_defect_model=True)
-
-                # Handle return formats
-                if len(result) >= 3:
-                    annotated_frame, defect_dict, measurements = result[:3]
-                    detections = result[3] if len(result) > 3 else []
+                # Apply ROI for focused detection (top camera only)
+                detection_frame, roi_info = self.apply_roi(frame, camera_name)
+                
+                # Pre-resize frame for faster processing if it's very large
+                height, width = detection_frame.shape[:2]
+                if width > 1280 or height > 720:
+                    # Resize for detection processing to improve speed
+                    scale_factor = min(1280/width, 720/height)
+                    new_width = int(width * scale_factor)
+                    new_height = int(height * scale_factor)
+                    resized_frame = cv2.resize(detection_frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+                    
+                    # Run detection on resized ROI frame
+                    result = self.analyze_frame(resized_frame, camera_name, run_defect_model=True)
+                    
+                    # Scale detection results back to ROI size
+                    if len(result) == 3:
+                        annotated_frame, defect_dict, measurements = result
+                        # Scale annotated frame back to ROI size
+                        annotated_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_LINEAR)
+                    else:
+                        annotated_frame, defect_dict = result
+                        annotated_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_LINEAR)
+                        measurements = []
                 else:
-                    annotated_frame, defect_dict = result
-                    measurements = []
-                    detections = []
-
-                # Resize annotated frame to canvas size for display
-                if annotated_frame.shape[:2] != (self.canvas_height, self.canvas_width):
-                    annotated_frame = cv2.resize(annotated_frame, (self.canvas_width, self.canvas_height))
-
-                # Filter detections and measurements based on ROI intersection for grading
-                roi_filtered_defect_dict = {}
-                roi_filtered_measurements = []
-
-                if self.roi_enabled.get(camera_name, False) and detections:
-                    # Filter based on bounding box intersection with ROI
-                    roi_intersecting_detections = []
-
-                    for det in detections:
-                        bbox = det.get('bbox', [])
-                        if len(bbox) >= 4 and self.bbox_intersects_roi(bbox, camera_name):
-                            roi_intersecting_detections.append(det)
-
-                    # Re-calculate defect_dict and measurements from ROI-intersecting detections only
-                    for det in roi_intersecting_detections:
-                        model_label = det.get('label', '')
-                        standard_defect_type = self.map_model_output_to_standard(model_label)
-
-                        # Count defects by type
-                        if standard_defect_type in roi_filtered_defect_dict:
-                            roi_filtered_defect_dict[standard_defect_type] += 1
-                        else:
-                            roi_filtered_defect_dict[standard_defect_type] = 1
-
-                        # Calculate size for measurements
-                        bbox_info = {'bbox': det['bbox']}
-                        size_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
-                        roi_filtered_measurements.append((standard_defect_type, size_mm, percentage))
+                    # ROI frame is already optimal size, process normally
+                    result = self.analyze_frame(detection_frame, camera_name, run_defect_model=True)
+                    
+                    # Handle both old and new return formats for compatibility
+                    if len(result) == 3:
+                        annotated_frame, defect_dict, measurements = result
+                    else:
+                        annotated_frame, defect_dict = result
+                        measurements = []
+                
+                # If ROI was applied, place the annotated ROI back into the full frame
+                if roi_info is not None:
+                    full_frame_annotated = frame.copy()
+                    full_frame_annotated[roi_info["y1"]:roi_info["y2"], roi_info["x1"]:roi_info["x2"]] = annotated_frame
+                    # Add ROI overlay to show the detection area
+                    annotated_frame = self.draw_roi_overlay(full_frame_annotated, camera_name)
                 else:
-                    # No ROI filtering - use all detections
-                    roi_filtered_defect_dict = defect_dict.copy()
-                    roi_filtered_measurements = measurements.copy()
-
-                # Store filtered detection results (only ROI-intersecting for grading)
-                self.live_detections[camera_name] = roi_filtered_defect_dict
+                    # No ROI applied, use the annotated frame as is
+                    pass
+                
+                # Store the detection results for automatic detection session
+                self.live_detections[camera_name] = defect_dict
+                
+                # Store measurements for sophisticated grading
                 if not hasattr(self, 'live_measurements'):
                     self.live_measurements = {"top": [], "bottom": []}
-                self.live_measurements[camera_name] = roi_filtered_measurements
-
-                # During automatic detection, collect data
+                self.live_measurements[camera_name] = measurements
+                
+                # During automatic detection, collect all detection data
                 if self.auto_detection_active:
                     detection_entry = {
                         "timestamp": datetime.now().isoformat(),
@@ -1903,25 +1683,28 @@ class App(tk.Tk):
                         "measurements": measurements.copy() if measurements else [],
                         "frame_captured": True
                     }
+                    
+                    # Add to session data
                     self.detection_session_data["total_detections"][camera_name].append(detection_entry)
-
-                    # Save best frame
-                    if (self.detection_session_data["best_frames"][camera_name] is None or
+                    
+                    # Save best frame (frame with most detections or first significant detection)
+                    if (self.detection_session_data["best_frames"][camera_name] is None or 
                         sum(defect_dict.values()) > 0):
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        # Convert frame to RGB for saving
+                        frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                         self.detection_session_data["best_frames"][camera_name] = frame_rgb.copy()
-
-                    # Store frame for report
-                    if len(self.detection_frames) < 50:
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Store frame for potential PDF report
+                    if len(self.detection_frames) < 50:  # Limit stored frames to prevent memory issues
+                        frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                         self.detection_frames.append({
                             "camera": camera_name,
                             "timestamp": datetime.now().isoformat(),
                             "frame": frame_rgb.copy(),
                             "defects": defect_dict.copy()
                         })
-
-                # Calculate grade
+                
+                # Calculate grade for this camera using sophisticated grading
                 if measurements:
                     surface_grade = self.determine_surface_grade(measurements)
                     grade_info = {
@@ -1931,53 +1714,107 @@ class App(tk.Tk):
                         'color': self.get_grade_color(surface_grade)
                     }
                 else:
-                    grade_info = self.calculate_grade(defect_dict)
-
+                    grade_info = self.calculate_grade(defect_dict)  # Fallback to simple grading
+                
                 self.live_grades[camera_name] = grade_info
-
-                # Update displays at intervals
-                if self._detection_frame_skip[camera_name] % FRAME_SKIP_DETECTION == 0:
+                
+                # Update dashboard every 5th frame for smoother updates
+                if self._detection_frame_skip[camera_name] % 5 == 0:
                     self.update_dashboard_display(camera_name, defect_dict, measurements)
-                if self._detection_frame_skip[camera_name] % UI_UPDATE_SKIP == 0:
+                
+                # Update the live grading display every 3rd frame
+                if self._detection_frame_skip[camera_name] % 3 == 0:
                     self.update_live_grading_display()
-
+                
+                cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             else:
-                # Reset detections when not active
+                # Just show raw feed without detection processing
+                # Add ROI overlay to show the detection area even when not detecting
+                frame_with_roi = self.draw_roi_overlay(frame, camera_name)
+                cv2image = cv2.cvtColor(frame_with_roi, cv2.COLOR_BGR2RGB)
+                
+                # Reset detections only when automatic detection is not active
                 if not self.auto_detection_active:
                     self.live_detections[camera_name] = {}
                     self.live_grades[camera_name] = "No wood detected"
                     if hasattr(self, 'live_measurements'):
                         self.live_measurements[camera_name] = []
-                    if self._detection_frame_skip[camera_name] % LOG_UPDATE_SKIP == 0:
+                    # Update dashboard every 10th frame when no detection
+                    if self._detection_frame_skip[camera_name] % 10 == 0:
                         self.update_dashboard_display(camera_name, {}, [])
                         self.update_live_grading_display()
-
+            
             # Increment frame skip counter
             self._detection_frame_skip[camera_name] += 1
-
-            # Convert to PhotoImage
-            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Convert to PIL Image and ensure consistent scaling
             img = Image.fromarray(cv2image)
-            photo = ImageTk.PhotoImage(image=img)
-
-            # Update canvas safely
-            canvas.delete('cam_img')  # Remove previous camera image
-            canvas.delete('bbox')     # Remove previous bounding boxes
-            canvas.delete('bbox_label')  # Remove previous bounding box labels
-            if camera_name == "top":
-                self._top_photo = photo
-                canvas.create_image(0, 0, anchor='nw', image=self._top_photo, tags='cam_img')
-            else:
-                self._bottom_photo = photo
-                canvas.create_image(0, 0, anchor='nw', image=self._bottom_photo, tags='cam_img')
-
-            # Draw bounding boxes if detections exist (only when detecting)
-            if should_detect and 'detections' in locals() and detections:
-                self.draw_bounding_boxes_on_canvas(canvas, detections, camera_name)
-
-            # Draw ROI on top camera if enabled (ensures it's on top)
-            if camera_name == "top":
-                self.draw_roi_on_canvas(canvas)
+            
+            # Cache label dimensions to avoid repeated calculations
+            if not hasattr(self, '_label_dimensions'):
+                self._label_dimensions = {}
+            
+            cache_key = f"{camera_name}_dimensions"
+            if cache_key not in self._label_dimensions:
+                label.update_idletasks()
+                self._label_dimensions[cache_key] = (label.winfo_width(), label.winfo_height())
+            
+            label_width, label_height = self._label_dimensions[cache_key]
+            
+            # Only resize if label has valid dimensions
+            if label_width > 1 and label_height > 1:
+                # Cache display dimensions calculation
+                if f"{cache_key}_display" not in self._label_dimensions:
+                    # Force consistent display size for both cameras (720p aspect ratio)
+                    target_aspect_ratio = 16 / 9  # 1280x720 = 16:9
+                    
+                    # Use minimal margin
+                    margin = 3
+                    available_width = label_width - (2 * margin)
+                    available_height = label_height - (2 * margin)
+                    
+                    # Calculate standardized size based on available space and 16:9 ratio
+                    if available_width / available_height > target_aspect_ratio:
+                        # Available space is wider than 16:9, constrain by height
+                        display_height = available_height
+                        display_width = int(display_height * target_aspect_ratio)
+                    else:
+                        # Available space is taller than 16:9, constrain by width
+                        display_width = available_width
+                        display_height = int(display_width / target_aspect_ratio)
+                    
+                    # Ensure dimensions don't exceed available space
+                    display_width = min(display_width, available_width)
+                    display_height = min(display_height, available_height)
+                    
+                    # Cache calculated dimensions and offsets
+                    x_offset = (label_width - display_width) // 2
+                    y_offset = (label_height - display_height) // 2
+                    
+                    self._label_dimensions[f"{cache_key}_display"] = {
+                        'display_width': display_width,
+                        'display_height': display_height,
+                        'x_offset': x_offset,
+                        'y_offset': y_offset
+                    }
+                
+                # Use cached dimensions
+                display_dims = self._label_dimensions[f"{cache_key}_display"]
+                
+                # Resize the camera image to exactly these dimensions (stretch if needed)
+                # Use NEAREST for speed in real-time processing
+                img = img.resize((display_dims['display_width'], display_dims['display_height']), Image.NEAREST)
+                
+                # Create a black background of the full label size
+                final_img = Image.new('RGB', (label_width, label_height), 'black')
+                
+                # Paste the resized image
+                final_img.paste(img, (display_dims['x_offset'], display_dims['y_offset']))
+                img = final_img
+            
+            imgtk = ImageTk.PhotoImage(image=img)
+            label.imgtk = imgtk
+            label.configure(image=imgtk)
 
     def calculate_grade(self, defect_dict):
         """Calculate grade based on defect dictionary and return grade info"""
@@ -2253,7 +2090,18 @@ class App(tk.Tk):
             # Prioritize ACM ports for Arduino Uno R3/Leonardo with native USB
             # Include USB ports for Arduino Nano/Pro Mini with FTDI/CH340 chips
             # Include potential reassigned ports (ACM1, USB01, etc.)
-            ports_to_try = ARDUINO_PORTS
+            ports_to_try = [
+                # ACM ports (Arduino Uno R3, Leonardo, Micro with native USB)
+                '/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2', '/dev/ttyACM3',
+                # USB ports (Arduino Nano, Pro Mini with FTDI/CH340)
+                '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3',
+                # Reassigned ports (when disconnection occurs)
+                '/dev/ttyUSB01', '/dev/ttyACM01',
+                # Other Linux serial ports
+                '/dev/ttyAMA0', '/dev/ttyAMA1', '/dev/ttyAMA10',
+                # Windows COM ports
+                'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'
+            ]
             
             for port in ports_to_try:
                 try:
@@ -2298,15 +2146,15 @@ class App(tk.Tk):
                     self.arduino_thread.start()
             
             if hasattr(self, 'status_label'):
-                self.update_status_text("Status: Arduino connected. Ready for automatic detection.")
+                self.status_label.config(text="Status: Arduino connected. Ready for automatic detection.")
                 # Start with auto detection ready status
-                self.update_status_text("Status: Ready - Waiting for IR beam trigger", STATUS_READY_COLOR)
+                self.status_label.config(text="Status: Ready - Waiting for IR beam trigger", foreground="green")
             
         except serial.SerialException as e:
             self.ser = None
             print(f"Arduino connection failed: {e}")
             if hasattr(self, 'status_label'):
-                self.update_status_text("Status: Arduino not found. Running in manual mode.", STATUS_WARNING_COLOR)
+                self.status_label.config(text="Status: Arduino not found. Running in manual mode.")
 
     def process_message_queue(self):
         """Process messages from background threads safely in the main thread"""
@@ -2327,8 +2175,8 @@ class App(tk.Tk):
                                 print("🔧 Arduino should now set motorActiveForTrigger = true")
                                 print("⚡ Stepper motor should start running NOW!")
                                 if hasattr(self, 'status_label'):
-                                    self.update_status_text(
-                                        "Status: IR TRIGGERED - Motor should be running!", STATUS_WARNING_COLOR
+                                    self.status_label.config(
+                                        text="Status: IR TRIGGERED - Motor should be running!", foreground="orange"
                                     )
                                 self.start_automatic_detection()
                             else:
@@ -2348,13 +2196,13 @@ class App(tk.Tk):
                             if self.current_mode == "TRIGGER" and self.auto_detection_active:
                                 print("IR beam cleared – stopping detection (TRIGGER MODE)")
                                 if hasattr(self, 'status_label'):
-                                    self.update_status_text(
-                                        "Status: Processing results...", STATUS_ERROR_COLOR
+                                    self.status_label.config(
+                                        text="Status: Processing results...", foreground="red"
                                     )
                                 self.stop_automatic_detection_and_grade()
                                 if hasattr(self, 'status_label'):
-                                    self.update_status_text(
-                                        "Status: Ready - Waiting for IR beam trigger", STATUS_READY_COLOR
+                                    self.status_label.config(
+                                        text="Status: Ready - Waiting for IR beam trigger", foreground="green"
                                     )
                             else:
                                 print(f"Length signal received (duration: {duration_ms}ms) but system is in {self.current_mode} mode or no detection active")
@@ -2366,11 +2214,11 @@ class App(tk.Tk):
                     else:
                         print(f"Arduino message received: '{message}'")
                         if hasattr(self, 'status_label'):
-                            self.update_status_text(f"Status: Arduino: {message}")
+                            self.status_label.config(text=f"Status: Arduino: {message}")
 
                 elif msg_type == "status_update":
                     if hasattr(self, 'status_label'):
-                        self.update_status_text(f"Status: {data}")
+                        self.status_label.config(text=f"Status: {data}")
                     
         except queue.Empty:
             pass
@@ -2514,12 +2362,12 @@ class App(tk.Tk):
             else:
                 print("❌ Cannot send command: Arduino not connected.")
                 if hasattr(self, 'status_label'):
-                    self.update_status_text("Status: Arduino not connected.", STATUS_ERROR_COLOR)
+                    self.status_label.config(text="Status: Arduino not connected.")
                     
         except (serial.SerialException, OSError, TypeError) as e:
             print(f"🔥 Error sending Arduino command '{command}': {e}")
             if hasattr(self, 'status_label'):
-                self.update_status_text("Status: Arduino communication error - attempting reconnect...", STATUS_ERROR_COLOR)
+                self.status_label.config(text="Status: Arduino communication error - attempting reconnect...")
             
             # Try to reconnect only if not shutting down
             if not (hasattr(self, '_shutting_down') and self._shutting_down):
@@ -2555,7 +2403,7 @@ class App(tk.Tk):
         self.send_arduino_command('X')  # Send stop command to Arduino
         self.live_detection_var.set(False)
         self.auto_grade_var.set(False)
-        self.update_status_text("Status: IDLE - Conveyor Stopped", SECONDARY_TEXT_COLOR)
+        self.status_label.config(text="Status: IDLE - Conveyor Stopped", foreground="gray")
 
     def finalize_grading(self, final_grade, all_measurements):
         """Central function to log piece details, update stats, and send Arduino command."""
@@ -2607,7 +2455,7 @@ class App(tk.Tk):
         # 5. Update status label and console
         status_text = f"Piece #{piece_number} Graded: {final_grade} (Cmd: {arduino_command})"
         print(f"✅ Grading Finalized - {status_text}")
-        self.update_status_text(f"Status: {status_text}", STATUS_READY_COLOR)
+        self.status_label.config(text=f"Status: {status_text}", foreground="darkgreen")
         self.log_action(f"Graded Piece #{piece_number} as {final_grade} -> Arduino Cmd: {arduino_command}")
 
     def _execute_manual_grade(self):
@@ -2629,60 +2477,48 @@ class App(tk.Tk):
             self.finalize_grading(final_grade, all_measurements)
         else:
             print("Manual grade trigger - No wood currently detected")
-            self.update_status_text("Status: Manual grade - no wood detected")
+            self.status_label.config(text="Status: Manual grade - no wood detected")
 
     def analyze_frame(self, frame, camera_name="top", run_defect_model=True):
         """Analyze frame using DeGirum model for defect detection with size measurement"""
         if self.model is None:
             return frame, {}, []
-
+        
         try:
-            # Resize frame to model's expected input size (640x640) and convert to RGB
-            model_input = cv2.cvtColor(cv2.resize(frame, (640, 640)), cv2.COLOR_BGR2RGB)
-            print(f"Debug: Running inference on {camera_name} camera, input shape: {model_input.shape}")
-
             # Run inference using DeGirum
-            inference_result = self.model(model_input)
-            print(f"Debug: Inference successful on {camera_name} camera")
-
+            inference_result = self.model(frame)
+            
             # Get annotated frame
             annotated_frame = inference_result.image_overlay
-
+            
             # Process detections to count defects and measure sizes
             final_defect_dict = {}
             defect_measurements = []  # Store detailed measurements for grading
             detections = inference_result.results
-
+            
             for det in detections:
                 model_label = det['label']
-
+                
                 # Map model output to standard defect types
                 standard_defect_type = self.map_model_output_to_standard(model_label)
-
-                # Extract bounding box and scale to original frame coordinates for size calculation
-                x1, y1, x2, y2 = det['bbox']
-                scale_x = 1280.0 / 640.0  # Original width / model width
-                scale_y = 720.0 / 640.0   # Original height / model height
-
-                # Scale bbox to original frame coordinates
-                bbox_original = {
-                    'bbox': [x1 * scale_x, y1 * scale_y, x2 * scale_x, y2 * scale_y]
-                }
-
+                
+                # Extract bounding box for size calculation
+                bbox_info = {'bbox': det['bbox']}
+                
                 # Calculate defect size in mm and percentage using camera-specific calibration
-                size_mm, percentage = self.calculate_defect_size(bbox_original, camera_name)
-
+                size_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
+                
                 # Store detailed measurement for sophisticated grading
                 defect_measurements.append((standard_defect_type, size_mm, percentage))
-
+                
                 # Count defects by standardized label (for simple display)
                 if standard_defect_type in final_defect_dict:
                     final_defect_dict[standard_defect_type] += 1
                 else:
                     final_defect_dict[standard_defect_type] = 1
-
-            return annotated_frame, final_defect_dict, defect_measurements, detections
-
+            
+            return annotated_frame, final_defect_dict, defect_measurements
+            
         except Exception as e:
             print(f"Error during DeGirum inference on {camera_name} camera: {e}")
             return frame, {}, []
@@ -2987,7 +2823,7 @@ class App(tk.Tk):
             print(f"Wood piece length calculated: {length_cm:.2f} cm")
 
         except ValueError:
-            self.update_status_text("Status: Invalid speed value!")
+            self.status_label.config(text="Status: Invalid speed value!")
 
     def on_closing(self):
         print("Releasing resources...")
@@ -3084,10 +2920,10 @@ class App(tk.Tk):
             with open(log_filename, 'a') as f:
                 f.write(log_entry)
             print(f"Entry added to log file: {log_filename}")
-            self.log_status_label.config(text="Log: Updated", foreground=STATUS_READY_COLOR)
+            self.log_status_label.config(text="Log: Updated", foreground="blue")
         except Exception as e:
             print(f"Error updating log file: {e}")
-            self.log_status_label.config(text="Log: Error", foreground=STATUS_ERROR_COLOR)
+            self.log_status_label.config(text="Log: Error", foreground="red")
 
         # Generate PDF Report
         try:
@@ -3159,7 +2995,7 @@ class App(tk.Tk):
     def manual_generate_report(self):
         """Manually generate a report"""
         self.generate_report()
-        self.log_status_label.config(text="Log: Manual report generated", foreground=STATUS_READY_COLOR)
+        self.log_status_label.config(text="Log: Manual report generated", foreground="green")
 
     def toggle_fullscreen(self, event=None):
         """Toggle fullscreen mode (F11 key)"""
