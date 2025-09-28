@@ -72,6 +72,18 @@ ROI_COORDINATES = {
         "y1": 0,
         "x2": CAMERA_WIDTH,   # Use configured camera width
         "y2": CAMERA_HEIGHT   # Use configured camera height
+    },
+    "wood_detection": {
+        "x1": 25,  # Left boundary for wood detection
+        "y1": 0,    # Top boundary
+        "x2": 100,  # Right boundary for wood detection
+        "y2": 720   # Bottom boundary for wood detection
+    },
+    "exit_wood": {
+        "x1": 1175,  # Left boundary for exit wood ROI
+        "y1": 0,    # Top boundary
+        "x2": 1250, # Right boundary for exit wood ROI
+        "y2": 720   # Bottom boundary for exit wood ROI
     }
 }
 
@@ -403,7 +415,7 @@ class App(tk.Tk):
         self.live_grades = {"top": "No wood detected", "bottom": "No wood detected"}
 
         # ROI (Region of Interest) settings
-        self.roi_enabled = {"top": True, "bottom": False}  # Enable ROI for top camera by default
+        self.roi_enabled = {"top": True, "bottom": False, "wood_detection": True, "exit_wood": True}  # Enable ROI for top camera, wood detection, and exit wood by default
         self.roi_coordinates = ROI_COORDINATES.copy()
 
         # Create canvases for camera feeds taking full width
@@ -1791,39 +1803,91 @@ class App(tk.Tk):
 
     def draw_roi_on_canvas(self, canvas):
         """Draw ROI overlay on top camera canvas"""
-        if not self.roi_enabled.get("top", False):
+        if not self.roi_enabled.get("top", False) and not self.roi_enabled.get("wood_detection", False):
             return
 
         # Clear previous ROI
         canvas.delete("roi")
         canvas.delete("roi_label")
+        canvas.delete("wood_roi")
+        canvas.delete("wood_roi_label")
+        canvas.delete("exit_roi")
+        canvas.delete("exit_roi_label")
 
-        # Get ROI coordinates
-        roi_coords = self.roi_coordinates.get("top", {})
-        roi_x1 = roi_coords.get("x1", 150)
-        roi_y1 = roi_coords.get("y1", 80)
-        roi_x2 = roi_coords.get("x2", 1280)
-        roi_y2 = roi_coords.get("y2", 720)
-
-        # Scale ROI coordinates to canvas
+        # Scale factors for canvas
         scale_x = self.canvas_width / 1280.0
         scale_y = self.canvas_height / 720.0
 
-        x1 = roi_x1 * scale_x
-        y1 = roi_y1 * scale_y
-        x2 = roi_x2 * scale_x
-        y2 = roi_y2 * scale_y
+        # Draw top ROI if enabled
+        if self.roi_enabled.get("top", False):
+            # Get ROI coordinates
+            roi_coords = self.roi_coordinates.get("top", {})
+            roi_x1 = roi_coords.get("x1", 150)
+            roi_y1 = roi_coords.get("y1", 80)
+            roi_x2 = roi_coords.get("x2", 1280)
+            roi_y2 = roi_coords.get("y2", 720)
 
-        # Draw ROI rectangle (yellow border)
-        canvas.create_rectangle(x1, y1, x2, y2, outline="yellow", width=3, tags="roi")
+            x1 = roi_x1 * scale_x
+            y1 = roi_y1 * scale_y
+            x2 = roi_x2 * scale_x
+            y2 = roi_y2 * scale_y
 
-        # Add ROI label
-        canvas.create_text(x1 + 10, y1 + 30, text="ROI - TOP",
-                          fill="yellow", font=("Helvetica", 12, "bold"), anchor="nw", tags="roi_label")
+            # Draw ROI rectangle (yellow border)
+            canvas.create_rectangle(x1, y1, x2, y2, outline="yellow", width=3, tags="roi")
 
-        # Keep ROI on top
+            # Add ROI label
+            canvas.create_text(x1 + 10, y1 + 30, text="ROI - TOP",
+                              fill="yellow", font=("Helvetica", 12, "bold"), anchor="nw", tags="roi_label")
+
+        # Draw wood detection ROI if enabled
+        if self.roi_enabled.get("wood_detection", False):
+            # Get wood detection ROI coordinates
+            wood_roi_coords = self.roi_coordinates.get("wood_detection", {})
+            wood_roi_x1 = wood_roi_coords.get("x1", 100)
+            wood_roi_y1 = wood_roi_coords.get("y1", 0)
+            wood_roi_x2 = wood_roi_coords.get("x2", 500)
+            wood_roi_y2 = wood_roi_coords.get("y2", 300)
+
+            wood_x1 = wood_roi_x1 * scale_x
+            wood_y1 = wood_roi_y1 * scale_y
+            wood_x2 = wood_roi_x2 * scale_x
+            wood_y2 = wood_roi_y2 * scale_y
+
+            # Draw wood detection ROI rectangle (green border)
+            canvas.create_rectangle(wood_x1, wood_y1, wood_x2, wood_y2, outline="green", width=3, tags="wood_roi")
+
+            # Add wood detection ROI label
+            canvas.create_text(wood_x1 + 10, wood_y1 + 30, text="WOOD DETECTION ROI",
+                              fill="green", font=("Helvetica", 12, "bold"), anchor="nw", tags="wood_roi_label")
+
+        # Draw exit wood ROI if enabled
+        if self.roi_enabled.get("exit_wood", False):
+            # Get exit wood ROI coordinates
+            exit_roi_coords = self.roi_coordinates.get("exit_wood", {})
+            exit_roi_x1 = exit_roi_coords.get("x1", 700)
+            exit_roi_y1 = exit_roi_coords.get("y1", 0)
+            exit_roi_x2 = exit_roi_coords.get("x2", 1100)
+            exit_roi_y2 = exit_roi_coords.get("y2", 250)
+
+            exit_x1 = exit_roi_x1 * scale_x
+            exit_y1 = exit_roi_y1 * scale_y
+            exit_x2 = exit_roi_x2 * scale_x
+            exit_y2 = exit_roi_y2 * scale_y
+
+            # Draw exit wood ROI rectangle (blue border)
+            canvas.create_rectangle(exit_x1, exit_y1, exit_x2, exit_y2, outline="blue", width=3, tags="exit_roi")
+
+            # Add exit wood ROI label
+            canvas.create_text(exit_x1 + 10, exit_y1 + 30, text="EXIT WOOD ROI",
+                              fill="blue", font=("Helvetica", 12, "bold"), anchor="nw", tags="exit_roi_label")
+
+        # Keep ROIs on top
         canvas.tag_raise("roi")
         canvas.tag_raise("roi_label")
+        canvas.tag_raise("wood_roi")
+        canvas.tag_raise("wood_roi_label")
+        canvas.tag_raise("exit_roi")
+        canvas.tag_raise("exit_roi_label")
 
     def update_single_feed(self, cap, canvas, camera_name):
         ret, frame = cap.read()
