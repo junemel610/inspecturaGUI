@@ -71,7 +71,7 @@ ROI_COORDINATES = {
         "x1": 150,    # Full frame for bottom camera (no ROI)
         "y1": 0,
         "x2": CAMERA_WIDTH,   # Use configured camera width
-        "y2": CAMERA_HEIGHT   # Use configured camera height
+        "y2": CAMERA_HEIGHT   # Use configured camera height 
     },
     "wood_detection": {
         "x1": 25,  # Left boundary for wood detection
