@@ -15,6 +15,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 import numpy as np
+from typing import List, Dict, Tuple, Optional
 
 # =============================================================================
 # CONFIGURATION SECTION - Fine-tune these parameters for your setup
@@ -74,10 +75,10 @@ ROI_COORDINATES = {
         "y2": CAMERA_HEIGHT   # Use configured camera height 
     },
     "wood_detection": {
-        "x1": 25,  # Left boundary for wood detection
+        "x1": 100,  # Left boundary for wood detection
         "y1": 0,    # Top boundary
-        "x2": 100,  # Right boundary for wood detection
-        "y2": 720   # Bottom boundary for wood detection
+        "x2": 500,  # Right boundary for wood detection
+        "y2": 300   # Bottom boundary for wood detection
     },
     "exit_wood": {
         "x1": 1175,  # Left boundary for exit wood ROI
@@ -155,7 +156,7 @@ MIN_WINDOW_WIDTH = 800            # Minimum window width in pixels
 MIN_WINDOW_HEIGHT = 600           # Minimum window height in pixels
 ENABLE_FULLSCREEN_STARTUP = True # Automatically start in fullscreen mode (for kiosks/RPi)
 
-# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------    
 # FONT SETTINGS
 # Customize text appearance throughout the application
 # ------------------------------------------------------------------------------
@@ -253,6 +254,399 @@ MAX_DETECTION_ENTRIES = 50         # Maximum number of detection entries to keep
 # END OF UI CONFIGURATION SECTION
 # =============================================================================
 # =============================================================================
+
+class ColorWoodDetector:
+    def __init__(self):
+        self.wood_color_profiles = {
+            'top_panel': {
+                'hsv_lower': np.array([85, 10, 100]),  # Expanded minimum HSV values for the top panel
+                'hsv_upper': np.array([125, 40, 240]),  # Expanded maximum HSV values for the top panel
+                'name': 'Top Panel Wood'
+            },
+            'bottom_panel': {
+                'hsv_lower': np.array([70, 3, 130]),  # Expanded HSV range for wood detection
+                'hsv_upper': np.array([130, 6, 140]),  # Expanded HSV range for wood detection
+                'name': 'Bottom Panel Wood'
+            }
+        }
+
+        # Detection parameters
+        self.min_contour_area = 3000      # Minimum area for wood detection
+        self.max_contour_area = 500000    # Maximum area for wood detection
+        self.min_aspect_ratio = 1.0       # Minimum width/height ratio for plank
+        self.max_aspect_ratio = 10.0      # Maximum width/height ratio for plank
+        self.contour_approximation = 0.03 # Epsilon for contour approximation
+
+        # Morphological operations
+        self.morph_kernel_size = 5
+        self.closing_iterations = 2
+        self.opening_iterations = 1
+
+        # Pixel to mm conversion parameters for width measurement
+        self.pixel_per_mm_top = 2.96     # Placeholder: calibrate based on top camera distance (31cm)
+        self.pixel_per_mm_bottom = 3.18  # Placeholder: calibrate based on bottom camera distance
+
+    def calculate_width_mm(self, bbox_pixels: int, camera: str = 'top') -> float:
+        """Calculate width in mm from bounding box dimension in pixels using pixel_per_mm factors"""
+        if camera == 'top':
+            return bbox_pixels / self.pixel_per_mm_top
+        elif camera == 'bottom':
+            return bbox_pixels / self.pixel_per_mm_bottom
+        else:
+            raise ValueError("Camera must be 'top' or 'bottom'")
+
+    def detect_wood_by_color(self, image: np.ndarray, profile_names: List[str] = None) -> Tuple[np.ndarray, List[Dict]]:
+        """Detect wood using color profiles"""
+        if profile_names is None:
+            profile_names = list(self.wood_color_profiles.keys())
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        # Apply histogram equalization on V channel for better lighting compensation
+        h, s, v = cv2.split(hsv)
+        v = cv2.equalizeHist(v)
+        hsv = cv2.merge([h, s, v])
+        combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+
+        detections = []
+
+        print(f"🎨 Using profiles: {profile_names}")
+
+        # Combine masks from selected profiles
+        for profile_name in profile_names:
+            if profile_name in self.wood_color_profiles:
+                profile = self.wood_color_profiles[profile_name]
+                mask = cv2.inRange(hsv, profile['hsv_lower'], profile['hsv_upper'])
+                mask_pixels = cv2.countNonZero(mask)
+                total_pixels = hsv.shape[0] * hsv.shape[1]
+                mask_percentage = (mask_pixels / total_pixels) * 100
+                print(f"  📊 {profile_name}: HSV range {profile['hsv_lower']} - {profile['hsv_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
+                combined_mask = cv2.bitwise_or(combined_mask, mask)
+
+        pre_morph_pixels = cv2.countNonZero(combined_mask)
+        pre_morph_percentage = (pre_morph_pixels / total_pixels) * 100
+        print(f"🔧 Pre-morph combined mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
+
+        # Clean up mask with morphological operations
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size))
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
+        combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
+
+        post_morph_pixels = cv2.countNonZero(combined_mask)
+        post_morph_percentage = (post_morph_pixels / total_pixels) * 100
+        print(f"🔧 Post-morph combined mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
+
+        return combined_mask, detections
+
+    def detect_rectangular_contours(self, mask: np.ndarray) -> List[Dict]:
+        """Detect rectangular contours that could be wood planks"""
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        print(f"📐 Found {len(contours)} total contours")
+
+        wood_candidates = []
+        rejected_area = 0
+        rejected_aspect = 0
+
+        for i, contour in enumerate(contours):
+            area = cv2.contourArea(contour)
+
+            # Filter by area
+            if area < self.min_contour_area or area > self.max_contour_area:
+                rejected_area += 1
+                print(f"  ❌ Contour {i}: area {area:.0f} out of range [{self.min_contour_area}, {self.max_contour_area}]")
+                continue
+
+            # Get bounding rectangle
+            x, y, w, h = cv2.boundingRect(contour)
+            aspect_ratio = max(w, h) / min(w, h)
+
+            # Filter by aspect ratio (wood planks are typically rectangular)
+            if aspect_ratio < self.min_aspect_ratio or aspect_ratio > self.max_aspect_ratio:
+                rejected_aspect += 1
+                print(f"  ❌ Contour {i}: aspect {aspect_ratio:.2f} out of range [{self.min_aspect_ratio}, {self.max_aspect_ratio}]")
+                continue
+
+            # Approximate contour to polygon
+            epsilon = self.contour_approximation * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
+
+            # Calculate additional metrics
+            hull = cv2.convexHull(contour)
+            hull_area = cv2.contourArea(hull)
+            solidity = area / hull_area if hull_area > 0 else 0
+
+            # Get rotated rectangle for better angle detection
+            rect = cv2.minAreaRect(contour)
+            box = cv2.boxPoints(rect)
+            box = np.intp(box)
+
+            confidence = self._calculate_wood_confidence(area, aspect_ratio, solidity, len(approx))
+
+            wood_candidate = {
+                'contour': contour,
+                'approx_points': approx,
+                'bbox': (x, y, w, h),
+                'area': area,
+                'aspect_ratio': aspect_ratio,
+                'solidity': solidity,
+                'vertices': len(approx),
+                'rotated_rect': rect,
+                'corner_points': box,
+                'confidence': confidence
+            }
+
+            wood_candidates.append(wood_candidate)
+            print(f"  ✅ Contour {i}: area {area:.0f}, aspect {aspect_ratio:.2f}, solidity {solidity:.2f}, confidence {confidence:.2f}")
+
+        print(f"📊 Contour filtering: {len(contours)} total, {rejected_area} rejected by area, {rejected_aspect} by aspect, {len(wood_candidates)} candidates")
+
+        # Sort by confidence
+        wood_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+
+        return wood_candidates
+
+    def _calculate_wood_confidence(self, area: float, aspect_ratio: float, solidity: float, vertices: int) -> float:
+        """Calculate confidence score for wood detection"""
+        confidence = 0.0
+
+        # Area score (larger is better, up to a point)
+        if 10000 <= area <= 100000:
+            confidence += 0.3
+        elif area > 5000:
+            confidence += 0.2
+
+        # Aspect ratio score (rectangular is better)
+        if 2.0 <= aspect_ratio <= 6.0:
+            confidence += 0.3
+        elif 1.5 <= aspect_ratio <= 8.0:
+            confidence += 0.2
+
+        # Solidity score (more solid shapes are better)
+        if solidity > 0.7:
+            confidence += 0.2
+        elif solidity > 0.5:
+            confidence += 0.1
+
+        # Vertex count score (4-6 vertices for rectangular shapes)
+        if vertices == 4:
+            confidence += 0.2
+        elif 4 <= vertices <= 6:
+            confidence += 0.1
+
+        return min(confidence, 1.0)
+
+    def detect_wood_comprehensive(self, image: np.ndarray, profile_names: List[str] = None, roi: Tuple[int, int, int, int] = None) -> Dict:
+        """Comprehensive wood detection combining color and shape analysis"""
+
+        print(f"🪵 Starting comprehensive wood detection on image shape: {image.shape}")
+
+        # Step 1: Color-based detection with optional ROI
+        if roi is not None:
+            x, y, w, h = roi
+            cropped = image[y:y+h, x:x+w]
+            color_mask_cropped, _ = self.detect_wood_by_color(cropped, profile_names)
+            color_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+            color_mask[y:y+h, x:x+w] = color_mask_cropped
+        else:
+            color_mask, _ = self.detect_wood_by_color(image, profile_names)
+
+        mask_pixels = cv2.countNonZero(color_mask)
+        total_pixels = image.shape[0] * image.shape[1]
+        mask_percentage = (mask_pixels / total_pixels) * 100
+        print(f"🎨 Color mask: {mask_pixels} pixels ({mask_percentage:.1f}%)")
+
+        # Step 2: Find rectangular contours
+        wood_candidates = self.detect_rectangular_contours(color_mask)
+        print(f"📐 Found {len(wood_candidates)} wood candidates after contour filtering")
+
+        # Step 3: Generate automatic ROI
+        auto_roi = self.generate_auto_roi(wood_candidates, image.shape)
+        if auto_roi:
+            print(f"🎯 Auto ROI generated: {auto_roi}")
+        else:
+            print("❌ No auto ROI generated (no candidates)")
+
+        # Step 4: Create result
+        result = {
+            'wood_detected': len(wood_candidates) > 0,
+            'wood_count': len(wood_candidates),
+            'wood_candidates': wood_candidates,
+            'auto_roi': auto_roi,
+            'color_mask': color_mask,
+            'confidence': wood_candidates[0]['confidence'] if wood_candidates else 0.0
+        }
+
+        print(f"✅ Detection complete: wood_detected={result['wood_detected']}, count={result['wood_count']}, confidence={result['confidence']:.2f}")
+
+        return result
+
+    def generate_auto_roi(self, wood_candidates: List[Dict], image_shape: Tuple) -> Optional[Tuple[int, int, int, int]]:
+        """Generate automatic ROI based on detected wood"""
+        if not wood_candidates:
+            return None
+
+        # Use the highest confidence detection
+        best_candidate = wood_candidates[0]
+        x, y, w, h = best_candidate['bbox']
+
+        # Add some padding around the detected wood
+        padding_x = int(w * 0.1)  # 10% padding
+        padding_y = int(h * 0.1)
+
+        roi_x1 = max(0, x - padding_x)
+        roi_y1 = max(0, y - padding_y)
+        roi_x2 = min(image_shape[1], x + w + padding_x)
+        roi_y2 = min(image_shape[0], y + h + padding_y)
+
+        return (roi_x1, roi_y1, roi_x2 - roi_x1, roi_y2 - roi_y1)
+
+    def detect_wood_presence(self, frame):
+        color_conf = self._detect_wood_by_color(frame)
+        texture_conf = self._detect_wood_by_texture(frame)
+        shape_conf = self._detect_wood_by_shape(frame)
+
+        # Combine confidences with weights (color most important for wood)
+        combined_conf = (0.5 * color_conf + 0.3 * texture_conf + 0.2 * shape_conf)
+        wood_detected = combined_conf > 0.3  # Lower threshold since multiple methods
+
+        return wood_detected, combined_conf, {
+            'color_confidence': color_conf,
+            'texture_confidence': texture_conf,
+            'shape_confidence': shape_conf
+        }
+
+    def detect_wood(self, frame):
+        """
+        Enhanced wood detection using the wood detection model.
+        Falls back to visual detection if model is not available.
+        Returns True if wood is detected, False otherwise.
+        """
+        wood_detected, confidence, _ = self.detect_wood_presence(frame)
+        return wood_detected
+
+    def _detect_wood_by_color(self, frame):
+        """Detect wood using HSV color segmentation"""
+        try:
+            hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+            # Define multiple wood color ranges to handle different wood types
+            wood_ranges = [
+                # Light wood (pine, birch)
+                ([8, 50, 50], [25, 255, 255]),
+                # Medium wood (oak, maple)
+                ([10, 40, 40], [20, 200, 200]),
+                # Dark wood (walnut, mahogany)
+                ([5, 30, 30], [15, 150, 180])
+            ]
+
+            combined_mask = None
+            for lower, upper in wood_ranges:
+                mask = cv2.inRange(hsv_frame, np.array(lower), np.array(upper))
+                if combined_mask is None:
+                    combined_mask = mask
+                else:
+                    combined_mask = cv2.bitwise_or(combined_mask, mask)
+
+            # Clean up mask with morphological operations
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
+
+            # Calculate percentage of wood-like pixels
+            wood_pixel_count = cv2.countNonZero(combined_mask)
+            total_pixels = frame.shape[0] * frame.shape[1]
+            wood_percentage = (wood_pixel_count / total_pixels) * 100
+
+            # Return confidence (normalized to 0-1)
+            return min(wood_percentage / 20.0, 1.0)  # 20% wood pixels = 100% confidence
+
+        except Exception as e:
+            print(f"Error in color-based wood detection: {e}")
+            return 0.0
+
+    def _detect_wood_by_texture(self, frame):
+        """Detect wood using basic texture analysis"""
+        try:
+            # Convert to grayscale
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Apply Gaussian blur to reduce noise
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+            # Calculate texture using standard deviation in local neighborhoods
+            kernel_size = 15
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+
+            # Calculate local standard deviation (texture measure)
+            mean = cv2.blur(blurred.astype(np.float32), (kernel_size, kernel_size))
+            sqr_mean = cv2.blur((blurred.astype(np.float32))**2, (kernel_size, kernel_size))
+            texture_variance = sqr_mean - mean**2
+            texture_std = np.sqrt(np.maximum(texture_variance, 0))
+
+            # Wood typically has moderate texture (not too smooth, not too rough)
+            # Calculate confidence based on texture distribution
+            texture_mean = np.mean(texture_std)
+            texture_confidence = 0.0
+
+            # Optimal texture range for wood (adjust based on testing)
+            if 10 < texture_mean < 40:
+                texture_confidence = 1.0 - abs(texture_mean - 25) / 15.0
+
+            return max(0.0, min(1.0, texture_confidence))
+
+        except Exception as e:
+            print(f"Error in texture-based wood detection: {e}")
+            return 0.0
+
+    def _detect_wood_by_shape(self, frame):
+        """Detect wood using contour and shape analysis"""
+        try:
+            # Convert to grayscale and apply edge detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+
+            # Find contours
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            if not contours:
+                return 0.0
+
+            # Analyze largest contours for rectangular/wood-like shapes
+            frame_area = frame.shape[0] * frame.shape[1]
+            shape_confidence = 0.0
+
+            for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:5]:
+                area = cv2.contourArea(contour)
+
+                # Skip very small contours
+                if area < frame_area * 0.05:
+                    continue
+
+                # Calculate contour properties
+                perimeter = cv2.arcLength(contour, True)
+                if perimeter == 0:
+                    continue
+
+                # Aspect ratio analysis
+                x, y, w, h = cv2.boundingRect(contour)
+                aspect_ratio = float(w) / h
+
+                # Wood planks typically have certain aspect ratios
+                # Adjust these ranges based on your conveyor setup
+                if 0.3 < aspect_ratio < 5.0:  # Not too square, not too thin
+                    # Calculate rectangularity (how close to rectangle)
+                    rect_area = w * h
+                    rectangularity = area / rect_area
+
+                    if rectangularity > 0.6:  # Reasonably rectangular
+                        shape_confidence = max(shape_confidence, rectangularity)
+
+            return min(1.0, shape_confidence)
+
+        except Exception as e:
+            print(f"Error in shape-based wood detection: {e}")
+            return 0.0
 
 class App(tk.Tk):
     def __init__(self):
@@ -414,9 +808,15 @@ class App(tk.Tk):
         self.live_detections = {"top": {}, "bottom": {}}
         self.live_grades = {"top": "No wood detected", "bottom": "No wood detected"}
 
+        # Initialize wood detector
+        self.wood_detector = ColorWoodDetector()
+
         # ROI (Region of Interest) settings
         self.roi_enabled = {"top": True, "bottom": False, "wood_detection": True, "exit_wood": True}  # Enable ROI for top camera, wood detection, and exit wood by default
         self.roi_coordinates = ROI_COORDINATES.copy()
+
+        # Enable wood detection by default when program starts
+        self.wood_detection_active = True
 
         # Create canvases for camera feeds taking full width
         self.canvas_width = screen_width // 2 - 25
@@ -1801,6 +2201,45 @@ class App(tk.Tk):
         canvas.tag_raise("bbox")
         canvas.tag_raise("bbox_label")
 
+    def draw_wood_bounding_boxes_on_canvas(self, canvas, wood_candidates):
+        """Draw bounding boxes for detected wood pieces on canvas"""
+        for i, wood_candidate in enumerate(wood_candidates):
+            bbox = wood_candidate.get('bbox', [])
+            if len(bbox) >= 4:
+                x, y, w, h = bbox[:4]
+
+                # Scale from original frame coordinates to canvas coordinates
+                x1_canvas = x * (self.canvas_width / 1280.0)
+                y1_canvas = y * (self.canvas_height / 720.0)
+                x2_canvas = (x + w) * (self.canvas_width / 1280.0)
+                y2_canvas = (y + h) * (self.canvas_height / 720.0)
+
+                # Use blue color for wood detection bounding boxes
+                box_color = "blue"
+                label_color = "white"
+
+                # Draw rectangle for wood bounding box
+                canvas.create_rectangle(x1_canvas, y1_canvas, x2_canvas, y2_canvas,
+                                      outline=box_color, width=4, tags="wood_bbox")
+
+                # Add wood detection label above the bounding box
+                confidence = wood_candidate.get('confidence', 0.0)
+                label_text = f"Wood ({confidence:.2f})"
+                label_x = x1_canvas
+                label_y = y1_canvas - 20  # 20 pixels above the box
+
+                # Ensure label doesn't go off the top of canvas
+                if label_y < 5:
+                    label_y = y1_canvas + 5  # Put it inside the box if too high
+
+                canvas.create_text(label_x, label_y, text=label_text,
+                                 fill=label_color, font=("Arial", 12, "bold"),
+                                 anchor="sw", tags="wood_bbox_label")
+
+        # Keep wood boxes and labels on top
+        canvas.tag_raise("wood_bbox")
+        canvas.tag_raise("wood_bbox_label")
+
     def draw_roi_on_canvas(self, canvas):
         """Draw ROI overlay on top camera canvas"""
         if not self.roi_enabled.get("top", False) and not self.roi_enabled.get("wood_detection", False):
@@ -1901,8 +2340,10 @@ class App(tk.Tk):
 
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or self.live_detection_var.get()
+            # Wood detection runs independently when enabled
+            should_detect_wood = self.wood_detection_active and camera_name == "top"
 
-            if should_detect:
+            if should_detect or should_detect_wood:
                 # Run detection on the full frame (ROI-independent)
                 result = self.analyze_frame(frame, camera_name, run_defect_model=True)
 
@@ -1914,6 +2355,46 @@ class App(tk.Tk):
                     annotated_frame, defect_dict = result
                     measurements = []
                     detections = []
+
+                # Run wood detection on top camera if enabled (runs independently of defect detection)
+                if camera_name == "top" and self.roi_enabled.get("wood_detection", False) and should_detect_wood:
+                    wood_roi_coords = self.roi_coordinates.get("wood_detection", {})
+                    wood_roi = (wood_roi_coords.get("x1", 100), wood_roi_coords.get("y1", 0),
+                                wood_roi_coords.get("x2", 500) - wood_roi_coords.get("x1", 100),
+                                wood_roi_coords.get("y2", 300) - wood_roi_coords.get("y1", 0))
+
+                    # Run comprehensive wood detection
+                    wood_result = self.wood_detector.detect_wood_comprehensive(frame, roi=wood_roi)
+                    wood_detected = wood_result.get('wood_detected', False)
+                    wood_confidence = wood_result.get('confidence', 0.0)
+
+                    print(f"🪵 Wood detection on {camera_name}: detected={wood_detected}, confidence={wood_confidence:.2f}")
+
+                    # Store wood detection results for later use
+                    if not hasattr(self, 'wood_detection_results'):
+                        self.wood_detection_results = {"top": {}, "bottom": {}}
+                    self.wood_detection_results[camera_name] = {
+                        'detected': wood_detected,
+                        'confidence': wood_confidence,
+                        'result': wood_result
+                    }
+
+                    # Check for intersection with wood detection ROI and trigger Arduino
+                    if wood_detected and wood_result.get('wood_candidates'):
+                        # Get the best wood candidate
+                        best_wood = wood_result['wood_candidates'][0]
+                        wood_bbox = best_wood.get('bbox', [])
+
+                        if len(wood_bbox) == 4:
+                            # Check if wood bounding box intersects with wood detection ROI
+                            wood_intersects = self.bbox_intersects_roi(wood_bbox, "wood_detection")
+
+                            if wood_intersects:
+                                print(f"🎯 Wood detected and intersects with wood detection ROI! Triggering Arduino signal.")
+                                # Here you would add the Arduino trigger logic
+                                # For now, just log the event
+                                self.log_action(f"Wood detected in wood_detection ROI - ready for Arduino trigger")
+                                # TODO: Add Arduino signal sending logic here
 
                 # Resize annotated frame to canvas size for display
                 if annotated_frame.shape[:2] != (self.canvas_height, self.canvas_width):
@@ -2028,6 +2509,8 @@ class App(tk.Tk):
             canvas.delete('cam_img')  # Remove previous camera image
             canvas.delete('bbox')     # Remove previous bounding boxes
             canvas.delete('bbox_label')  # Remove previous bounding box labels
+            canvas.delete('wood_bbox')  # Remove previous wood bounding boxes
+            canvas.delete('wood_bbox_label')  # Remove previous wood bounding box labels
             if camera_name == "top":
                 self._top_photo = photo
                 canvas.create_image(0, 0, anchor='nw', image=self._top_photo, tags='cam_img')
@@ -2038,6 +2521,12 @@ class App(tk.Tk):
             # Draw bounding boxes if detections exist (only when detecting)
             if should_detect and 'detections' in locals() and detections:
                 self.draw_bounding_boxes_on_canvas(canvas, detections, camera_name)
+
+            # Draw wood detection bounding boxes if wood was detected
+            if camera_name == "top" and hasattr(self, 'wood_detection_results') and self.wood_detection_results.get("top"):
+                wood_result = self.wood_detection_results["top"]
+                if wood_result.get('detected') and wood_result.get('result', {}).get('wood_candidates'):
+                    self.draw_wood_bounding_boxes_on_canvas(canvas, wood_result['result']['wood_candidates'])
 
             # Draw ROI on top camera if enabled (ensures it's on top)
             if camera_name == "top":
