@@ -2173,9 +2173,6 @@ class App(tk.Tk):
                                     self.status_label.config(
                                         text="Status: IR TRIGGERED - Motor should be running!", foreground="orange"
                                     )
-                                # Reset servo to 90 degrees (command '1') at start of detection
-                                self.send_arduino_command('1')
-                                print("📡 Sent command '1' to Arduino - Reset servo to 90°")
                                 self.start_automatic_detection()
                                 self.live_detection_var.set(True)
                                 # Keep auto_grade_var False in TRIGGER mode - grading triggered by beam clear

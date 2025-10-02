@@ -42,7 +42,7 @@ bool stepState = false;
 int lastStableIrState = HIGH;      // Last known stable state of the IR sensor
 int lastFlickerIrState = HIGH;     // Last read state, used for debounce timing
 unsigned long lastStateChangeTime = 0; // Time of the last state flicker
-const long debounceDelay = 100;     // Debounce delay in milliseconds
+const long debounceDelay = 500;     // Debounce delay in milliseconds
 unsigned long beamBrokenStartTime = 0; // Timestamp when the beam was broken
 bool beamIsBroken = false;         // Tracks if the beam is currently considered broken
 
@@ -142,6 +142,7 @@ void checkIrSensor() {
       if (currentIrState == LOW) {
         // --- Beam Broken Event ---
         Serial.println("B");
+        activateAllServoGates(90); // Reset servos to 90 degrees on beam break
         beamBrokenStartTime = millis();
         beamIsBroken = true; // Mark the beam as officially broken
         // Note: In TRIGGER mode, motor runs continuously
