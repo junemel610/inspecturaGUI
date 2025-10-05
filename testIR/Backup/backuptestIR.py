@@ -15,82 +15,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 import numpy as np
-from scipy.optimize import linear_sum_assignment
-from filterpy.kalman import KalmanFilter
-import copy
-from typing import Dict
-
-
-class CameraHandler:
-    def __init__(self):
-        self.top_camera = None
-        self.bottom_camera = None
-        self.top_camera_index = 0  # Cam0
-        self.bottom_camera_index = 2  # Cam2
-        self.top_camera_settings = {
-            'brightness': 0,
-            'contrast': 32,
-            'saturation': 64,
-            'hue': 0,
-            'exposure': -6,
-            'white_balance': 4520,
-            'gain': 0
-        }
-        self.bottom_camera_settings = {
-            'brightness': 150,
-            'contrast': 125,
-            'saturation': 125,
-            'hue': 0,
-            'exposure': -6,
-            'white_balance': 4850,
-            'gain': 0,
-            'backlight_compensation': 1
-        }
-
-    def initialize_cameras(self):
-        try:
-            self.top_camera = cv2.VideoCapture(self.top_camera_index)
-            if not self.top_camera.isOpened():
-                raise RuntimeError(f"Could not open top camera (Cam0 - index {self.top_camera_index})")
-            self.bottom_camera = cv2.VideoCapture(self.bottom_camera_index)
-            if not self.bottom_camera.isOpened():
-                self.top_camera.release()
-                raise RuntimeError(f"Could not open bottom camera (Cam2 - index {self.bottom_camera_index})")
-            self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            self._apply_camera_settings(self.top_camera, self.top_camera_settings)
-            self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
-            print("Cameras initialized successfully at 720p (1280x720)")
-        except Exception as e:
-            self.release_cameras()
-            raise RuntimeError(f"Failed to initialize cameras: {str(e)}")
-
-    def _apply_camera_settings(self, camera, settings):
-        try:
-            camera.set(cv2.CAP_PROP_BRIGHTNESS, settings['brightness'])
-            camera.set(cv2.CAP_PROP_CONTRAST, settings['contrast'])
-            camera.set(cv2.CAP_PROP_SATURATION, settings['saturation'])
-            camera.set(cv2.CAP_PROP_HUE, settings['hue'])
-            camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-            camera.set(cv2.CAP_PROP_EXPOSURE, settings['exposure'])
-            camera.set(cv2.CAP_PROP_AUTO_WB, 0)
-            camera.set(cv2.CAP_PROP_WB_TEMPERATURE, settings['white_balance'])
-            camera.set(cv2.CAP_PROP_GAIN, settings['gain'])
-            camera.set(cv2.CAP_PROP_SHARPNESS, settings['sharpness'])
-            camera.set(cv2.CAP_PROP_BACKLIGHT, settings['backlight_compensation'])
-        except Exception as e:
-            print(f"Warning: Some camera settings may not be supported: {e}")
-
-    def release_cameras(self):
-        if self.top_camera:
-            self.top_camera.release()
-            self.top_camera = None
-        if self.bottom_camera:
-            self.bottom_camera.release()
-            self.bottom_camera = None
-        print("Cameras released")
 
 # SS-EN 1611-1 Grading Standards Implementation (Revised)
 # Grade constants - Individual grades
@@ -103,15 +27,15 @@ GRADE_G2_4 = "G2-4"
 # Camera-specific calibration based on your setup
 # Top camera: 37cm distance, Bottom camera: 29cm distance
 # Assuming 1280x720 resolution with typical camera FOV
-TOP_CAMERA_DISTANCE_CM = 28
-BOTTOM_CAMERA_DISTANCE_CM = 27.5
+TOP_CAMERA_DISTANCE_CM = 37
+BOTTOM_CAMERA_DISTANCE_CM = 29
 
 # Actual pixel-to-millimeter factors (measured)
 TOP_CAMERA_PIXEL_TO_MM = 2.96  # Top camera: 2.96 pixels per mm
 BOTTOM_CAMERA_PIXEL_TO_MM = 3.18  # Bottom camera: 3.18 pixels per mm
 
-# Dynamic wood pallet height (measured perpendicular to grain) - starts at 0 until wood is detected
-WOOD_PALLET_HEIGHT_MM = 0  # Will be updated dynamically when wood is detected
+# Your actual wood pallet width
+WOOD_PALLET_WIDTH_MM = 115  # 11.5cm = 115mm
 
 # SS-EN 1611-1 Grading constants for size limits: limit = (0.10 * wood_width) + constant
 GRADING_CONSTANTS = {
@@ -128,725 +52,6 @@ KNOT_COUNT_LIMITS = {
     "G2-3": 5,
     "G2-4": float('inf')
 }
-
-
-class Track:
-    """Represents a single object track"""
-    def __init__(self, track_id, bbox, defect_type, size_mm, confidence=0.5):
-        self.track_id = track_id
-        self.defect_type = defect_type
-        self.size_mm = size_mm
-        self.confidence = confidence
-        self.age = 1  # How many frames this track has been alive
-        self.time_since_update = 0  # Frames since last update
-        self.hits = 1  # Number of successful updates
-        self.hit_streak = 1  # Consecutive hits
-
-        # Initialize Kalman filter for position prediction
-        self.kalman = self._init_kalman_filter(bbox)
-
-        # Store original detection info
-        self.bbox = bbox
-        self.first_seen = datetime.now().isoformat()
-        self.last_seen = datetime.now().isoformat()
-
-    def _init_kalman_filter(self, bbox):
-        """Initialize Kalman filter for bounding box tracking"""
-        kf = KalmanFilter(dim_x=4, dim_z=4)  # 4 state vars, 4 measurement vars
-
-        # State: [x, y, w, h, vx, vy, vw, vh] but we'll use 4D for simplicity
-        kf.x = np.array([bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]).reshape(4, 1)
-
-        # State transition matrix (constant velocity model)
-        kf.F = np.array([[1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-
-        # Measurement matrix (we measure position and size directly)
-        kf.H = np.eye(4)
-
-        # Process noise (higher for fast-moving objects)
-        kf.Q = np.eye(4) * 0.5
-
-        # Measurement noise (detection uncertainty)
-        kf.R = np.eye(4) * 0.5
-
-        # Initial covariance
-        kf.P = np.eye(4) * 10.0
-
-        return kf
-
-    def predict(self):
-        """Predict next position using Kalman filter"""
-        self.kalman.predict()
-        self.age += 1
-        self.time_since_update += 1
-        return self.get_state()
-
-    def update(self, bbox, confidence=0.5):
-        """Update track with new detection"""
-        self.time_since_update = 0
-        self.hits += 1
-        self.hit_streak += 1
-
-        # Update Kalman filter
-        measurement = np.array([bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]).reshape(4, 1)
-        self.kalman.update(measurement)
-
-        # Update stored bbox and confidence
-        self.bbox = bbox
-        self.confidence = max(self.confidence, confidence)  # Keep highest confidence
-        self.last_seen = datetime.now().isoformat()
-
-    def get_state(self):
-        """Get current state as bbox [x1, y1, x2, y2]"""
-        state = self.kalman.x.flatten()
-        x1, y1, w, h = state
-        return [x1, y1, x1 + w, y1 + h]
-
-
-class CustomObjectTracker:
-    """Custom object tracker similar to SORT algorithm"""
-    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3):
-        self.tracks = []
-        self.track_id_count = 0
-        self.max_age = max_age  # Maximum frames a track can go without update
-        self.min_hits = min_hits  # Minimum hits to consider track confirmed
-        self.iou_threshold = iou_threshold  # IOU threshold for matching
-
-    def update(self, detections):
-        """
-        Update tracks with new detections
-        detections: list of (bbox, defect_type, size_mm, confidence) tuples
-        """
-        # Predict new locations for existing tracks
-        for track in self.tracks:
-            track.predict()
-
-        # Associate detections with existing tracks
-        matched, unmatched_dets, unmatched_tracks = self._associate_detections(detections)
-
-        # Update matched tracks
-        for track_idx, det_idx in matched:
-            self.tracks[track_idx].update(detections[det_idx][0], detections[det_idx][3])
-
-        # Create new tracks for unmatched detections
-        for det_idx in unmatched_dets:
-            bbox, defect_type, size_mm, confidence = detections[det_idx]
-            if confidence > 0.3:  # Only create tracks for reasonably confident detections
-                self._create_track(bbox, defect_type, size_mm, confidence)
-
-        # Mark unmatched tracks as lost
-        for track_idx in unmatched_tracks:
-            self.tracks[track_idx].time_since_update += 1
-
-        # Remove dead tracks
-        self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
-
-        # Return active tracks
-        return [t for t in self.tracks if t.hits >= self.min_hits]
-
-    def _associate_detections(self, detections):
-        """Associate detections with existing tracks using IoU"""
-        if len(self.tracks) == 0:
-            return [], list(range(len(detections))), []
-
-        if len(detections) == 0:
-            return [], [], list(range(len(self.tracks)))
-
-        # Calculate IoU matrix
-        iou_matrix = np.zeros((len(detections), len(self.tracks)))
-        for d, det in enumerate(detections):
-            for t, track in enumerate(self.tracks):
-                iou_matrix[d, t] = self._calculate_iou(det[0], track.get_state())
-
-        # Use Hungarian algorithm for optimal assignment
-        det_indices, track_indices = linear_sum_assignment(-iou_matrix)  # Maximize IoU
-
-        # Filter matches above threshold
-        matched = []
-        unmatched_dets = list(range(len(detections)))
-        unmatched_tracks = list(range(len(self.tracks)))
-
-        for d, t in zip(det_indices, track_indices):
-            if iou_matrix[d, t] >= self.iou_threshold:
-                matched.append((t, d))  # (track_idx, det_idx)
-                unmatched_dets.remove(d)
-                unmatched_tracks.remove(t)
-
-        return matched, unmatched_dets, unmatched_tracks
-
-    def _calculate_iou(self, bbox1, bbox2):
-        """Calculate Intersection over Union of two bounding boxes"""
-        x1_1, y1_1, x2_1, y2_1 = bbox1
-        x1_2, y1_2, x2_2, y2_2 = bbox2
-
-        # Calculate intersection
-        x1_i = max(x1_1, x1_2)
-        y1_i = max(y1_1, y1_2)
-        x2_i = min(x2_1, x2_2)
-        y2_i = min(y2_1, y2_2)
-
-        if x2_i <= x1_i or y2_i <= y1_i:
-            return 0.0
-
-        intersection = (x2_i - x1_i) * (y2_i - y1_i)
-
-        # Calculate union
-        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
-        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
-        union = area1 + area2 - intersection
-
-        return intersection / union if union > 0 else 0.0
-
-    def _create_track(self, bbox, defect_type, size_mm, confidence):
-        """Create a new track"""
-        track = Track(self.track_id_count, bbox, defect_type, size_mm, confidence)
-        self.tracks.append(track)
-        self.track_id_count += 1
-        return track
-
-    def get_tracks(self):
-        """Get all active tracks"""
-        return [t for t in self.tracks if t.hits >= self.min_hits]
-
-    def clear(self):
-        """Clear all tracks"""
-        self.tracks = []
-        self.track_id_count = 0
-
-
-class DetectionDeduplicator:
-    """Deduplicates detections based on spatial and temporal proximity for low FPS scenarios"""
-
-    def __init__(self, spatial_threshold_mm=10.0, temporal_threshold_sec=0.5):
-        self.spatial_threshold_mm = spatial_threshold_mm  # Max distance to consider same defect
-        self.temporal_threshold_sec = temporal_threshold_sec  # Max time gap to group detections
-
-    def deduplicate(self, detections):
-        """
-        Group detections by spatial-temporal proximity and return best detection from each group
-        detections: list of detection dicts with keys: timestamp, defect_type, size_mm, percentage
-        """
-        if not detections:
-            return []
-
-        # Sort detections by timestamp
-        sorted_detections = sorted(detections, key=lambda x: x['timestamp'])
-
-        # Group detections into clusters
-        clusters = []
-        current_cluster = [sorted_detections[0]]
-
-        for detection in sorted_detections[1:]:
-            # Check if this detection belongs to the current cluster
-            if self._should_merge_with_cluster(detection, current_cluster):
-                current_cluster.append(detection)
-            else:
-                # Start new cluster
-                clusters.append(current_cluster)
-                current_cluster = [detection]
-
-        # Don't forget the last cluster
-        if current_cluster:
-            clusters.append(current_cluster)
-
-        # For each cluster, select the best detection
-        deduplicated = []
-        for cluster in clusters:
-            best_detection = self._select_best_detection(cluster)
-            deduplicated.append(best_detection)
-
-        return deduplicated
-
-    def _should_merge_with_cluster(self, detection, cluster):
-        """Check if detection should be merged with existing cluster"""
-        # Check temporal proximity with the most recent detection in cluster
-        last_detection = cluster[-1]
-        time_diff = abs(self._timestamp_to_seconds(detection['timestamp']) -
-                       self._timestamp_to_seconds(last_detection['timestamp']))
-
-        if time_diff > self.temporal_threshold_sec:
-            return False
-
-        # Check spatial proximity with all detections in cluster
-        for cluster_detection in cluster:
-            if (detection['defect_type'] == cluster_detection['defect_type'] and
-                abs(detection['size_mm'] - cluster_detection['size_mm']) <= self.spatial_threshold_mm):
-                return True
-
-        return False
-
-    def _select_best_detection(self, cluster):
-        """Select the best detection from a cluster (largest size, highest confidence)"""
-        if len(cluster) == 1:
-            return cluster[0]
-
-        # Select detection with largest size (most conservative for grading)
-        best_detection = max(cluster, key=lambda x: x['size_mm'])
-        return best_detection
-
-    def _timestamp_to_seconds(self, timestamp_str):
-        """Convert ISO timestamp to seconds since epoch"""
-        from datetime import datetime
-        dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-        return dt.timestamp()
-
-
-class ColorWoodDetector:
-    def __init__(self):
-        self.wood_color_profiles = {
-            'top_panel': {
-                'rgb_lower': np.array([169, 180, 176]),  # BGR
-                'rgb_upper': np.array([225, 220, 210]),
-                'name': 'Top Panel Wood'
-            },
-            'bottom_panel': {
-                'rgb_lower': np.array([150, 180, 150]),  # BGR
-                'rgb_upper': np.array([225, 220, 210]),
-                'name': 'Bottom Panel Wood'
-            }
-        }
-
-        # Detection parameters
-        self.min_contour_area = 2000      # Increased for more reliable detection with tighter RGB ranges
-        self.max_contour_area = 500000    # Slightly reduced for typical wood plank sizes
-        self.min_aspect_ratio = 1.0       # Tightened for more rectangular wood shapes
-        self.max_aspect_ratio = 10.0      # Reduced for more typical plank proportions
-        self.contour_approximation = 0.025 # Slightly tighter for better shape approximation
-
-        # Morphological operations
-        self.morph_kernel_size = 11
-        self.closing_iterations = 3
-        self.opening_iterations = 2
-
-        # Pixel to mm conversion parameters for width measurement
-        self.pixel_per_mm_top = 2.96     # Placeholder: calibrate based on top camera distance (31cm)
-        self.pixel_per_mm_bottom = 3.18  # Placeholder: calibrate based on bottom camera distance
-
-    def calculate_width_mm(self, bbox_pixels: int, camera: str = 'top') -> float:
-        """Calculate width in mm from bounding box dimension in pixels using pixel_per_mm factors"""
-        if camera == 'top':
-            return bbox_pixels / self.pixel_per_mm_top
-        elif camera == 'bottom':
-            return bbox_pixels / self.pixel_per_mm_bottom
-        else:
-            raise ValueError("Camera must be 'top' or 'bottom'")
-
-    def analyze_image_colors(self, image_path: str) -> Dict:
-        """Analyze the color composition of the captured image"""
-        print(f"🎨 Analyzing colors in: {image_path}")
-
-        image = cv2.imread(image_path)
-        if image is None:
-            return {"error": "Could not load image"}
-
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        h, w = image.shape[:2]
-
-        analysis = {
-            "image_size": f"{w}x{h}",
-            "wood_profiles_detected": {},
-            "dominant_colors": {},
-            "recommendations": []
-        }
-
-        # Test each wood color profile
-        for profile_name, profile in self.wood_color_profiles.items():
-            mask = cv2.inRange(rgb, profile['rgb_lower'], profile['rgb_upper'])
-            pixels_detected = cv2.countNonZero(mask)
-            percentage = (pixels_detected / (h * w)) * 100
-
-            analysis["wood_profiles_detected"][profile_name] = {
-                "pixels": pixels_detected,
-                "percentage": round(percentage, 2),
-                "detected": percentage > 1.0  # Consider detected if >1% of image
-            }
-
-            if percentage > 1.0:
-                print(f"  ✅ {profile['name']}: {percentage:.1f}% of image")
-            else:
-                print(f"  ❌ {profile['name']}: {percentage:.1f}% of image")
-
-        # Find dominant colors in RGB
-        rgb_flat = rgb.reshape(-1, 3)
-        r_values = rgb_flat[:, 0]
-        g_values = rgb_flat[:, 1]
-        b_values = rgb_flat[:, 2]
-        print(f"🎨 Dominant RGB in image: R={int(np.mean(r_values)):.0f}±{int(np.std(r_values)):.0f}, G={int(np.mean(g_values)):.0f}, B={int(np.mean(b_values)):.0f}")
-
-        return analysis
-
-    def detect_wood_by_color(self, image: np.ndarray, profile_names: list = None) -> tuple:
-        """Detect wood using color profiles"""
-        if profile_names is None:
-            profile_names = list(self.wood_color_profiles.keys())
-
-        # Apply histogram equalization on V channel for better lighting compensation
-        hsv_temp = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        h, s, v = cv2.split(hsv_temp)
-        v = cv2.equalizeHist(v)
-        hsv_temp = cv2.merge([h, s, v])
-        rgb = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
-
-        combined_mask = np.zeros(rgb.shape[:2], dtype=np.uint8)
-
-        print(f"🎨 Using profiles: {profile_names}")
-
-        # Combine masks from selected profiles
-        for profile_name in profile_names:
-            if profile_name in self.wood_color_profiles:
-                profile = self.wood_color_profiles[profile_name]
-                mask = cv2.inRange(rgb, profile['rgb_lower'], profile['rgb_upper'])
-                mask_pixels = cv2.countNonZero(mask)
-                total_pixels = rgb.shape[0] * rgb.shape[1]
-                mask_percentage = (mask_pixels / total_pixels) * 100
-                print(f"  📊 {profile_name}: RGB range {profile['rgb_lower']} - {profile['rgb_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
-                combined_mask = cv2.bitwise_or(combined_mask, mask)
-
-        pre_morph_pixels = cv2.countNonZero(combined_mask)
-        pre_morph_percentage = (pre_morph_pixels / total_pixels) * 100
-        print(f"🔧 Pre-morph combined mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
-
-        # Clean up mask with morphological operations
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size))
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
-        combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
-
-        post_morph_pixels = cv2.countNonZero(combined_mask)
-        post_morph_percentage = (post_morph_pixels / total_pixels) * 100
-        print(f"🔧 Post-morph combined mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
-
-        # Additional logging for dominant colors
-        rgb_flat = rgb.reshape(-1, 3)
-        r_values = rgb_flat[:, 0]
-        g_values = rgb_flat[:, 1]
-        b_values = rgb_flat[:, 2]
-        print(f"🎨 Dominant RGB in image: R={int(np.mean(r_values)):.0f}±{int(np.std(r_values)):.0f}, G={int(np.mean(g_values)):.0f}, B={int(np.mean(b_values)):.0f}")
-
-        return combined_mask, []
-
-    def detect_rectangular_contours(self, mask: np.ndarray, camera: str = 'top') -> list:
-        """Detect rectangular contours that could be wood planks"""
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        print(f"📐 Found {len(contours)} total contours")
-
-        wood_candidates = []
-        rejected_area = 0
-        rejected_aspect = 0
-
-        for i, contour in enumerate(contours):
-            area = cv2.contourArea(contour)
-
-            # Filter by area
-            if area < self.min_contour_area or area > self.max_contour_area:
-                rejected_area += 1
-                print(f"  ❌ Contour {i}: area {area:.0f} out of range [{self.min_contour_area}, {self.max_contour_area}]")
-                continue
-
-            # Get bounding rectangle
-            x, y, w, h = cv2.boundingRect(contour)
-
-            # Filter by minimum size to prevent small detections
-            if camera == 'top':
-                min_height = 266
-                min_width = 100
-            elif camera == 'bottom':
-                min_height = 286
-                min_width = 100
-            else:
-                min_height = 100
-                min_width = 100
-
-            if h < min_height or w < min_width:
-                rejected_area += 1
-                print(f"  ❌ Contour {i}: size {w}x{h} too small for {camera} camera (min {min_width}x{min_height})")
-                continue
-
-            aspect_ratio = max(w, h) / min(w, h)
-
-            # Filter by aspect ratio (wood planks are typically rectangular)
-            if aspect_ratio < self.min_aspect_ratio or aspect_ratio > self.max_aspect_ratio:
-                rejected_aspect += 1
-                print(f"  ❌ Contour {i}: aspect {aspect_ratio:.2f} out of range [{self.min_aspect_ratio}, {self.max_aspect_ratio}]")
-                continue
-
-            # Approximate contour to polygon
-            epsilon = self.contour_approximation * cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, epsilon, True)
-
-            # Calculate additional metrics
-            hull = cv2.convexHull(contour)
-            hull_area = cv2.contourArea(hull)
-            solidity = area / hull_area if hull_area > 0 else 0
-
-            # Get rotated rectangle for better angle detection
-            rect = cv2.minAreaRect(contour)
-            box = cv2.boxPoints(rect)
-            box = np.intp(box)
-
-            confidence = self._calculate_wood_confidence(area, aspect_ratio, solidity, len(approx))
-
-            wood_candidate = {
-                'contour': contour,
-                'approx_points': approx,
-                'bbox': (x, y, w, h),
-                'area': area,
-                'aspect_ratio': aspect_ratio,
-                'solidity': solidity,
-                'vertices': len(approx),
-                'rotated_rect': rect,
-                'corner_points': box,
-                'confidence': confidence
-            }
-
-            wood_candidates.append(wood_candidate)
-            print(f"  ✅ Contour {i}: area {area:.0f}, aspect {aspect_ratio:.2f}, solidity {solidity:.2f}, confidence {confidence:.2f}")
-
-        print(f"📊 Contour filtering: {len(contours)} total, {rejected_area} rejected by area, {rejected_aspect} by aspect, {len(wood_candidates)} candidates")
-
-        # Sort by confidence
-        wood_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-
-        return wood_candidates
-
-    def _calculate_wood_confidence(self, area: float, aspect_ratio: float, solidity: float, vertices: int) -> float:
-        """Calculate confidence score for wood detection"""
-        confidence = 0.0
-
-        # Area score (larger is better, up to a point)
-        if 10000 <= area <= 100000:
-            confidence += 0.3
-        elif area > 5000:
-            confidence += 0.2
-
-        # Aspect ratio score (rectangular is better)
-        if 2.0 <= aspect_ratio <= 6.0:
-            confidence += 0.3
-        elif 1.5 <= aspect_ratio <= 8.0:
-            confidence += 0.2
-
-        # Solidity score (more solid shapes are better)
-        if solidity > 0.7:
-            confidence += 0.2
-        elif solidity > 0.5:
-            confidence += 0.1
-
-        # Vertex count score (4-6 vertices for rectangular shapes)
-        if vertices == 4:
-            confidence += 0.2
-        elif 4 <= vertices <= 6:
-            confidence += 0.1
-
-        return min(confidence, 1.0)
-
-    def _detect_wood_by_texture(self, image: np.ndarray) -> float:
-        """Detect wood using texture analysis (LBP features)"""
-        try:
-            # Convert to grayscale for texture analysis
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-            # Apply Gaussian blur to reduce noise
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-            # Calculate texture features using Local Binary Patterns (LBP)
-            # Simple texture measure: variance of Laplacian (focus/blur measure)
-            laplacian_var = cv2.Laplacian(blurred, cv2.CV_64F).var()
-
-            # Wood typically has moderate texture (not too smooth, not too rough)
-            # Normalize to 0-1 confidence score
-            if laplacian_var < 50:
-                # Too smooth (might be painted surface)
-                texture_confidence = 0.2
-            elif laplacian_var < 200:
-                # Good wood texture range
-                texture_confidence = 0.8
-            elif laplacian_var < 500:
-                # Moderately textured
-                texture_confidence = 0.6
-            else:
-                # Too rough (might be heavily damaged)
-                texture_confidence = 0.3
-
-            print(f"🔍 Texture analysis: Laplacian variance = {laplacian_var:.1f}, confidence = {texture_confidence:.2f}")
-
-            return texture_confidence
-
-        except Exception as e:
-            print(f"❌ Error in texture analysis: {e}")
-            return 0.5  # Neutral confidence on error
-
-    def _detect_wood_by_shape(self, image: np.ndarray, camera: str = 'top') -> tuple:
-        """Detect wood using shape analysis (contours and geometry)"""
-        try:
-            # Convert to grayscale and apply edge detection
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            edges = cv2.Canny(blurred, 50, 150)
-
-            # Find contours
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            print(f"🔺 Found {len(contours)} contours for shape analysis")
-
-            wood_shapes = []
-            for i, contour in enumerate(contours):
-                area = cv2.contourArea(contour)
-
-                # Filter by area
-                if area < 1000:  # Smaller threshold for shape analysis
-                    continue
-
-                # Get bounding rectangle
-                x, y, w, h = cv2.boundingRect(contour)
-
-                # Calculate shape properties
-                aspect_ratio = max(w, h) / min(w, h) if min(w, h) > 0 else 10
-                extent = area / (w * h) if (w * h) > 0 else 0
-
-                # Wood planks typically have rectangular shapes with good extent
-                if 1.2 <= aspect_ratio <= 8.0 and extent > 0.6:
-                    confidence = min(extent * 0.8 + (1.0 / aspect_ratio) * 0.2, 1.0)
-                    wood_shapes.append({
-                        'bbox': (x, y, w, h),
-                        'area': area,
-                        'aspect_ratio': aspect_ratio,
-                        'extent': extent,
-                        'confidence': confidence
-                    })
-                    print(f"  ✅ Contour {i}: area={area:.0f}, aspect={aspect_ratio:.2f}, extent={extent:.2f}, conf={confidence:.2f}")
-
-            return wood_shapes, edges
-
-        except Exception as e:
-            print(f"❌ Error in shape analysis: {e}")
-            return [], None
-
-    def visualize_detection(self, image: np.ndarray, detection_result: Dict, output_path: str = None) -> np.ndarray:
-        """Create a visualization of the wood detection results"""
-        vis_image = image.copy()
-
-        if not detection_result.get('wood_detected', False):
-            # No wood detected - add text overlay
-            h, w = vis_image.shape[:2]
-            cv2.putText(vis_image, "NO WOOD DETECTED", (w//2 - 150, h//2),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-            return vis_image
-
-        # Draw wood detection results
-        wood_candidates = detection_result.get('wood_candidates', [])
-        for i, candidate in enumerate(wood_candidates):
-            x, y, w, h = candidate['bbox']
-            confidence = candidate['confidence']
-
-            # Color based on confidence
-            if confidence > 0.7:
-                color = (0, 255, 0)  # Green for high confidence
-            elif confidence > 0.5:
-                color = (0, 255, 255)  # Yellow for medium confidence
-            else:
-                color = (0, 165, 255)  # Orange for low confidence
-
-            # Draw bounding box
-            cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 3)
-
-            # Add label
-            label = f"Wood {i+1}: {confidence:.2f}"
-            cv2.putText(vis_image, label, (x, y - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-        # Add summary information
-        h, w = vis_image.shape[:2]
-        wood_count = detection_result.get('wood_count', 0)
-        total_confidence = detection_result.get('confidence', 0.0)
-
-        summary_text = f"Wood Detected: {wood_count} pieces (conf: {total_confidence:.2f})"
-        cv2.putText(vis_image, summary_text, (10, h - 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-        # Save if output path provided
-        if output_path:
-            cv2.imwrite(output_path, cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR))
-            print(f"💾 Visualization saved to: {output_path}")
-
-        return vis_image
-
-    def generate_auto_roi(self, wood_candidates: list, image_shape: tuple) -> tuple:
-        """Generate automatic ROI based on detected wood"""
-        if not wood_candidates:
-            return None
-
-        # Use the highest confidence detection
-        best_candidate = wood_candidates[0]
-        x, y, w, h = best_candidate['bbox']
-
-        # Add some padding around the detected wood
-        padding_x = int(w * 0.1)  # 10% padding
-        padding_y = int(h * 0.1)
-
-        roi_x1 = max(0, x - padding_x)
-        roi_y1 = max(0, y - padding_y)
-        roi_x2 = min(image_shape[1], x + w + padding_x)
-        roi_y2 = min(image_shape[0], y + h + padding_y)
-
-        return (roi_x1, roi_y1, roi_x2 - roi_x1, roi_y2 - roi_y1)
-
-    def detect_wood_comprehensive(self, image: np.ndarray, profile_names: list = None, roi: tuple = None, camera: str = 'top') -> dict:
-        """Comprehensive wood detection combining color and shape analysis"""
-
-        print(f"🪵 Starting comprehensive wood detection on image shape: {image.shape}")
-
-        # Step 1: Color-based detection with optional ROI
-        if roi is not None:
-            x, y, w, h = roi
-            cropped = image[y:y+h, x:x+w]
-            color_mask_cropped, _ = self.detect_wood_by_color(cropped, profile_names)
-            color_mask = np.zeros(image.shape[:2], dtype=np.uint8)
-            color_mask[y:y+h, x:x+w] = color_mask_cropped
-        else:
-            color_mask, _ = self.detect_wood_by_color(image, profile_names)
-
-        mask_pixels = cv2.countNonZero(color_mask)
-        total_pixels = image.shape[0] * image.shape[1]
-        mask_percentage = (mask_pixels / total_pixels) * 100
-        print(f"🎨 Color mask: {mask_pixels} pixels ({mask_percentage:.1f}%)")
-
-        # Step 2: Find rectangular contours
-        wood_candidates = self.detect_rectangular_contours(color_mask, camera)
-        print(f"📐 Found {len(wood_candidates)} wood candidates after contour filtering")
-
-        # Step 3: Use exact wood bounding box as ROI
-        auto_roi = None
-        if wood_candidates:
-            best_candidate = wood_candidates[0]  # highest confidence
-            x, y, w, h = best_candidate['bbox']
-            auto_roi = (x, y, w, h)
-            print(f"🎯 Using exact wood bbox as ROI: {(x, y, w, h)}")
-        else:
-            print("❌ No wood detected, no ROI")
-
-        # Step 4: Integrate texture analysis for enhanced confidence
-        texture_confidence = self._detect_wood_by_texture(image)
-        combined_confidence = (wood_candidates[0]['confidence'] + texture_confidence) / 2 if wood_candidates else texture_confidence
-
-        # Step 5: Create result
-        result = {
-            'wood_detected': len(wood_candidates) > 0,
-            'wood_count': len(wood_candidates),
-            'wood_candidates': wood_candidates,
-            'auto_roi': auto_roi,
-            'color_mask': color_mask,
-            'confidence': combined_confidence,
-            'texture_confidence': texture_confidence
-        }
-
-        print(f"✅ Detection complete: wood_detected={result['wood_detected']}, count={result['wood_count']}, confidence={result['confidence']:.2f}")
-
-        return result
-
 
 class App(tk.Tk):
     def __init__(self):
@@ -942,10 +147,6 @@ class App(tk.Tk):
             "final_grade": None
         }
 
-        # Store all detections throughout the session for deduplication
-        self.session_detections = {"top": [], "bottom": []}
-        self.final_deduplicated_defects = {"top": [], "bottom": []}
-
         # --- DeGirum Model and Camera Initialization ---
         # DeGirum Configuration
         self.inference_host_address = "@local"
@@ -965,58 +166,52 @@ class App(tk.Tk):
             messagebox.showerror("Model Error", f"Failed to load DeGirum model: {e}")
             self.model = None
         
-        # Initialize custom object trackers for each camera (optimized for fast movement)
-        self.trackers = {
-            "top": CustomObjectTracker(max_age=8, min_hits=1, iou_threshold=0.4),
-            "bottom": CustomObjectTracker(max_age=8, min_hits=1, iou_threshold=0.4)
-        }
-
-        # Initialize detection deduplicator for low FPS scenarios
-        self.deduplicator = DetectionDeduplicator(spatial_threshold_mm=15.0, temporal_threshold_sec=1.0)
-
-        # Initialize Camera Handler with optimized settings
-        self.camera_handler = CameraHandler()
-        try:
-            self.camera_handler.initialize_cameras()
-            self.cap_top = self.camera_handler.top_camera
-            self.cap_bottom = self.camera_handler.bottom_camera
-
-            # Store camera resolution for display scaling
-            self.camera_width = 1280
-            self.camera_height = 720
-
-            print("Camera handler initialized with optimized settings")
-        except RuntimeError as e:
-            print(f"Camera initialization failed: {e}")
-            self.cap_top = None
-            self.cap_bottom = None
-
-        # Initialize RGB Wood Detector for dynamic ROI generation
-        self.rgb_wood_detector = ColorWoodDetector()
-        print("RGB Wood Detector initialized for dynamic ROI generation")
-
-        # Initialize dynamic ROI storage
-        self.dynamic_roi = {}
-        self.detected_wood_width_mm = {"top": None, "bottom": None}
-
-        # Store wood detection results for visualization
-        self.wood_detection_results = {"top": None, "bottom": None}
+        # Initialize cameras with specific resolution
+        self.cap_top = cv2.VideoCapture(0)
+        self.cap_bottom = cv2.VideoCapture(2)
+        
+        # Set camera resolution (you can adjust these values)
+        camera_width = 1280  # Desired width
+        camera_height = 720  # Desired height
+        
+        # Configure top camera
+        self.cap_top.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+        self.cap_top.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+        self.cap_top.set(cv2.CAP_PROP_FPS, 30)  # Set FPS
+        
+        # Configure bottom camera
+        self.cap_bottom.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
+        self.cap_bottom.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+        self.cap_bottom.set(cv2.CAP_PROP_FPS, 30)  # Set FPS
+        
+        # Store camera resolution for display scaling
+        self.camera_width = camera_width
+        self.camera_height = camera_height
+        
+        # Verify camera settings
+        actual_top_width = self.cap_top.get(cv2.CAP_PROP_FRAME_WIDTH)
+        actual_top_height = self.cap_top.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        actual_bottom_width = self.cap_bottom.get(cv2.CAP_PROP_FRAME_WIDTH)
+        actual_bottom_height = self.cap_bottom.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        
+        print(f"Top camera resolution: {actual_top_width}x{actual_top_height}")
+        print(f"Bottom camera resolution: {actual_bottom_width}x{actual_bottom_height}")
 
         # Live detection tracking
         self.live_detections = {"top": {}, "bottom": {}}
         self.live_grades = {"top": "No wood detected", "bottom": "No wood detected"}
 
-        # ROI (Region of Interest) settings - Removed top ROI to avoid confusion
-        self.roi_enabled = {"top": False, "bottom": False}  # Disable ROI for both cameras - use dynamic ROI instead
+        # ROI (Region of Interest) settings
+        self.roi_enabled = {"top": True, "bottom": False}  # Enable ROI for top camera by default
         self.roi_coordinates = {
             "top": {
-                "x1": 0,    # Full frame for top camera
-                "y1": 0,
-                "x2": 1280,
-                "y2": 720
+                "x1": 150,  # Left boundary - exclude left equipment
+                "y1": 80,   # Top boundary - exclude top area
+                "x2": 1130, # Right boundary - exclude right equipment  
+                "y2": 640   # Bottom boundary - focus on wood area
             },
             "bottom": {
-                "x1": 0,    # Full frame for bottom camera
+                "x1": 0,    # No ROI for bottom camera
                 "y1": 0,
                 "x2": 1280,
                 "y2": 720
@@ -1050,6 +245,12 @@ class App(tk.Tk):
         # Top camera live feed - larger display area
         self.top_live_feed = ttk.Label(left_camera_frame, background="black", text="Initializing Camera...")
         self.top_live_feed.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # ROI status overlay
+        self.roi_status_label = ttk.Label(left_camera_frame, 
+                                         text="ROI: Active (150,80) to (1130,640)", 
+                                         font=self.font_small, foreground="orange")
+        self.roi_status_label.place(x=10, y=10)  # Position as overlay
         
         # Right Camera (Bottom Camera)
         right_camera_frame = ttk.LabelFrame(cameras_container, text="Bottom Camera View", padding="5")
@@ -1095,12 +296,16 @@ class App(tk.Tk):
         # Detection Settings
         detection_frame = ttk.LabelFrame(controls_frame, text="Detection", padding="5")
         detection_frame.grid(row=0, column=2, sticky="nsew", padx=2, pady=2)
-
+        
+        self.roi_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(detection_frame, text="Top ROI", variable=self.roi_var, 
+                       command=self.toggle_roi).pack(anchor="w")
+        
         self.live_detection_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(detection_frame, text="Live Detect", variable=self.live_detection_var,
                        command=self.toggle_live_detection_mode).pack(anchor="w")
         self.live_detection_var.set(False)  # Ensure it's False at startup
-
+        
         self.auto_grade_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(detection_frame, text="Auto Grade", variable=self.auto_grade_var).pack(anchor="w")
 
@@ -1209,14 +414,9 @@ class App(tk.Tk):
         combined_container = ttk.Frame(live_grading_frame)
         combined_container.grid(row=0, column=2, sticky="ew", padx=5, pady=2)
         ttk.Label(combined_container, text="Final Grade:", font=("Arial", 12, "bold")).pack(anchor="w")
-        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected",
+        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected", 
                                              font=("Arial", 11, "bold"), foreground="gray")
         self.combined_grade_label.pack(anchor="w")
-
-        # Add status indicator for grading state
-        self.grading_status_label = ttk.Label(combined_container, text="",
-                                             font=("Arial", 8), foreground="blue")
-        self.grading_status_label.pack(anchor="w")
 
         # Tab 2: Defect Details
         defect_details_tab = ttk.Frame(self.stats_notebook)
@@ -1334,10 +534,10 @@ class App(tk.Tk):
 
     def calibrate_with_wood_pallet(self, wood_pallet_width_px_top, wood_pallet_width_px_bottom):
         """Auto-calibrate both cameras using the known wood pallet width"""
-        print(f"Auto-calibrating cameras with {WOOD_PALLET_HEIGHT_MM}mm wood pallet...")
-
-        top_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_top, WOOD_PALLET_HEIGHT_MM, "top")
-        bottom_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_bottom, WOOD_PALLET_HEIGHT_MM, "bottom")
+        print(f"Auto-calibrating cameras with {WOOD_PALLET_WIDTH_MM}mm wood pallet...")
+        
+        top_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_top, WOOD_PALLET_WIDTH_MM, "top")
+        bottom_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_bottom, WOOD_PALLET_WIDTH_MM, "bottom") 
         
         print(f"Calibration complete:")
         print(f"  Top camera (37cm): {top_factor:.4f} mm/pixel")
@@ -1347,22 +547,13 @@ class App(tk.Tk):
 
     def map_model_output_to_standard(self, model_label):
         """Map your model's output labels to standardized defect types"""
-        # Mapping from your model's actual output labels to standard categories
+        # Mapping from your model's labels to standard categories
         label_mapping = {
-            # Your actual model outputs (case-insensitive)
-            "dead knots": "Dead_Knot",
-            "knots with crack": "Unsound_Knot",
-            "live knots": "Sound_Knot",
-            "missing knots": "Unsound_Knot",
-            # Variations and alternatives
-            "dead_knots": "Dead_Knot",
-            "knots_with_crack": "Unsound_Knot",
-            "live_knots": "Sound_Knot",
-            "missing_knots": "Unsound_Knot",
-            # Legacy mappings for backward compatibility
+            # Your model outputs
             "sound_knots": "Sound_Knot",
             "dead_knots": "Dead_Knot",
             "unsound_knots": "Unsound_Knot",
+            # Add variations of your model's actual output labels here
             "sound knots": "Sound_Knot",
             "dead knots": "Dead_Knot",
             "unsound knots": "Unsound_Knot",
@@ -1385,49 +576,38 @@ class App(tk.Tk):
         try:
             # Extract bounding box coordinates
             x1, y1, x2, y2 = detection_box['bbox']
-
+            
             # Calculate defect dimensions in pixels
-            width_px = abs(x2 - x1)   # Horizontal dimension (across wood width)
-            height_px = abs(y2 - y1) # Vertical dimension (along wood length)
-
-            # For wood defects on vertically-oriented wood pieces, measure the height
-            # (vertical dimension) as this represents the defect size perpendicular to grain
-            # Based on rgb_wood_detector.py calibration approach
-            defect_size_px = height_px
-
+            width_px = abs(x2 - x1)
+            height_px = abs(y2 - y1)
+            
+            # Use the larger dimension (worst case for grading)
+            max_dimension_px = max(width_px, height_px)
+            
             # Use camera-specific conversion factor
             if camera_name == "top":
                 pixel_to_mm = TOP_CAMERA_PIXEL_TO_MM
             else:  # bottom camera
                 pixel_to_mm = BOTTOM_CAMERA_PIXEL_TO_MM
-
-            # Convert to millimeters using division (pixels per mm factor)
-            size_mm = defect_size_px / pixel_to_mm
-
-            # Calculate percentage of actual wood pallet height
-            percentage = (size_mm / WOOD_PALLET_HEIGHT_MM) * 100
-
-            # Debug logging to understand bounding box sizes
-            print(f"DEBUG [{camera_name}]: bbox=({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}) "
-                  f"-> width_px={width_px:.1f}, height_px={height_px:.1f} "
-                  f"-> defect_size_px={defect_size_px:.1f} -> size_mm={size_mm:.1f}")
-
+            
+            # Convert to millimeters
+            size_mm = max_dimension_px * pixel_to_mm
+            
+            # Calculate percentage of actual wood pallet width
+            percentage = (size_mm / WOOD_PALLET_WIDTH_MM) * 100
+            
             return size_mm, percentage
-
+            
         except Exception as e:
             print(f"Error calculating defect size: {e}")
             # Return conservative values if calculation fails
             return 50.0, 35.0  # Assumes large defect for safety
 
-    def get_individual_knot_grade(self, defect_type, defect_size_mm, wood_height_mm):
+    def get_individual_knot_grade(self, defect_type, defect_size_mm, wood_width_mm):
         """
         Determines the grade of a single knot based on SS-EN 1611-1 size limits.
-        The formula is: Limit = (0.10 * height) + constant
+        The formula is: Limit = (0.10 * width) + constant
         """
-        # Check if wood height has been measured yet
-        if wood_height_mm <= 0:
-            return "G2-4"  # Cannot grade without wood dimensions
-
         # Define the constants from the standard table
         constants = GRADING_CONSTANTS.get(defect_type, {})
 
@@ -1447,7 +627,7 @@ class App(tk.Tk):
                 continue
 
             # Calculate the maximum allowed size for this grade
-            limit = (0.10 * wood_height_mm) + constants[grade]
+            limit = (0.10 * wood_width_mm) + constants[grade]
 
             if defect_size_mm <= limit:
                 return grade  # This is the best possible grade for this knot
@@ -1462,10 +642,6 @@ class App(tk.Tk):
         if not defect_measurements:
             return GRADE_G2_0
 
-        # Check if wood height has been measured
-        if WOOD_PALLET_HEIGHT_MM <= 0:
-            return GRADE_G2_4  # Cannot grade without wood dimensions
-
         # 1. Grade based on the size of the worst individual knot
         worst_grade_by_size = "G2-0"
         grade_order = ["G2-0", "G2-1", "G2-2", "G2-3", "G2-4"]
@@ -1478,7 +654,7 @@ class App(tk.Tk):
                 dead_or_unsound_count += 1
 
             # Get individual knot grade
-            knot_grade = self.get_individual_knot_grade(defect_type, defect_size_mm, WOOD_PALLET_HEIGHT_MM)
+            knot_grade = self.get_individual_knot_grade(defect_type, defect_size_mm, WOOD_PALLET_WIDTH_MM)
 
             # Check if this knot's grade is worse than the current worst
             if grade_order.index(knot_grade) > grade_order.index(worst_grade_by_size):
@@ -1673,8 +849,8 @@ class App(tk.Tk):
         widgets['calibration_label'] = ttk.Label(calib_frame, text=calib_text, font=self.font_small)
         widgets['calibration_label'].pack(anchor="w")
         
-        widgets['wood_height_label'] = ttk.Label(calib_frame,
-                                              text=f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm",
+        widgets['wood_width_label'] = ttk.Label(calib_frame, 
+                                              text=f"Wood Width: {WOOD_PALLET_WIDTH_MM}mm",
                                               font=self.font_small)
         widgets['wood_width_label'].pack(anchor="w")
         
@@ -1835,7 +1011,7 @@ class App(tk.Tk):
         calib_label = ttk.Label(calib_frame, text=calib_text, font=("Arial", 9))
         calib_label.pack(anchor="w")
         
-        wood_label = ttk.Label(calib_frame, text=f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm",
+        wood_label = ttk.Label(calib_frame, text=f"Wood Width: {WOOD_PALLET_WIDTH_MM}mm", 
                              font=("Arial", 9))
         wood_label.pack(anchor="w", pady=(5, 0))
         
@@ -1901,12 +1077,12 @@ class App(tk.Tk):
         detection_entry["camera_info"] = {
             "distance_cm": TOP_CAMERA_DISTANCE_CM if camera_name == "top" else BOTTOM_CAMERA_DISTANCE_CM,
             "pixel_to_mm": TOP_CAMERA_PIXEL_TO_MM if camera_name == "top" else BOTTOM_CAMERA_PIXEL_TO_MM,
-            "wood_height_mm": WOOD_PALLET_HEIGHT_MM
+            "wood_width_mm": WOOD_PALLET_WIDTH_MM
         }
         
         # Add individual defect details
         for i, (defect_type, size_mm, percentage) in enumerate(measurements, 1):
-            individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_HEIGHT_MM)
+            individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_WIDTH_MM)
             
             defect_detail = {
                 "defect_id": i,
@@ -1919,7 +1095,7 @@ class App(tk.Tk):
             
             # Add threshold information for new grading system
             constants = GRADING_CONSTANTS.get(defect_type, {})
-            defect_detail["applied_threshold"] = f"Limit = (0.10 * {WOOD_PALLET_HEIGHT_MM}mm) + constant"
+            defect_detail["applied_threshold"] = f"Limit = (0.10 * {WOOD_PALLET_WIDTH_MM}mm) + constant"
             defect_detail["threshold_grade"] = individual_grade
             
             detection_entry["defects"].append(defect_detail)
@@ -2070,7 +1246,7 @@ class App(tk.Tk):
                 defect_frame.pack(fill="x", pady=1)
                 
                 # Defect details
-                individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_HEIGHT_MM)
+                individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_WIDTH_MM)
                 
                 size_label = ttk.Label(defect_frame, 
                                      text=f"Size: {size_mm:.1f}mm ({percentage:.1f}% of width)",
@@ -2085,8 +1261,8 @@ class App(tk.Tk):
                 
                 # Show threshold info for new grading system
                 constants = GRADING_CONSTANTS.get(defect_type, {})
-                limit = (0.10 * WOOD_PALLET_HEIGHT_MM) + constants.get(individual_grade, 0)
-                threshold_text = f"Threshold: ≤{limit:.1f}mm (0.10*{WOOD_PALLET_HEIGHT_MM} + {constants.get(individual_grade, 0)})"
+                limit = (0.10 * WOOD_PALLET_WIDTH_MM) + constants.get(individual_grade, 0)
+                threshold_text = f"Threshold: ≤{limit:.1f}mm (0.10*{WOOD_PALLET_WIDTH_MM} + {constants.get(individual_grade, 0)})"
                 
                 threshold_label = ttk.Label(defect_frame, text=threshold_text, 
                                           font=self.font_small, foreground="gray")
@@ -2224,10 +1400,6 @@ class App(tk.Tk):
 
     def toggle_live_detection_mode(self):
         """Handle toggling between IR trigger and live detection modes."""
-        # Clear wood detection results when toggling live detection off
-        if not self.live_detection_var.get():
-            self.wood_detection_results = {"top": None, "bottom": None}
-            self.dynamic_roi = {}
         self.update_detection_status_display()
 
     def start_automatic_detection(self):
@@ -2242,153 +1414,56 @@ class App(tk.Tk):
             "final_grade": None
         }
         self.detection_frames = []
-
-
-        # Clear trackers for new session
-        self.trackers["top"].clear()
-        self.trackers["bottom"].clear()
-
-        # Clear session detections for new piece
-        self.session_detections = {"top": [], "bottom": []}
-        self.final_deduplicated_defects = {"top": [], "bottom": []}
-
+        
         # Clear previous live detections
         self.live_detections = {"top": {}, "bottom": {}}
         self.live_grades = {"top": "Detecting...", "bottom": "Detecting..."}
-
-        # Reset wood detection reporting flags for new session
-        self._wood_reported = {'top': False, 'bottom': False}
-
+        
         print("🔍 Automatic detection STARTED - Object detected by IR beam")
-        print("🎯 Custom object trackers initialized for unique defect counting")
         self.log_action("Automatic detection started - IR beam triggered")
 
     def stop_automatic_detection_and_grade(self):
         """Stop automatic detection and send grade when object clears IR beam"""
         if not self.auto_detection_active:
             return
-
+            
         self.auto_detection_active = False
         self._in_active_inference = False  # Clear inference flag to resume normal UI updates
         self.detection_session_data["end_time"] = datetime.now()
-
-        # Collect ALL detections from the entire session (every frame during the detection period)
-        all_measurements = []
-        top_measurements = []
-        bottom_measurements = []
-
-        # Process all detections from top camera session data
-        for detection_entry in self.detection_session_data["total_detections"]["top"]:
-            measurements = detection_entry.get("measurements", [])
-            for measurement in measurements:
-                top_measurements.append(measurement)
-                all_measurements.append(measurement)
-
-        # Process all detections from bottom camera session data
-        for detection_entry in self.detection_session_data["total_detections"]["bottom"]:
-            measurements = detection_entry.get("measurements", [])
-            for measurement in measurements:
-                bottom_measurements.append(measurement)
-                all_measurements.append(measurement)
-
-        # STEP 4 & 5: List all Wood and Defect Details and Grade the wood based on the list and logic of the grading system
-        print("\n" + "="*80)
-        print("FINAL WOOD AND DEFECT ANALYSIS REPORT")
-        print("="*80)
-
-        # Report wood detection results
-        print("\nWOOD DETECTION SUMMARY:")
-        print("-" * 40)
-        if hasattr(self, 'wood_detection_results') and self.wood_detection_results:
-            for camera_name in ["top", "bottom"]:
-                if camera_name in self.wood_detection_results and self.wood_detection_results[camera_name]:
-                    detection = self.wood_detection_results[camera_name]
-                    if detection.get('wood_detected', False):
-                        candidates = detection.get('wood_candidates', [])
-                        confidence = detection.get('confidence', 0)
-                        print(f"📷 {camera_name.upper()} CAMERA:")
-                        print(f"   ✓ Wood detected (confidence: {confidence:.2f})")
-                        print(f"   ✓ {len(candidates)} wood piece(s) found:")
-                        for i, candidate in enumerate(candidates, 1):
-                            bbox = candidate['bbox']
-                            area = candidate['area']
-                            conf = candidate['confidence']
-                            print(f"      {i}. Position: {bbox}, Area: {area:.0f}px, Confidence: {conf:.2f}")
-                    else:
-                        print(f"📷 {camera_name.upper()} CAMERA:")
-                        print("   ✗ No wood detected")
-        else:
-            print("   No wood detection data available")
-
-        # Report defect detection results (ALL detections from session)
-        print("\nDEFECT DETECTION SUMMARY:")
-        print("-" * 40)
-        print(f"🎯 TOP CAMERA: {len(top_measurements)} defect(s) detected across {len(self.detection_session_data['total_detections']['top'])} frames")
-        for i, (defect_type, size_mm, percentage) in enumerate(top_measurements, 1):
-            print(f"   {i}. {defect_type} - Size: {size_mm:.1f}mm")
-
-        print(f"🎯 BOTTOM CAMERA: {len(bottom_measurements)} defect(s) detected across {len(self.detection_session_data['total_detections']['bottom'])} frames")
-        for i, (defect_type, size_mm, percentage) in enumerate(bottom_measurements, 1):
-            print(f"   {i}. {defect_type} - Size: {size_mm:.1f}mm")
-
-        # Determine final grades from tracked objects
-        final_top_grade = self.determine_surface_grade(top_measurements)
-        final_bottom_grade = self.determine_surface_grade(bottom_measurements)
-
+        
+        # Process all collected detection data
+        top_detections = self.detection_session_data["total_detections"]["top"]
+        bottom_detections = self.detection_session_data["total_detections"]["bottom"]
+        
+        # Determine final grades from accumulated detections
+        final_top_grade = self.determine_final_grade_from_session("top", top_detections)
+        final_bottom_grade = self.determine_final_grade_from_session("bottom", bottom_detections)
+        
         # Combine grades for final decision
         combined_grade = self.determine_final_grade(final_top_grade, final_bottom_grade)
         self.detection_session_data["final_grade"] = combined_grade
-
-        print("\nGRADING ANALYSIS:")
-        print("-" * 40)
-        print(f"📊 Top Surface Grade: {final_top_grade}")
-        print(f"📊 Bottom Surface Grade: {final_bottom_grade}")
-        print(f"🏆 Final Combined Grade: {combined_grade}")
-
-        # Show grading reasoning
-        print("\nGRADING REASONING:")
-        print("-" * 40)
-        total_defects = len(all_measurements)
-        if total_defects > 6:
-            print("Reasoning: More than 6 defects detected - Automatic G2-4 (SS-EN 1611-1)")
-        elif total_defects > 4:
-            print("Reasoning: More than 4 defects detected - Maximum G2-3 (SS-EN 1611-1)")
-        elif total_defects > 2:
-            print("Reasoning: More than 2 defects detected - Maximum G2-2 (SS-EN 1611-1)")
-        else:
-            print("Reasoning: Based on individual defect sizes (SS-EN 1611-1)")
-
-        print("="*80 + "\n")
-
-        # Log the final grading with tracked objects
-        self.finalize_grading(combined_grade, all_measurements)
-
+        
+        # --- New Centralized Logging ---
+        all_top_measurements = [m for d in top_detections for m in d.get("measurements", [])]
+        all_bottom_measurements = [m for d in bottom_detections for m in d.get("measurements", [])]
+        self.finalize_grading(combined_grade, all_top_measurements + all_bottom_measurements)
+        
         # Update live grading display
         self.live_grades["top"] = final_top_grade
         self.live_grades["bottom"] = final_bottom_grade
         self.update_live_grading_display()
-
-        # Clear trackers for next piece
-        self.trackers["top"].clear()
-        self.trackers["bottom"].clear()
-
+        
         # Clear detection data for next piece
         self.detection_frames = []
-        self.session_detections = {"top": [], "bottom": []}
-        self.final_deduplicated_defects = {"top": [], "bottom": []}
-
-        # Clear wood detection results for next piece
-        self.wood_detection_results = {"top": None, "bottom": None}
-        self.dynamic_roi = {}
 
     def determine_final_grade_from_session(self, camera_name, detections_list):
         """Determine final grade from all detections collected during session"""
         if not detections_list:
             return GRADE_G2_0 # No defects found, perfect grade
-
+        
         # Combine all defect counts from the session
         all_measurements = [m for d in detections_list for m in d.get("measurements", [])]
-
+        
         # Use sophisticated grading if measurements available
         if all_measurements:
             return self.determine_surface_grade(all_measurements)
@@ -2399,7 +1474,7 @@ class App(tk.Tk):
                 defect_dict = detection_data.get("defects", {})
                 for defect_type, count in defect_dict.items():
                     combined_defects[defect_type] = combined_defects.get(defect_type, 0) + count
-
+            
             grade_info = self.calculate_grade(combined_defects)
             # Map numeric grade back to standard grade text
             grade_map = {0: GRADE_G2_0, 1: GRADE_G2_0, 2: GRADE_G2_2, 3: GRADE_G2_4}
@@ -2447,121 +1522,76 @@ class App(tk.Tk):
         except Exception as e:
             print(f"❌ Error saving detection frame: {e}")
 
-
-    def apply_roi(self, frame, camera_name, custom_roi_coords=None):
-        """Apply Region of Interest (ROI) to frame for focused detection"""
-        # Use custom ROI if provided, otherwise check if ROI is enabled
-        if custom_roi_coords:
-            roi_coords = custom_roi_coords
-        elif not self.roi_enabled.get(camera_name, False):
-            return frame, None
+    def toggle_roi(self):
+        """Toggle ROI for top camera"""
+        self.roi_enabled["top"] = self.roi_var.get()
+        status = "enabled" if self.roi_enabled["top"] else "disabled"
+        
+        # Update ROI status label
+        if self.roi_enabled["top"]:
+            roi_coords = self.roi_coordinates["top"]
+            self.roi_status_label.config(
+                text=f"ROI: Active ({roi_coords['x1']},{roi_coords['y1']}) to ({roi_coords['x2']},{roi_coords['y2']})",
+                foreground="orange"
+            )
         else:
-            roi_coords = self.roi_coordinates.get(camera_name, {})
+            self.roi_status_label.config(
+                text="ROI: Disabled (Full Frame Detection)",
+                foreground="gray"
+            )
+        
+        print(f"ROI for top camera {status}")
 
+    def apply_roi(self, frame, camera_name):
+        """Apply Region of Interest (ROI) to frame for focused detection"""
+        if not self.roi_enabled.get(camera_name, False):
+            return frame, None
+        
+        roi_coords = self.roi_coordinates.get(camera_name, {})
         if not roi_coords:
             return frame, None
-
+        
         x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
         x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
-
+        
         # Ensure coordinates are within frame bounds
         x1 = max(0, min(x1, frame.shape[1]))
         y1 = max(0, min(y1, frame.shape[0]))
         x2 = max(x1, min(x2, frame.shape[1]))
         y2 = max(y1, min(y2, frame.shape[0]))
-
+        
         # Extract ROI
         roi_frame = frame[y1:y2, x1:x2]
         roi_info = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
-
+        
         return roi_frame, roi_info
 
     def draw_roi_overlay(self, frame, camera_name):
         """Draw ROI rectangle overlay on frame for visualization"""
         if not self.roi_enabled.get(camera_name, False):
             return frame
-
+        
         roi_coords = self.roi_coordinates.get(camera_name, {})
         if not roi_coords:
             return frame
-
+        
         frame_copy = frame.copy()
         x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
         x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
-
+        
         # Ensure coordinates are within frame bounds
         x1 = max(0, min(x1, frame.shape[1]))
         y1 = max(0, min(y1, frame.shape[0]))
         x2 = max(x1, min(x2, frame.shape[1]))
         y2 = max(y1, min(y2, frame.shape[0]))
-
+        
         # Draw ROI rectangle (yellow border)
         cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 255), 3)
-
+        
         # Add ROI label
-        cv2.putText(frame_copy, f"ROI - {camera_name.upper()}",
+        cv2.putText(frame_copy, f"ROI - {camera_name.upper()}", 
                    (x1 + 10, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-
-        return frame_copy
-
-    def draw_wood_detection_overlay(self, frame, camera_name):
-        """Draw wood detection results overlay on frame for visualization"""
-        # Only show wood detection overlay when live detection is active
-        if not self.live_detection_var.get():
-            return frame
-
-        frame_copy = frame.copy()
-
-        # Check if we have wood detection results
-        if hasattr(self, 'wood_detection_results') and self.wood_detection_results:
-            detection_result = self.wood_detection_results.get(camera_name)
-
-            if detection_result and detection_result.get('wood_detected', False):
-                # Wood detected - draw detection results
-                wood_candidates = detection_result.get('wood_candidates', [])
-                for i, candidate in enumerate(wood_candidates):
-                    x, y, w, h = candidate['bbox']
-                    confidence = candidate['confidence']
-
-                    # Draw bounding box (green for wood detection)
-                    cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (0, 255, 0), 3)
-
-                    # Add wood detection label with confidence
-                    label = f"Wood {i+1}: {confidence:.2f}"
-                    cv2.putText(frame_copy, label, (x, y - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-                # Draw dynamic ROI if available
-                if hasattr(self, 'dynamic_roi') and self.dynamic_roi and camera_name in self.dynamic_roi:
-                    roi = self.dynamic_roi[camera_name]
-                    if roi:
-                        x, y, w, h = roi
-                        # Draw dynamic ROI (blue border)
-                        cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                        cv2.putText(frame_copy, "Dynamic ROI",
-                                    (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-
-                # Add wood detection summary
-                wood_count = detection_result.get('wood_count', 0)
-                confidence = detection_result.get('confidence', 0.0)
-                summary_text = f"Wood: {wood_count} detected (conf: {confidence:.2f})"
-                cv2.putText(frame_copy, summary_text, (10, frame.shape[0] - 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            else:
-                # No wood detected - show clear message
-                h, w = frame_copy.shape[:2]
-                cv2.putText(frame_copy, "NO WOOD DETECTED", (w//2 - 150, h//2),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-                cv2.putText(frame_copy, "Waiting for wood to enter detection area...",
-                            (w//2 - 200, h//2 + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        else:
-            # No detection results yet - show waiting message
-            h, w = frame_copy.shape[:2]
-            cv2.putText(frame_copy, "INITIALIZING WOOD DETECTION", (w//2 - 180, h//2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 165, 0), 2)
-            cv2.putText(frame_copy, "Please wait...",
-                        (w//2 - 60, h//2 + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 165, 0), 2)
-
+        
         return frame_copy
 
     def update_single_feed(self, cap, label, camera_name):
@@ -2589,80 +1619,10 @@ class App(tk.Tk):
             
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or self.live_detection_var.get()
-
-            # During automatic detection or live detection, first do wood detection to establish dynamic ROI
+            
             if should_detect:
-                # STEP 2 & 3: WHEN BEAM is BROKEN use the rgb wood detection, and only proceed if wood detected
-                try:
-                    # Detect wood on current frame
-                    wood_detection = self.rgb_wood_detector.detect_wood_comprehensive(frame, camera=camera_name)
-
-                    # Store dynamic ROI for defect detection
-                    self.dynamic_roi[camera_name] = wood_detection.get('auto_roi')
-
-                    # Check if wood is detected (any candidates found)
-                    wood_detected = wood_detection['wood_detected']
-
-                    if wood_detected:
-                        # Store dynamic ROI for defect detection
-                        self.dynamic_roi[camera_name] = wood_detection.get('auto_roi')
-                        self.wood_detection_results[camera_name] = wood_detection
-
-                        # Calculate dynamic wood width based on detected wood dimensions
-                        # Following rgb_wood_detector.py measuring capabilities: use height (h) as it represents wood width perpendicular to grain
-                        if wood_detection.get('auto_roi'):
-                            x, y, w, h = wood_detection['auto_roi']
-                            # Use height (h) as wood width measurement (following rgb_wood_detector.py approach)
-                            detected_width_mm = h * (TOP_CAMERA_PIXEL_TO_MM if camera_name == 'top' else BOTTOM_CAMERA_PIXEL_TO_MM)
-                            # Update global wood height variable dynamically
-                            global WOOD_PALLET_HEIGHT_MM
-                            WOOD_PALLET_HEIGHT_MM = detected_width_mm
-                            self.detected_wood_width_mm[camera_name] = detected_width_mm
-                            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from {h}px height, camera: {camera_name})")
-
-                        # STEP 4: List wood detection details (only once per camera per detection session in auto mode)
-                        if self.auto_detection_active and (not hasattr(self, '_wood_reported') or not self._wood_reported.get(camera_name, False)):
-                            if not hasattr(self, '_wood_reported'):
-                                self._wood_reported = {'top': False, 'bottom': False}
-
-                            candidates = wood_detection.get('wood_candidates', [])
-                            print(f"🪵 {camera_name.upper()} CAMERA: {len(candidates)} wood pieces detected (confidence: {wood_detection.get('confidence', 0):.2f})")
-                            for i, candidate in enumerate(candidates, 1):
-                                bbox = candidate['bbox']
-                                confidence = candidate['confidence']
-                                area = candidate['area']
-                                print(f"   {i}. Wood piece: {bbox} (confidence: {confidence:.2f}, area: {area:.0f}px)")
-
-                            self._wood_reported[camera_name] = True
-                    else:
-                        # No wood detected - clear ROI and skip defect detection
-                        self.dynamic_roi[camera_name] = None
-                        if not hasattr(self, '_wood_reported'):
-                            self._wood_reported = {'top': False, 'bottom': False}
-                        self._wood_reported[camera_name] = False
-
-                except Exception as e:
-                    print(f"❌ Error in wood detection for {camera_name}: {e}")
-                    self.dynamic_roi[camera_name] = None
-
-            # Only proceed with defect detection if we have dynamic ROI (wood was detected)
-            has_dynamic_roi = (hasattr(self, 'dynamic_roi') and self.dynamic_roi and
-                             camera_name in self.dynamic_roi and self.dynamic_roi[camera_name] is not None)
-
-            if should_detect and has_dynamic_roi:
-                # STEP 3 CONTINUED: Use the generated Dynamic ROI for the Defect Detection
-                # Convert ROI format from (x, y, w, h) to coordinates for apply_roi
-                roi_coords = self.dynamic_roi[camera_name]
-                roi_x, roi_y, roi_w, roi_h = roi_coords
-                # Create ROI coordinates dict in the format expected by apply_roi
-                dynamic_roi_coords = {
-                    "x1": roi_x,
-                    "y1": roi_y,
-                    "x2": roi_x + roi_w,
-                    "y2": roi_y + roi_h
-                }
-                detection_frame, roi_info = self.apply_roi(frame, camera_name, dynamic_roi_coords)
-                print(f"🎯 Using dynamic ROI for {camera_name}: {dynamic_roi_coords}")
+                # Apply ROI for focused detection (top camera only)
+                detection_frame, roi_info = self.apply_roi(frame, camera_name)
                 
                 # Pre-resize frame for faster processing if it's very large
                 height, width = detection_frame.shape[:2]
@@ -2675,26 +1635,26 @@ class App(tk.Tk):
                     
                     # Run detection on resized ROI frame
                     result = self.analyze_frame(resized_frame, camera_name, run_defect_model=True)
-
+                    
                     # Scale detection results back to ROI size
                     if len(result) == 3:
-                        annotated_frame, defect_dict, detections_for_grading = result
+                        annotated_frame, defect_dict, measurements = result
                         # Scale annotated frame back to ROI size
                         annotated_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_LINEAR)
                     else:
                         annotated_frame, defect_dict = result
                         annotated_frame = cv2.resize(annotated_frame, (width, height), interpolation=cv2.INTER_LINEAR)
-                        detections_for_grading = []
+                        measurements = []
                 else:
                     # ROI frame is already optimal size, process normally
                     result = self.analyze_frame(detection_frame, camera_name, run_defect_model=True)
-
+                    
                     # Handle both old and new return formats for compatibility
                     if len(result) == 3:
-                        annotated_frame, defect_dict, detections_for_grading = result
+                        annotated_frame, defect_dict, measurements = result
                     else:
                         annotated_frame, defect_dict = result
-                        detections_for_grading = []
+                        measurements = []
                 
                 # If ROI was applied, place the annotated ROI back into the full frame
                 if roi_info is not None:
@@ -2705,39 +1665,35 @@ class App(tk.Tk):
                 else:
                     # No ROI applied, use the annotated frame as is
                     pass
-
-                # Add wood detection overlay if available
-                annotated_frame = self.draw_wood_detection_overlay(annotated_frame, camera_name)
-
+                
                 # Store the detection results for automatic detection session
                 self.live_detections[camera_name] = defect_dict
-
+                
                 # Store measurements for sophisticated grading
                 if not hasattr(self, 'live_measurements'):
                     self.live_measurements = {"top": [], "bottom": []}
-                self.live_measurements[camera_name] = detections_for_grading
-
-                # During automatic detection, store frame for potential PDF report
+                self.live_measurements[camera_name] = measurements
+                
+                # During automatic detection, collect all detection data
                 if self.auto_detection_active:
-                    # Keep the original session data structure for compatibility
                     detection_entry = {
                         "timestamp": datetime.now().isoformat(),
                         "camera": camera_name,
                         "defects": defect_dict.copy(),
-                        "measurements": detections_for_grading.copy() if detections_for_grading else [],
+                        "measurements": measurements.copy() if measurements else [],
                         "frame_captured": True
                     }
-
+                    
                     # Add to session data
                     self.detection_session_data["total_detections"][camera_name].append(detection_entry)
-
+                    
                     # Save best frame (frame with most detections or first significant detection)
-                    if (self.detection_session_data["best_frames"][camera_name] is None or
+                    if (self.detection_session_data["best_frames"][camera_name] is None or 
                         sum(defect_dict.values()) > 0):
                         # Convert frame to RGB for saving
                         frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                         self.detection_session_data["best_frames"][camera_name] = frame_rgb.copy()
-
+                    
                     # Store frame for potential PDF report
                     if len(self.detection_frames) < 50:  # Limit stored frames to prevent memory issues
                         frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
@@ -2747,39 +1703,36 @@ class App(tk.Tk):
                             "frame": frame_rgb.copy(),
                             "defects": defect_dict.copy()
                         })
-
+                
                 # Calculate grade for this camera using sophisticated grading
-                if detections_for_grading:
-                    surface_grade = self.determine_surface_grade(detections_for_grading)
+                if measurements:
+                    surface_grade = self.determine_surface_grade(measurements)
                     grade_info = {
                         'grade': surface_grade,
                         'text': f'{surface_grade} - SS-EN 1611-1 ({camera_name.title()} Camera)',
-                        'total_defects': len(detections_for_grading),
+                        'total_defects': len(measurements),
                         'color': self.get_grade_color(surface_grade)
                     }
                 else:
                     grade_info = self.calculate_grade(defect_dict)  # Fallback to simple grading
-
+                
                 self.live_grades[camera_name] = grade_info
-
+                
                 # Update dashboard every 5th frame for smoother updates
                 if self._detection_frame_skip[camera_name] % 5 == 0:
-                    self.update_dashboard_display(camera_name, defect_dict, detections_for_grading)
-
+                    self.update_dashboard_display(camera_name, defect_dict, measurements)
+                
                 # Update the live grading display every 3rd frame
                 if self._detection_frame_skip[camera_name] % 3 == 0:
                     self.update_live_grading_display()
-
+                
                 cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             else:
-                # No defect detection (either not should_detect or no dynamic ROI)
                 # Just show raw feed without detection processing
                 # Add ROI overlay to show the detection area even when not detecting
                 frame_with_roi = self.draw_roi_overlay(frame, camera_name)
-                # Add wood detection overlay if available
-                frame_with_overlays = self.draw_wood_detection_overlay(frame_with_roi, camera_name)
-                cv2image = cv2.cvtColor(frame_with_overlays, cv2.COLOR_BGR2RGB)
-
+                cv2image = cv2.cvtColor(frame_with_roi, cv2.COLOR_BGR2RGB)
+                
                 # Reset detections only when automatic detection is not active
                 if not self.auto_detection_active:
                     self.live_detections[camera_name] = {}
@@ -2955,10 +1908,31 @@ class App(tk.Tk):
             
             self.combined_grade_label.config(text=combined_text, foreground=combined_color)
             
-            # Auto-grade functionality - COMPLETELY DISABLED
-            # Grading only happens when beam clears in TRIGGER mode
-            # This ensures accurate grading based on complete defect tracking
-            pass
+            # Auto-grade functionality - send grade automatically if enabled
+            if self.auto_grade_var.get():
+                
+                current_time = time.time()
+                if current_time - self._last_auto_grade_time > 2.0:  # Only send grade every 2 seconds
+                    if final_grade:
+                        print(f"Auto-grade triggered - Final SS-EN 1611-1 grade: {final_grade}")
+                        # To log, we need the measurements that led to this grade
+                        all_measurements = self.live_measurements.get("top", []) + self.live_measurements.get("bottom", [])
+                        self.finalize_grading(final_grade, all_measurements)
+                    else:
+                        # Fallback for simple grading
+                        combined_defects = {}
+                        for camera_name in ["top", "bottom"]:
+                            if self.live_detections[camera_name]:
+                                for defect, count in self.live_detections[camera_name].items():
+                                    combined_defects[defect] = combined_defects.get(defect, 0) + count
+                        print(f"Auto-grade triggered - Combined defects: {combined_defects}")
+                        # Simple grading doesn't have measurement details, so we pass an empty list
+                        simple_grade_info = self.calculate_grade(combined_defects)
+                        grade_map = {0: GRADE_G2_0, 1: GRADE_G2_0, 2: GRADE_G2_2, 3: GRADE_G2_4}
+                        final_grade_text = grade_map.get(simple_grade_info.get('grade'), GRADE_G2_4)
+                        self.finalize_grading(final_grade_text, [])
+
+                    self._last_auto_grade_time = current_time
 
         else:
             self.combined_grade_label.config(text="No wood detected", foreground="gray")
@@ -2989,7 +1963,7 @@ class App(tk.Tk):
                 details_text += f"Distance: {BOTTOM_CAMERA_DISTANCE_CM}cm, Factor: {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
             
             total_defects = len(measurements)
-            details_text += f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm | Defects: {total_defects}\n"
+            details_text += f"Wood Width: {WOOD_PALLET_WIDTH_MM}mm | Defects: {total_defects}\n"
             details_text += "═" * 50 + "\n"
             
             # Show individual defect analysis
@@ -3002,8 +1976,8 @@ class App(tk.Tk):
                 
                 # Show which threshold was applied using new grading system
                 constants = GRADING_CONSTANTS.get(defect_type, {})
-                limit = (0.10 * WOOD_PALLET_HEIGHT_MM) + constants.get(individual_grade, 0)
-                details_text += f"Limit: ≤{limit:.1f}mm (0.10×{WOOD_PALLET_HEIGHT_MM}mm + {constants.get(individual_grade, 0)})\n"
+                limit = (0.10 * WOOD_PALLET_WIDTH_MM) + constants.get(individual_grade, 0)
+                details_text += f"Limit: ≤{limit:.1f}mm (0.10×{WOOD_PALLET_WIDTH_MM}mm + {constants.get(individual_grade, 0)})\n"
                 
                 details_text += "\n"
             
@@ -3060,7 +2034,7 @@ class App(tk.Tk):
             else:
                 details_text += f"Distance: {BOTTOM_CAMERA_DISTANCE_CM}cm, {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
             
-            details_text += f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm\n"
+            details_text += f"Wood Width: {WOOD_PALLET_WIDTH_MM}mm\n"
             details_text += "═" * 50 + "\n"
             details_text += "No wood or defects detected\n"
             details_text += "═" * 50 + "\n"
@@ -3195,7 +2169,6 @@ class App(tk.Tk):
                                 print("✅ TRIGGER MODE: Starting detection...")
                                 print("🔧 Arduino should now set motorActiveForTrigger = true")
                                 print("⚡ Stepper motor should start running NOW!")
-
                                 if hasattr(self, 'status_label'):
                                     self.status_label.config(
                                         text="Status: IR TRIGGERED - Motor should be running!", foreground="orange"
@@ -3264,15 +2237,15 @@ class App(tk.Tk):
     def listen_for_arduino(self):
         """Robust Arduino listener with automatic reconnection"""
         reconnect_attempts = 0
-        max_reconnect_attempts = 10  # Increased max attempts
-
+        max_reconnect_attempts = 5
+        
         while True:
             try:
                 # Check if we're shutting down
                 if hasattr(self, '_shutting_down') and self._shutting_down:
                     print("Arduino listener: Shutdown detected, exiting thread")
                     break
-
+                
                 # Check if serial connection exists and is open
                 if self.ser and hasattr(self.ser, 'is_open') and self.ser.is_open:
                     if self.ser.in_waiting > 0:
@@ -3287,7 +2260,7 @@ class App(tk.Tk):
                             # Put message in queue for main thread to process
                             self.message_queue.put(("arduino_message", message))
                             reconnect_attempts = 0  # Reset counter on successful communication
-
+                            
                         except UnicodeDecodeError as e:
                             print(f"⚠️ Arduino message decode error: {e}")
                             # Clear the buffer and continue
@@ -3296,78 +2269,61 @@ class App(tk.Tk):
                             except:
                                 pass
                             continue
-
+                            
                 elif not self.ser or (hasattr(self.ser, 'is_open') and not self.ser.is_open):
                     # Serial connection is closed or doesn't exist
                     if reconnect_attempts < max_reconnect_attempts:
                         reconnect_attempts += 1
                         print(f"🔄 Arduino disconnected, attempting reconnection {reconnect_attempts}/{max_reconnect_attempts}...")
-                        time.sleep(3)  # Increased wait time for Arduino to stabilize
-
-                        # Try to reconnect with multiple attempts per reconnection cycle
-                        reconnected = False
-                        for attempt in range(3):  # Try 3 times per reconnection attempt
-                            try:
-                                self.setup_arduino()
-                                if self.ser and self.ser.is_open:
-                                    print(f"✅ Arduino reconnected successfully on {self.ser.port}")
-                                    reconnect_attempts = 0
-                                    reconnected = True
-                                    break
-                                else:
-                                    print(f"❌ Reconnection sub-attempt {attempt + 1} failed, retrying...")
-                                    time.sleep(1)
-                            except Exception as e:
-                                print(f"❌ Reconnection sub-attempt {attempt + 1} failed: {e}")
-                                time.sleep(1)
-
-                        if not reconnected:
-                            print(f"❌ All reconnection sub-attempts failed for attempt {reconnect_attempts}")
+                        time.sleep(2)  # Wait before reconnect attempt
+                        
+                        # Try to reconnect
+                        try:
+                            self.setup_arduino()
+                            if self.ser and self.ser.is_open:
+                                print(f"✅ Arduino reconnected successfully on {self.ser.port}")
+                                reconnect_attempts = 0
+                            else:
+                                print(f"❌ Reconnection attempt {reconnect_attempts} failed")
+                        except Exception as e:
+                            print(f"❌ Reconnection attempt {reconnect_attempts} failed: {e}")
                     else:
                         print(f"❌ Max reconnection attempts ({max_reconnect_attempts}) reached, exiting listener thread")
                         break
-
+                    
                 time.sleep(0.1)  # Small delay to prevent CPU spinning
-
+                
             except (serial.SerialException, OSError, TypeError) as e:
                 print(f"🔥 Arduino communication error: {e}")
-
+                
                 # Check if this is due to application shutdown
                 if hasattr(self, '_shutting_down') and self._shutting_down:
                     print("Arduino listener: Application shutting down, exiting thread")
                     break
-
-                # Attempt reconnection with enhanced logic
+                    
+                # Attempt reconnection
                 if reconnect_attempts < max_reconnect_attempts:
                     reconnect_attempts += 1
                     print(f"🔄 Communication error, attempting reconnection {reconnect_attempts}/{max_reconnect_attempts}...")
-                    time.sleep(3)  # Increased wait time
-
-                    # Multiple reconnection attempts
-                    reconnected = False
-                    for attempt in range(3):
-                        try:
-                            self.setup_arduino()
-                            if self.ser and self.ser.is_open:
-                                print(f"✅ Arduino reconnected after error on {self.ser.port}")
-                                reconnect_attempts = 0
-                                reconnected = True
-                                break
-                            time.sleep(1)
-                        except Exception as reconnect_error:
-                            print(f"❌ Reconnection sub-attempt {attempt + 1} failed: {reconnect_error}")
-                            time.sleep(1)
-
-                    if not reconnected:
-                        print(f"❌ All reconnection attempts failed")
+                    time.sleep(2)
+                    try:
+                        self.setup_arduino()
+                        if self.ser and self.ser.is_open:
+                            print(f"✅ Arduino reconnected after error on {self.ser.port}")
+                            reconnect_attempts = 0
+                    except Exception as reconnect_error:
+                        print(f"❌ Reconnection failed: {reconnect_error}")
                 else:
                     print(f"❌ Max reconnection attempts reached after error, exiting thread")
                     break
-
+                    
             except Exception as e:
                 print(f"❌ Unexpected error in Arduino listener: {e}")
                 time.sleep(1)
                 self.message_queue.put(("status_update", "Arduino connection lost"))
+                break
+            except Exception as e:
+                print(f"Unexpected error in Arduino listener: {e}")
                 break
 
     def send_arduino_command(self, command):
@@ -3454,9 +2410,6 @@ class App(tk.Tk):
         self.live_detection_var.set(False)
         self.auto_grade_var.set(False)
         self.auto_detection_active = False  # Ensure automatic detection is disabled
-        # Clear wood detection results when entering idle mode
-        self.wood_detection_results = {"top": None, "bottom": None}
-        self.dynamic_roi = {}
         self.status_label.config(text="Status: IDLE - Conveyor Stopped", foreground="gray")
 
     def finalize_grading(self, final_grade, all_measurements):
@@ -3520,9 +2473,6 @@ class App(tk.Tk):
         self.status_label.config(text=f"Status: {status_text}", foreground="darkgreen")
         self.log_action(f"Graded Piece #{piece_number} as {final_grade} -> Arduino Cmd: {arduino_command}")
 
-        # Update grading status
-        self.grading_status_label.config(text="✅ Grading completed", foreground="darkgreen")
-
     def _execute_manual_grade(self):
         """Execute manual grading based on current detections."""
         wood_detected = False
@@ -3545,61 +2495,45 @@ class App(tk.Tk):
             self.status_label.config(text="Status: Manual grade - no wood detected")
 
     def analyze_frame(self, frame, camera_name="top", run_defect_model=True):
-        """Analyze frame using DeGirum model with object tracking"""
+        """Analyze frame using DeGirum model for defect detection with size measurement"""
         if self.model is None:
-            return frame, {}, [], []
-
+            return frame, {}, []
+        
         try:
             # Run inference using DeGirum
             inference_result = self.model(frame)
-
+            
             # Get annotated frame
             annotated_frame = inference_result.image_overlay
-
-            # Process detections for object tracking
-            current_detections = []
-            for det in inference_result.results:
+            
+            # Process detections to count defects and measure sizes
+            final_defect_dict = {}
+            defect_measurements = []  # Store detailed measurements for grading
+            detections = inference_result.results
+            
+            for det in detections:
                 model_label = det['label']
-                bbox = det['bbox']
-                confidence = det.get('confidence', 0.5)
-
+                
+                # Map model output to standard defect types
+                standard_defect_type = self.map_model_output_to_standard(model_label)
+                
                 # Extract bounding box for size calculation
-                bbox_info = {'bbox': bbox}
-
+                bbox_info = {'bbox': det['bbox']}
+                
                 # Calculate defect size in mm and percentage using camera-specific calibration
                 size_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
-
-                # Map to standard defect type
-                standard_defect_type = self.map_model_output_to_standard(model_label)
-
-                # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
-                current_detections.append((bbox, standard_defect_type, size_mm, confidence))
-
-            # Update object tracker with current detections
-            if hasattr(self, 'trackers') and camera_name in self.trackers:
-                active_tracks = self.trackers[camera_name].update(current_detections)
-            else:
-                active_tracks = []
-
-            # Process active tracks for grading and display
-            detections_for_grading = []
-            final_defect_dict = {}
-
-            for track in active_tracks:
-                # Use track information for grading
-                detections_for_grading.append((track.defect_type, track.size_mm, 0.0))  # percentage not needed for grading
-
-                # Count by defect type for display
-                if track.defect_type in final_defect_dict:
-                    final_defect_dict[track.defect_type] += 1
+                
+                # Store detailed measurement for sophisticated grading
+                defect_measurements.append((standard_defect_type, size_mm, percentage))
+                
+                # Count defects by standardized label (for simple display)
+                if standard_defect_type in final_defect_dict:
+                    final_defect_dict[standard_defect_type] += 1
                 else:
-                    final_defect_dict[track.defect_type] = 1
-
-            # Use the model's default overlay annotations
-            # The image_overlay from DeGirum already includes appropriate defect labels
-
-            return annotated_frame, final_defect_dict, detections_for_grading
-
+                    final_defect_dict[standard_defect_type] = 1
+            
+            return annotated_frame, final_defect_dict, defect_measurements
+            
         except Exception as e:
             print(f"Error during DeGirum inference on {camera_name} camera: {e}")
             return frame, {}, []
@@ -3718,7 +2652,7 @@ class App(tk.Tk):
         calibration_frame = ttk.LabelFrame(self.performance_frame, text="System Calibration", padding="5")
         calibration_frame.pack(fill="x", pady=2)
         
-        calibration_text = f"Wood Pallet Height: {WOOD_PALLET_HEIGHT_MM}mm\n"
+        calibration_text = f"Wood Pallet Width: {WOOD_PALLET_WIDTH_MM}mm\n"
         calibration_text += f"Top Camera: {TOP_CAMERA_DISTANCE_CM}cm distance, {TOP_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
         calibration_text += f"Bottom Camera: {BOTTOM_CAMERA_DISTANCE_CM}cm distance, {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
         calibration_text += "Standard: SS-EN 1611-1 European Wood Grading"
@@ -3922,11 +2856,13 @@ class App(tk.Tk):
             print("Waiting for Arduino thread to close...")
             self.arduino_thread.join(timeout=2.0)  # Wait up to 2 seconds
         
-        # Release camera resources using CameraHandler
+        # Release camera resources
         try:
             print("Releasing camera resources...")
-            if hasattr(self, 'camera_handler'):
-                self.camera_handler.release_cameras()
+            if hasattr(self, 'cap_top'):
+                self.cap_top.release()
+            if hasattr(self, 'cap_bottom'):
+                self.cap_bottom.release()
         except Exception as e:
             print(f"Error releasing cameras: {e}")
         

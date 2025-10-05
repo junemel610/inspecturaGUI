@@ -142,7 +142,8 @@ void checkIrSensor() {
       if (currentIrState == LOW) {
         // --- Beam Broken Event ---
         Serial.println("B");
-        activateAllServoGates(90); // Reset servos to 90 degrees on beam break
+        delay(200); // Allow time for serial transmission before servo activation
+        activateAllServoGates(90); // Reset servos to 90 degrees on beam break for every detection cycle
         beamBrokenStartTime = millis();
         beamIsBroken = true; // Mark the beam as officially broken
         // Note: In TRIGGER mode, motor runs continuously
@@ -191,8 +192,9 @@ void checkSerialCommands() {
         // Motor will run continuously in TRIGGER mode
         // IR beam only triggers detection, not motor control
         break;
-      case 'X': 
+      case 'X':
         currentMode = IDLE;
+        delay(200);
         activateAllServoGates(90);
         // Stop motor in IDLE mode
         break;

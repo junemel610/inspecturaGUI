@@ -1,0 +1,28 @@
+--- SS-EN 1611-1 Wood Sorting Report ---
+Generated at: 2025-10-05_07-07-07
+
+--- Session Summary ---
+Total Pieces Processed: 5
+Grade G2-0 (Perfect): 1
+Grade G2-1 (Good): 0
+Grade G2-2 (Fair): 0
+Grade G2-3 (Poor): 0
+Grade G2-4 (Reject): 4
+
+
+--- Individual Piece Log ---
+
+Piece #1: Grade G2-4
+  - Defect: Unsound Knot, Count: 2, Sizes (mm): 8.9, 19.6
+
+Piece #2: Grade G2-4
+  - Defect: Unsound Knot, Count: 3, Sizes (mm): 13.6, 13.4, 12.6
+
+Piece #3: Grade G2-4
+  - Defect: Unsound Knot, Count: 2, Sizes (mm): 39.1, 20.2
+
+Piece #4: Grade G2-0
+  - No defects detected.
+
+Piece #5: Grade G2-4
+  - Defect: Unsound Knot, Count: 7, Sizes (mm): 17.2, 13.1, 10.0, 19.5, 12.1, 15.9, 16.1

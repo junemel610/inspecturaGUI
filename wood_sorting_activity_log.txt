@@ -80903,3 +80903,82 @@
 2025-10-01 01:22:49 - Wood detected in wood_detection ROI - ready for Arduino trigger
 2025-10-01 01:22:49 - Wood detected in wood_detection ROI - ready for Arduino trigger
 2025-10-01 01:22:49 - Wood detected in wood_detection ROI - ready for Arduino trigger
+2025-10-04 23:31:48 - Automatic detection started - IR beam triggered
+2025-10-04 23:32:08 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-04 23:32:39 - Automatic detection started - IR beam triggered
+2025-10-04 23:32:59 - Graded Piece #2 as G2-4 -> Arduino Cmd: 3
+2025-10-04 23:33:58 - Graded Piece #3 as G2-4 -> Arduino Cmd: 3
+2025-10-04 23:34:00 - Graded Piece #4 as G2-4 -> Arduino Cmd: 3
+2025-10-04 23:34:02 - Graded Piece #5 as G2-4 -> Arduino Cmd: 3
+2025-10-04 23:34:21 - Graded Piece #6 as G2-4 -> Arduino Cmd: 3
+2025-10-05 05:21:02 - Automatic detection started - IR beam triggered
+2025-10-05 05:21:21 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 05:21:54 - Automatic detection started - IR beam triggered
+2025-10-05 05:32:51 - Automatic detection started - IR beam triggered
+2025-10-05 05:36:27 - Automatic detection started - IR beam triggered
+2025-10-05 05:39:46 - Automatic detection started - IR beam triggered
+2025-10-05 05:39:48 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 05:39:48 - Automatic detection started - IR beam triggered
+2025-10-05 05:42:37 - Automatic detection started - IR beam triggered
+2025-10-05 05:42:56 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 05:43:40 - Automatic detection started - IR beam triggered
+2025-10-05 05:43:59 - Graded Piece #2 as G2-4 -> Arduino Cmd: 3
+2025-10-05 05:48:46 - Automatic detection started - IR beam triggered
+2025-10-05 05:48:47 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 05:48:47 - Automatic detection started - IR beam triggered
+2025-10-05 05:49:05 - Graded Piece #2 as G2-4 -> Arduino Cmd: 3
+2025-10-05 06:50:34 - Automatic detection started - IR beam triggered
+2025-10-05 06:50:53 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 06:51:17 - Automatic detection started - IR beam triggered
+2025-10-05 06:51:43 - Automatic detection started - IR beam triggered
+2025-10-05 06:51:43 - Graded Piece #2 as G2-0 -> Arduino Cmd: 1
+2025-10-05 06:51:44 - Automatic detection started - IR beam triggered
+2025-10-05 06:52:02 - Graded Piece #3 as G2-0 -> Arduino Cmd: 1
+2025-10-05 07:00:51 - Automatic detection started - IR beam triggered
+2025-10-05 07:01:10 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 07:03:33 - Automatic detection started - IR beam triggered
+2025-10-05 07:03:52 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 07:05:39 - Automatic detection started - IR beam triggered
+2025-10-05 07:05:41 - Graded Piece #2 as G2-4 -> Arduino Cmd: 3
+2025-10-05 07:05:41 - Automatic detection started - IR beam triggered
+2025-10-05 07:05:58 - Graded Piece #3 as G2-4 -> Arduino Cmd: 3
+2025-10-05 07:06:06 - Automatic detection started - IR beam triggered
+2025-10-05 07:06:06 - Graded Piece #4 as G2-0 -> Arduino Cmd: 1
+2025-10-05 07:06:08 - Automatic detection started - IR beam triggered
+2025-10-05 07:06:24 - Graded Piece #5 as G2-4 -> Arduino Cmd: 3
+2025-10-05 10:56:32 - Automatic detection started - IR beam triggered
+2025-10-05 11:02:42 - Automatic detection started - IR beam triggered
+2025-10-05 11:03:16 - Automatic detection started - IR beam triggered
+2025-10-05 11:03:41 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:09:14 - Automatic detection started - IR beam triggered
+2025-10-05 11:09:39 - Graded Piece #1 as G2-0 -> Arduino Cmd: 1
+2025-10-05 11:26:20 - Automatic detection started - IR beam triggered
+2025-10-05 11:26:44 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:27:03 - Automatic detection started - IR beam triggered
+2025-10-05 11:27:28 - Graded Piece #2 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:27:47 - Automatic detection started - IR beam triggered
+2025-10-05 11:28:11 - Graded Piece #3 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:28:28 - Automatic detection started - IR beam triggered
+2025-10-05 11:28:52 - Graded Piece #4 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:29:11 - Automatic detection started - IR beam triggered
+2025-10-05 11:29:35 - Graded Piece #5 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:46:11 - Automatic detection started - IR beam triggered
+2025-10-05 11:49:16 - Automatic detection started - IR beam triggered
+2025-10-05 11:49:41 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:50:12 - Automatic detection started - IR beam triggered
+2025-10-05 11:50:36 - Graded Piece #2 as G2-4 -> Arduino Cmd: 3
+2025-10-05 11:54:08 - Automatic detection started - IR beam triggered
+2025-10-05 11:56:25 - Automatic detection started - IR beam triggered
+2025-10-05 11:56:49 - Graded Piece #1 as G2-0 -> Arduino Cmd: 1
+2025-10-05 12:00:05 - Automatic detection started - IR beam triggered
+2025-10-05 12:00:30 - Graded Piece #1 as G2-0 -> Arduino Cmd: 1
+2025-10-05 12:07:27 - Automatic detection started - IR beam triggered
+2025-10-05 12:07:51 - Graded Piece #1 as G2-0 -> Arduino Cmd: 1
+2025-10-05 12:12:04 - Automatic detection started - IR beam triggered
+2025-10-05 12:12:29 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 12:23:48 - Automatic detection started - IR beam triggered
+2025-10-05 12:24:13 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 12:26:40 - Automatic detection started - IR beam triggered
+2025-10-05 12:27:05 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
+2025-10-05 12:39:24 - Automatic detection started - IR beam triggered
+2025-10-05 12:39:49 - Graded Piece #1 as G2-4 -> Arduino Cmd: 3
