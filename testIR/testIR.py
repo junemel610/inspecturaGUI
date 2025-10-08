@@ -10,14 +10,12 @@ import degirum as dg
 import degirum_tools
 import json
 import os
+import subprocess
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 import numpy as np
-from scipy.optimize import linear_sum_assignment
-from filterpy.kalman import KalmanFilter
-import copy
 from typing import Dict
 
 
@@ -25,8 +23,11 @@ class CameraHandler:
     def __init__(self):
         self.top_camera = None
         self.bottom_camera = None
-        self.top_camera_index = 0  # Cam0
-        self.bottom_camera_index = 2  # Cam2
+        # Device paths for cameras (Rapoo for top, C922 for bottom)
+        self.top_camera_devices = ['/dev/video0','/dev/video1', '/dev/video3']  # Rapoo Camera
+        self.bottom_camera_devices = ['/dev/video2', '/dev/video4', '/dev/video5']  # C922 Pro Stream Webcam
+        self.top_camera_device = None  # Will be set to successful device path
+        self.bottom_camera_device = None  # Will be set to successful device path
         self.top_camera_settings = {
             'brightness': 0,
             'contrast': 32,
@@ -47,22 +48,112 @@ class CameraHandler:
             'backlight_compensation': 1
         }
 
+    def _get_camera_device_info(self):
+        """Get camera device information using v4l2-ctl to identify cameras by name"""
+        try:
+            print("🔍 Running v4l2-ctl --list-devices to detect cameras...")
+            result = subprocess.run(['v4l2-ctl', '--list-devices'], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                print("❌ Failed to run v4l2-ctl --list-devices")
+                return {}
+
+            # Print the raw output for visibility
+            print("📋 v4l2-ctl output:")
+            print(result.stdout)
+            print("📋 End of v4l2-ctl output")
+
+            devices = {}
+            lines = result.stdout.strip().split('\n')
+            current_device = None
+
+            for line in lines:
+                # Check for device paths before stripping (preserve tabs)
+                if line.startswith('\t/dev/video'):
+                    # This is a device path
+                    if current_device:
+                        device_path = line.strip()
+                        devices[device_path] = current_device
+                elif line.strip() and not line.startswith('\t'):
+                    # This is a device name (not indented)
+                    current_device = line.strip()
+
+            print(f"📊 Parsed {len(devices)} video devices: {list(devices.keys())}")
+            return devices
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
+            print(f"❌ Error getting camera device info: {e}")
+            return {}
+
+    def _identify_camera_by_name(self, device_path):
+        """Identify camera type by device name"""
+        device_info = self._get_camera_device_info()
+        device_name = device_info.get(device_path, "").lower()
+
+        if "c922" in device_name or "stream webcam" in device_name:
+            return "C922"
+        elif "rapoo" in device_name:
+            return "Rapoo"
+        else:
+            return "Unknown"
+
+    def _initialize_camera_with_devices(self, device_list, camera_name):
+        """Try to initialize camera using specific device paths"""
+        for device_path in device_list:
+            try:
+                print(f"Trying to open {camera_name} camera at {device_path}...")
+                cap = cv2.VideoCapture(device_path, cv2.CAP_V4L2)
+                if cap.isOpened():
+                    # Try to read a frame to ensure camera is working
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        camera_type = self._identify_camera_by_name(device_path)
+                        print(f"Successfully opened {camera_name} camera at {device_path} (Type: {camera_type})")
+                        return cap, device_path
+                    else:
+                        print(f"Camera at {device_path} opened but cannot read frames")
+                        cap.release()
+                else:
+                    print(f"Failed to open camera at {device_path}")
+            except Exception as e:
+                print(f"Error opening camera at {device_path}: {e}")
+                continue
+        return None, None
+
     def initialize_cameras(self):
         try:
-            self.top_camera = cv2.VideoCapture(self.top_camera_index)
-            if not self.top_camera.isOpened():
-                raise RuntimeError(f"Could not open top camera (Cam0 - index {self.top_camera_index})")
-            self.bottom_camera = cv2.VideoCapture(self.bottom_camera_index)
-            if not self.bottom_camera.isOpened():
+            # Try dynamic camera identification first
+            success = self._dynamic_reassign_cameras()
+            if success:
+                print("Cameras initialized successfully using dynamic identification")
+                return
+
+            # Fallback to specific device paths
+            print("Dynamic identification failed, trying specific device paths...")
+            # Initialize top camera (Rapoo)
+            self.top_camera, self.top_camera_device = self._initialize_camera_with_devices(
+                self.top_camera_devices, "top")
+            if self.top_camera is None:
+                raise RuntimeError("Could not open top camera (Rapoo) on any device")
+
+            # Initialize bottom camera (C922)
+            self.bottom_camera, self.bottom_camera_device = self._initialize_camera_with_devices(
+                self.bottom_camera_devices, "bottom")
+            if self.bottom_camera is None:
                 self.top_camera.release()
-                raise RuntimeError(f"Could not open bottom camera (Cam2 - index {self.bottom_camera_index})")
+                raise RuntimeError("Could not open bottom camera (C922) on any device")
+
+            # Set resolution and apply settings
             self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
             self._apply_camera_settings(self.top_camera, self.top_camera_settings)
             self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
+
             print("Cameras initialized successfully at 720p (1280x720)")
+            print(f"Top camera (Rapoo): {self.top_camera_device}")
+            print(f"Bottom camera (C922): {self.bottom_camera_device}")
+
         except Exception as e:
             self.release_cameras()
             raise RuntimeError(f"Failed to initialize cameras: {str(e)}")
@@ -83,12 +174,245 @@ class CameraHandler:
         except Exception as e:
             print(f"Warning: Some camera settings may not be supported: {e}")
 
+    def reconnect_cameras(self):
+        """Attempt to reconnect cameras if they become disconnected"""
+        print("🔌 Attempting to reconnect cameras...")
+        print("   This is called automatically when camera disconnections are detected")
+
+        # Release current cameras
+        self.release_cameras()
+
+        try:
+            # Try dynamic reassignment first
+            success = self._dynamic_reassign_cameras()
+            if success:
+                return True
+
+            # Fallback to original device paths
+            print("🔄 Dynamic reassignment failed, trying original device paths...")
+            if self.top_camera_device:
+                print(f"Trying to reconnect top camera at {self.top_camera_device}")
+                self.top_camera = cv2.VideoCapture(self.top_camera_device, cv2.CAP_V4L2)
+                if self.top_camera.isOpened():
+                    ret, _ = self.top_camera.read()
+                    if ret:
+                        print(f"Reconnected top camera at {self.top_camera_device}")
+                    else:
+                        self.top_camera.release()
+                        self.top_camera = None
+
+            if self.bottom_camera_device:
+                print(f"Trying to reconnect bottom camera at {self.bottom_camera_device}")
+                self.bottom_camera = cv2.VideoCapture(self.bottom_camera_device, cv2.CAP_V4L2)
+                if self.bottom_camera.isOpened():
+                    ret, _ = self.bottom_camera.read()
+                    if ret:
+                        print(f"Reconnected bottom camera at {self.bottom_camera_device}")
+                    else:
+                        self.bottom_camera.release()
+                        self.bottom_camera = None
+
+            # Apply settings if cameras are connected
+            if self.top_camera:
+                self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self._apply_camera_settings(self.top_camera, self.top_camera_settings)
+
+            if self.bottom_camera:
+                self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
+
+            if self.top_camera and self.bottom_camera:
+                print("Camera reconnection successful")
+                print(f"Top camera: {self.top_camera_device}")
+                print(f"Bottom camera: {self.bottom_camera_device}")
+                return True
+            else:
+                print("Camera reconnection failed - not all cameras reconnected")
+                return False
+
+        except Exception as e:
+            print(f"Camera reconnection failed: {e}")
+            return False
+
+    def _dynamic_reassign_cameras(self):
+        """Dynamically scan and reassign cameras based on device identification"""
+        print("🔄 Performing dynamic camera reassignment...")
+        print("   This happens at startup and whenever camera disconnections are detected")
+
+        # Release any existing cameras first
+        self.release_cameras()
+
+        # Get all available video devices
+        device_info = self._get_camera_device_info()
+        available_devices = list(device_info.keys())
+
+        if len(available_devices) < 2:
+            print(f"❌ Only {len(available_devices)} devices available, need at least 2")
+            return False
+
+        # Identify camera types
+        c922_devices = []
+        rapoo_devices = []
+
+        for device_path in available_devices:
+            camera_type = self._identify_camera_by_name(device_path)
+            if camera_type == "C922":
+                c922_devices.append(device_path)
+            elif camera_type == "Rapoo":
+                rapoo_devices.append(device_path)
+
+        print(f"📷 Found C922 devices: {c922_devices}")
+        print(f"📷 Found Rapoo devices: {rapoo_devices}")
+
+        # Assign cameras based on identification
+        top_device = None
+        bottom_device = None
+
+        # Rapoo for top
+        if rapoo_devices:
+            for device in rapoo_devices:
+                try:
+                    cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        ret, _ = cap.read()
+                        if ret:
+                            top_device = device
+                            cap.release()
+                            break
+                        cap.release()
+                except:
+                    continue
+
+        # C922 for bottom
+        if c922_devices:
+            for device in c922_devices:
+                try:
+                    cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        ret, _ = cap.read()
+                        if ret:
+                            bottom_device = device
+                            cap.release()
+                            break
+                        cap.release()
+                except:
+                    continue
+
+        if top_device and bottom_device:
+            # Successfully identified and assigned
+            self.top_camera = cv2.VideoCapture(top_device, cv2.CAP_V4L2)
+            self.bottom_camera = cv2.VideoCapture(bottom_device, cv2.CAP_V4L2)
+            self.top_camera_device = top_device
+            self.bottom_camera_device = bottom_device
+
+            # Apply settings
+            self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            self._apply_camera_settings(self.top_camera, self.top_camera_settings)
+
+            self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
+
+            print("Dynamic camera reassignment successful!")
+            print(f"Top camera (Rapoo): {top_device}")
+            print(f"Bottom camera (C922): {bottom_device}")
+            return True
+        else:
+            print("Dynamic reassignment failed - could not identify both camera types")
+            return False
+
+    def check_camera_status(self):
+        """Check if cameras are still connected and working"""
+        try:
+            top_ok = False
+            bottom_ok = False
+
+            if self.top_camera and self.top_camera.isOpened():
+                # Try to read a frame to ensure camera is responsive
+                ret, _ = self.top_camera.read()
+                if ret:
+                    top_ok = True
+                else:
+                    print("⚠️ Top camera is not responding")
+            else:
+                print("⚠️ Top camera is not opened")
+
+            if self.bottom_camera and self.bottom_camera.isOpened():
+                # Try to read a frame to ensure camera is responsive
+                ret, _ = self.bottom_camera.read()
+                if ret:
+                    bottom_ok = True
+                else:
+                    print("⚠️ Bottom camera is not responding")
+            else:
+                print("⚠️ Bottom camera is not opened")
+
+            # Log status periodically (not every check to avoid spam)
+            if not (top_ok and bottom_ok):
+                print(f"📊 Camera status check: Top={'✅ OK' if top_ok else '❌ FAIL'}, Bottom={'✅ OK' if bottom_ok else '❌ FAIL'}")
+
+            return top_ok and bottom_ok
+        except Exception as e:
+            print(f"❌ Error checking camera status: {e}")
+            return False
+
+    def reassign_cameras_runtime(self):
+        """Runtime method to dynamically reassign cameras - can be called from UI or automatically"""
+        print("Runtime camera reassignment requested...")
+        success = self._dynamic_reassign_cameras()
+        if success:
+            print("Runtime camera reassignment successful")
+            # Update any UI elements if needed
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="Status: Cameras reassigned successfully", foreground="green")
+        else:
+            print("Runtime camera reassignment failed")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="Status: Camera reassignment failed", foreground="red")
+        return success
+
+    def reassign_arduino_runtime(self):
+        """Runtime method to dynamically reassign Arduino port - can be called from UI or automatically"""
+        print("Runtime Arduino reassignment requested...")
+        try:
+            # Close current connection
+            if hasattr(self, 'ser') and self.ser:
+                self.ser.close()
+                self.ser = None
+
+            # Try to setup again
+            self.setup_arduino()
+            if self.ser and self.ser.is_open:
+                print("Runtime Arduino reassignment successful")
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text="Status: Arduino reassigned successfully", foreground="green")
+                return True
+            else:
+                print("Runtime Arduino reassignment failed")
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text="Status: Arduino reassignment failed", foreground="red")
+                return False
+        except Exception as e:
+            print(f"Error during runtime Arduino reassignment: {e}")
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="Status: Arduino reassignment error", foreground="red")
+            return False
+
     def release_cameras(self):
         if self.top_camera:
-            self.top_camera.release()
+            try:
+                self.top_camera.release()
+            except Exception as e:
+                print(f"Error releasing top camera: {e}")
             self.top_camera = None
         if self.bottom_camera:
-            self.bottom_camera.release()
+            try:
+                self.bottom_camera.release()
+            except Exception as e:
+                print(f"Error releasing bottom camera: {e}")
             self.bottom_camera = None
         print("Cameras released")
 
@@ -130,191 +454,6 @@ KNOT_COUNT_LIMITS = {
 }
 
 
-class Track:
-    """Represents a single object track"""
-    def __init__(self, track_id, bbox, defect_type, size_mm, confidence=0.5):
-        self.track_id = track_id
-        self.defect_type = defect_type
-        self.size_mm = size_mm
-        self.confidence = confidence
-        self.age = 1  # How many frames this track has been alive
-        self.time_since_update = 0  # Frames since last update
-        self.hits = 1  # Number of successful updates
-        self.hit_streak = 1  # Consecutive hits
-
-        # Initialize Kalman filter for position prediction
-        self.kalman = self._init_kalman_filter(bbox)
-
-        # Store original detection info
-        self.bbox = bbox
-        self.first_seen = datetime.now().isoformat()
-        self.last_seen = datetime.now().isoformat()
-
-    def _init_kalman_filter(self, bbox):
-        """Initialize Kalman filter for bounding box tracking"""
-        kf = KalmanFilter(dim_x=4, dim_z=4)  # 4 state vars, 4 measurement vars
-
-        # State: [x, y, w, h, vx, vy, vw, vh] but we'll use 4D for simplicity
-        kf.x = np.array([bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]).reshape(4, 1)
-
-        # State transition matrix (constant velocity model)
-        kf.F = np.array([[1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-
-        # Measurement matrix (we measure position and size directly)
-        kf.H = np.eye(4)
-
-        # Process noise (higher for fast-moving objects)
-        kf.Q = np.eye(4) * 0.5
-
-        # Measurement noise (detection uncertainty)
-        kf.R = np.eye(4) * 0.5
-
-        # Initial covariance
-        kf.P = np.eye(4) * 10.0
-
-        return kf
-
-    def predict(self):
-        """Predict next position using Kalman filter"""
-        self.kalman.predict()
-        self.age += 1
-        self.time_since_update += 1
-        return self.get_state()
-
-    def update(self, bbox, confidence=0.5):
-        """Update track with new detection"""
-        self.time_since_update = 0
-        self.hits += 1
-        self.hit_streak += 1
-
-        # Update Kalman filter
-        measurement = np.array([bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]).reshape(4, 1)
-        self.kalman.update(measurement)
-
-        # Update stored bbox and confidence
-        self.bbox = bbox
-        self.confidence = max(self.confidence, confidence)  # Keep highest confidence
-        self.last_seen = datetime.now().isoformat()
-
-    def get_state(self):
-        """Get current state as bbox [x1, y1, x2, y2]"""
-        state = self.kalman.x.flatten()
-        x1, y1, w, h = state
-        return [x1, y1, x1 + w, y1 + h]
-
-
-class CustomObjectTracker:
-    """Custom object tracker similar to SORT algorithm"""
-    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3):
-        self.tracks = []
-        self.track_id_count = 0
-        self.max_age = max_age  # Maximum frames a track can go without update
-        self.min_hits = min_hits  # Minimum hits to consider track confirmed
-        self.iou_threshold = iou_threshold  # IOU threshold for matching
-
-    def update(self, detections):
-        """
-        Update tracks with new detections
-        detections: list of (bbox, defect_type, size_mm, confidence) tuples
-        """
-        # Predict new locations for existing tracks
-        for track in self.tracks:
-            track.predict()
-
-        # Associate detections with existing tracks
-        matched, unmatched_dets, unmatched_tracks = self._associate_detections(detections)
-
-        # Update matched tracks
-        for track_idx, det_idx in matched:
-            self.tracks[track_idx].update(detections[det_idx][0], detections[det_idx][3])
-
-        # Create new tracks for unmatched detections
-        for det_idx in unmatched_dets:
-            bbox, defect_type, size_mm, confidence = detections[det_idx]
-            if confidence > 0.3:  # Only create tracks for reasonably confident detections
-                self._create_track(bbox, defect_type, size_mm, confidence)
-
-        # Mark unmatched tracks as lost
-        for track_idx in unmatched_tracks:
-            self.tracks[track_idx].time_since_update += 1
-
-        # Remove dead tracks
-        self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
-
-        # Return active tracks
-        return [t for t in self.tracks if t.hits >= self.min_hits]
-
-    def _associate_detections(self, detections):
-        """Associate detections with existing tracks using IoU"""
-        if len(self.tracks) == 0:
-            return [], list(range(len(detections))), []
-
-        if len(detections) == 0:
-            return [], [], list(range(len(self.tracks)))
-
-        # Calculate IoU matrix
-        iou_matrix = np.zeros((len(detections), len(self.tracks)))
-        for d, det in enumerate(detections):
-            for t, track in enumerate(self.tracks):
-                iou_matrix[d, t] = self._calculate_iou(det[0], track.get_state())
-
-        # Use Hungarian algorithm for optimal assignment
-        det_indices, track_indices = linear_sum_assignment(-iou_matrix)  # Maximize IoU
-
-        # Filter matches above threshold
-        matched = []
-        unmatched_dets = list(range(len(detections)))
-        unmatched_tracks = list(range(len(self.tracks)))
-
-        for d, t in zip(det_indices, track_indices):
-            if iou_matrix[d, t] >= self.iou_threshold:
-                matched.append((t, d))  # (track_idx, det_idx)
-                unmatched_dets.remove(d)
-                unmatched_tracks.remove(t)
-
-        return matched, unmatched_dets, unmatched_tracks
-
-    def _calculate_iou(self, bbox1, bbox2):
-        """Calculate Intersection over Union of two bounding boxes"""
-        x1_1, y1_1, x2_1, y2_1 = bbox1
-        x1_2, y1_2, x2_2, y2_2 = bbox2
-
-        # Calculate intersection
-        x1_i = max(x1_1, x1_2)
-        y1_i = max(y1_1, y1_2)
-        x2_i = min(x2_1, x2_2)
-        y2_i = min(y2_1, y2_2)
-
-        if x2_i <= x1_i or y2_i <= y1_i:
-            return 0.0
-
-        intersection = (x2_i - x1_i) * (y2_i - y1_i)
-
-        # Calculate union
-        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
-        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
-        union = area1 + area2 - intersection
-
-        return intersection / union if union > 0 else 0.0
-
-    def _create_track(self, bbox, defect_type, size_mm, confidence):
-        """Create a new track"""
-        track = Track(self.track_id_count, bbox, defect_type, size_mm, confidence)
-        self.tracks.append(track)
-        self.track_id_count += 1
-        return track
-
-    def get_tracks(self):
-        """Get all active tracks"""
-        return [t for t in self.tracks if t.hits >= self.min_hits]
-
-    def clear(self):
-        """Clear all tracks"""
-        self.tracks = []
-        self.track_id_count = 0
 
 
 class DetectionDeduplicator:
@@ -965,11 +1104,6 @@ class App(tk.Tk):
             messagebox.showerror("Model Error", f"Failed to load DeGirum model: {e}")
             self.model = None
         
-        # Initialize custom object trackers for each camera (optimized for fast movement)
-        self.trackers = {
-            "top": CustomObjectTracker(max_age=8, min_hits=1, iou_threshold=0.4),
-            "bottom": CustomObjectTracker(max_age=8, min_hits=1, iou_threshold=0.4)
-        }
 
         # Initialize detection deduplicator for low FPS scenarios
         self.deduplicator = DetectionDeduplicator(spatial_threshold_mm=15.0, temporal_threshold_sec=1.0)
@@ -1107,21 +1241,22 @@ class App(tk.Tk):
         # Reports
         reports_frame = ttk.LabelFrame(controls_frame, text="Reports", padding="5")
         reports_frame.grid(row=0, column=3, sticky="nsew", padx=2, pady=2)
-        
-        self.log_status_label = ttk.Label(reports_frame, text="Log: Ready", 
+
+        self.log_status_label = ttk.Label(reports_frame, text="Log: Ready",
                                          foreground="green", font=self.font_small)
         self.log_status_label.pack()
-        
-        ttk.Button(reports_frame, text="Generate Report", 
+
+        ttk.Button(reports_frame, text="Generate Report",
                   command=self.manual_generate_report).pack(pady=2)
-        
+
         self.show_report_notification = tk.BooleanVar(value=True)
-        ttk.Checkbutton(reports_frame, text="Notifications", 
+        ttk.Checkbutton(reports_frame, text="Notifications",
                        variable=self.show_report_notification).pack()
-        
-        self.last_report_label = ttk.Label(reports_frame, text="Last: None", 
+
+        self.last_report_label = ttk.Label(reports_frame, text="Last: None",
                                           font=self.font_small, wraplength=100)
         self.last_report_label.pack()
+
 
         # --- Bottom Panel: Statistics (Full Width) ---
         bottom_panel = ttk.Frame(main_frame)
@@ -2152,21 +2287,36 @@ class App(tk.Tk):
     def update_feeds(self):
         self.update_single_feed(self.cap_top, self.top_live_feed, "top")
         self.update_single_feed(self.cap_bottom, self.bottom_live_feed, "bottom")
-        
+
         # Reduce update frequency for non-critical components to prevent UI lag
         # Only update every 15th frame (~4.4 FPS for dashboard updates) to reduce load
         if not hasattr(self, '_frame_counter'):
             self._frame_counter = 0
-        
+
         self._frame_counter += 1
         if self._frame_counter % 15 == 0:
+            # Check camera status and reconnect if needed
+            if not self.camera_handler.check_camera_status():
+                print("Camera status check failed - attempting reconnection...")
+                if self.camera_handler.reassign_cameras_runtime():
+                    # Update the cap references after successful reconnection
+                    self.cap_top = self.camera_handler.top_camera
+                    self.cap_bottom = self.camera_handler.bottom_camera
+                    print("Camera reconnection successful during runtime")
+                    if hasattr(self, 'status_label'):
+                        self.status_label.config(text="Status: Cameras reconnected", foreground="green")
+                else:
+                    print("Camera reconnection failed during runtime")
+                    if hasattr(self, 'status_label'):
+                        self.status_label.config(text="Status: Camera reconnection failed", foreground="red")
+
             # Update detection status
             self.update_detection_status_display()
-            
+
             # Only update details if not in active inference to prevent interference
             if not getattr(self, '_in_active_inference', False):
                 self.ensure_detection_details_updated()
-        
+
         # Optimize for constant detection - update every 10ms for ~100 FPS
         self.after(10, self.update_feeds)
 
@@ -2506,7 +2656,7 @@ class App(tk.Tk):
 
     def draw_wood_detection_overlay(self, frame, camera_name):
         """Draw wood detection results overlay on frame for visualization"""
-        # Only show wood detection overlay when live detection is active
+        # Only show wood detection overlay when live detection is active (beam blocked)
         if not self.live_detection_var.get():
             return frame
 
@@ -2552,8 +2702,6 @@ class App(tk.Tk):
                 h, w = frame_copy.shape[:2]
                 cv2.putText(frame_copy, "NO WOOD DETECTED", (w//2 - 150, h//2),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-                cv2.putText(frame_copy, "Waiting for wood to enter detection area...",
-                            (w//2 - 200, h//2 + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
         else:
             # No detection results yet - show waiting message
             h, w = frame_copy.shape[:2]
@@ -2588,14 +2736,16 @@ class App(tk.Tk):
                 print(f"Memory cleanup performed at frame {self._memory_cleanup_counter}")
             
             # Process detection based on automatic IR beam OR live detection toggle
-            should_detect = self.auto_detection_active or self.live_detection_var.get()
+            should_detect = self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER")
 
-            # During automatic detection or live detection, first do wood detection to establish dynamic ROI
+            # Only perform wood detection when detection is active (not in idle mode)
             if should_detect:
-                # STEP 2 & 3: WHEN BEAM is BROKEN use the rgb wood detection, and only proceed if wood detected
                 try:
                     # Detect wood on current frame
                     wood_detection = self.rgb_wood_detector.detect_wood_comprehensive(frame, camera=camera_name)
+
+                    # Store wood detection results for overlay display
+                    self.wood_detection_results[camera_name] = wood_detection
 
                     # Store dynamic ROI for defect detection
                     self.dynamic_roi[camera_name] = wood_detection.get('auto_roi')
@@ -2604,21 +2754,23 @@ class App(tk.Tk):
                     wood_detected = wood_detection['wood_detected']
 
                     if wood_detected:
-                        # Store dynamic ROI for defect detection
-                        self.dynamic_roi[camera_name] = wood_detection.get('auto_roi')
-                        self.wood_detection_results[camera_name] = wood_detection
-
-                        # Calculate dynamic wood width based on detected wood dimensions
-                        # Following rgb_wood_detector.py measuring capabilities: use height (h) as it represents wood width perpendicular to grain
+                        # Calculate dynamic wood width based on detected wood dimensions using same algorithm as defects
+                        # Following the same measurement approach as calculate_defect_size function
                         if wood_detection.get('auto_roi'):
                             x, y, w, h = wood_detection['auto_roi']
-                            # Use height (h) as wood width measurement (following rgb_wood_detector.py approach)
-                            detected_width_mm = h * (TOP_CAMERA_PIXEL_TO_MM if camera_name == 'top' else BOTTOM_CAMERA_PIXEL_TO_MM)
+
+                            # Use the same measurement algorithm as defects
+                            # Extract bounding box coordinates (same format as defect detection)
+                            bbox_info = {'bbox': [x, y, x + w, y + h]}
+
+                            # Calculate wood size using the same function as defects
+                            detected_width_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
+
                             # Update global wood height variable dynamically
                             global WOOD_PALLET_HEIGHT_MM
                             WOOD_PALLET_HEIGHT_MM = detected_width_mm
                             self.detected_wood_width_mm[camera_name] = detected_width_mm
-                            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from {h}px height, camera: {camera_name})")
+                            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm ({percentage:.1f}% of width, from bbox {w}x{h}px, camera: {camera_name})")
 
                         # STEP 4: List wood detection details (only once per camera per detection session in auto mode)
                         if self.auto_detection_active and (not hasattr(self, '_wood_reported') or not self._wood_reported.get(camera_name, False)):
@@ -2640,10 +2792,15 @@ class App(tk.Tk):
                         if not hasattr(self, '_wood_reported'):
                             self._wood_reported = {'top': False, 'bottom': False}
                         self._wood_reported[camera_name] = False
-
                 except Exception as e:
                     print(f"❌ Error in wood detection for {camera_name}: {e}")
                     self.dynamic_roi[camera_name] = None
+                    # Clear wood detection results on error
+                    self.wood_detection_results[camera_name] = None
+            else:
+                # When not detecting (idle mode), clear wood detection results and ROI
+                self.dynamic_roi[camera_name] = None
+                self.wood_detection_results[camera_name] = None
 
             # Only proceed with defect detection if we have dynamic ROI (wood was detected)
             has_dynamic_roi = (hasattr(self, 'dynamic_roi') and self.dynamic_roi and
@@ -2769,6 +2926,10 @@ class App(tk.Tk):
                 # Update the live grading display every 3rd frame
                 if self._detection_frame_skip[camera_name] % 3 == 0:
                     self.update_live_grading_display()
+
+                # Mirror the bottom camera horizontally for consistent perspective
+                if camera_name == "bottom":
+                    annotated_frame = cv2.flip(annotated_frame, 1)  # Horizontal flip
 
                 cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             else:
@@ -3094,11 +3255,71 @@ class App(tk.Tk):
             # Cache the content
             self._last_detection_content[camera_name] = details_text
 
+    def _identify_arduino_port(self):
+        """Identify Arduino port by testing communication"""
+        import glob
+
+        # Get all potential serial ports
+        ports_to_try = [
+            # ACM ports (Arduino Uno R3, Leonardo, Micro with native USB)
+            '/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2', '/dev/ttyACM3',
+            # USB ports (Arduino Nano, Pro Mini with FTDI/CH340)
+            '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3',
+            # Reassigned ports (when disconnection occurs)
+            '/dev/ttyUSB01', '/dev/ttyACM01',
+            # Windows COM ports
+            'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'
+        ]
+
+        # Also check for any ttyACM* or ttyUSB* devices that might exist
+        acm_ports = glob.glob('/dev/ttyACM*')
+        usb_ports = glob.glob('/dev/ttyUSB*')
+        all_ports = list(set(ports_to_try + acm_ports + usb_ports))
+
+        arduino_ports = []
+
+        for port in all_ports:
+            try:
+                print(f"Testing Arduino port {port}...")
+                # Try to open the port (same settings as setup_arduino)
+                ser = serial.Serial(
+                    port=port,
+                    baudrate=9600,
+                    timeout=2,
+                    write_timeout=2,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_ONE,
+                    xonxoff=False,
+                    rtscts=False,
+                    dsrdtr=False
+                )
+
+                # Clear buffers
+                ser.reset_input_buffer()
+                ser.reset_output_buffer()
+
+                # Test communication by sending stop command (same as setup_arduino)
+                ser.write(b'X')
+                ser.flush()
+                time.sleep(0.5)  # Give Arduino time to process
+
+                # If we get here without exception, port is accessible
+                arduino_ports.append(port)
+                print(f"✅ Found accessible serial port {port}")
+                ser.close()
+
+            except (serial.SerialException, OSError, UnicodeDecodeError) as e:
+                print(f"❌ Port {port} not accessible: {e}")
+                continue
+
+        return arduino_ports
+
     def setup_arduino(self):
         # Don't attempt to setup Arduino if shutting down
         if hasattr(self, '_shutting_down') and self._shutting_down:
             return
-            
+
         try:
             # Close existing connection if any
             if hasattr(self, 'ser') and self.ser:
@@ -3106,71 +3327,80 @@ class App(tk.Tk):
                     self.ser.close()
                 except:
                     pass
-            
-            # Try multiple common serial ports for Arduino
-            # Prioritize ACM ports for Arduino Uno R3/Leonardo with native USB
-            # Include USB ports for Arduino Nano/Pro Mini with FTDI/CH340 chips
-            # Include potential reassigned ports (ACM1, USB01, etc.)
-            ports_to_try = [
-                # ACM ports (Arduino Uno R3, Leonardo, Micro with native USB)
-                '/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2', '/dev/ttyACM3',
-                # USB ports (Arduino Nano, Pro Mini with FTDI/CH340)
-                '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3',
-                # Reassigned ports (when disconnection occurs)
-                '/dev/ttyUSB01', '/dev/ttyACM01',
-                # Other Linux serial ports
-                '/dev/ttyAMA0', '/dev/ttyAMA1', '/dev/ttyAMA10',
-                # Windows COM ports
-                'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'
-            ]
-            
-            for port in ports_to_try:
-                try:
-                    print(f"Trying to connect to Arduino on {port}...")
-                    # More robust serial connection settings
-                    self.ser = serial.Serial(
-                        port=port, 
-                        baudrate=9600, 
-                        timeout=2,           # Increased timeout
-                        write_timeout=2,     # Prevent hanging on write
-                        bytesize=serial.EIGHTBITS,
-                        parity=serial.PARITY_NONE,
-                        stopbits=serial.STOPBITS_ONE,
-                        xonxoff=False,       # Disable software flow control
-                        rtscts=False,        # Disable hardware flow control
-                        dsrdtr=False         # Disable DSR/DTR flow control
-                    )
-                    time.sleep(3)  # Extended time for Arduino to reset and stabilize
-                    
-                    # Clear any existing data in buffers
-                    self.ser.reset_input_buffer()
-                    self.ser.reset_output_buffer()
-                    
-                    # Test the connection with a gentle ping
-                    self.ser.write(b'X')  # Send stop command as test
-                    self.ser.flush()
-                    time.sleep(0.5)
-                    
-                    print(f"✅ Arduino connected successfully on {port}")
-                    break
-                except (serial.SerialException, OSError) as e:
-                    print(f"❌ Failed to connect on {port}: {e}")
-                    continue
+
+            # Try dynamic Arduino identification first
+            arduino_ports = self._identify_arduino_port()
+            if arduino_ports:
+                port = arduino_ports[0]  # Use first found Arduino
+                print(f"Using dynamically identified Arduino port: {port}")
             else:
-                # No port worked
-                raise serial.SerialException("No Arduino found on any port")
-            
+                # Fallback to manual port list
+                ports_to_try = [
+                    '/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2', '/dev/ttyACM3',
+                    '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyUSB2', '/dev/ttyUSB3',
+                    '/dev/ttyUSB01', '/dev/ttyACM01',
+                    'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'
+                ]
+                port = None
+                for p in ports_to_try:
+                    try:
+                        print(f"Trying to connect to Arduino on {p}...")
+                        ser = serial.Serial(
+                            port=p,
+                            baudrate=9600,
+                            timeout=2,
+                            write_timeout=2,
+                            bytesize=serial.EIGHTBITS,
+                            parity=serial.PARITY_NONE,
+                            stopbits=serial.STOPBITS_ONE,
+                            xonxoff=False,
+                            rtscts=False,
+                            dsrdtr=False
+                        )
+                        time.sleep(2)
+                        ser.reset_input_buffer()
+                        ser.reset_output_buffer()
+                        ser.write(b'X')
+                        ser.flush()
+                        time.sleep(0.5)
+                        port = p
+                        ser.close()
+                        print(f"✅ Arduino connected successfully on {p}")
+                        break
+                    except (serial.SerialException, OSError):
+                        continue
+
+                if not port:
+                    raise serial.SerialException("No Arduino found on any port")
+
+            # Connect to the identified port
+            self.ser = serial.Serial(
+                port=port,
+                baudrate=9600,
+                timeout=2,
+                write_timeout=2,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                xonxoff=False,
+                rtscts=False,
+                dsrdtr=False
+            )
+            time.sleep(3)  # Allow Arduino to stabilize
+
+            self.ser.reset_input_buffer()
+            self.ser.reset_output_buffer()
+
             # Start Arduino listener thread if not already running and not shutting down
             if not (hasattr(self, '_shutting_down') and self._shutting_down):
                 if not hasattr(self, 'arduino_thread') or not self.arduino_thread.is_alive():
                     self.arduino_thread = threading.Thread(target=self.listen_for_arduino, daemon=True)
                     self.arduino_thread.start()
-            
+
             if hasattr(self, 'status_label'):
                 self.status_label.config(text="Status: Arduino connected. Ready for automatic detection.")
-                # Start with auto detection ready status
                 self.status_label.config(text="Status: Ready - Waiting for IR beam trigger", foreground="green")
-            
+
         except serial.SerialException as e:
             self.ser = None
             print(f"Arduino connection failed: {e}")
@@ -3201,7 +3431,6 @@ class App(tk.Tk):
                                         text="Status: IR TRIGGERED - Motor should be running!", foreground="orange"
                                     )
                                 self.start_automatic_detection()
-                                self.live_detection_var.set(True)
                                 # Keep auto_grade_var False in TRIGGER mode - grading triggered by beam clear
                                 print(f"After 'B': live_detection_var: {self.live_detection_var.get()}, auto_grade_var: {self.auto_grade_var.get()}")
                             else:
@@ -3220,7 +3449,6 @@ class App(tk.Tk):
                             # In TRIGGER mode, process grading if detection was active
                             if self.current_mode == "TRIGGER":
                                 # Stop detection when beam clears, regardless of whether detection was active
-                                self.live_detection_var.set(False)
                                 self.auto_grade_var.set(False)
                                 print("IR beam cleared – stopping detection")
                                 print(f"After 'L': live_detection_var: {self.live_detection_var.get()}, auto_grade_var: {self.auto_grade_var.get()}")
@@ -3441,7 +3669,7 @@ class App(tk.Tk):
         self.current_mode = "TRIGGER"
         print(f"Sending 'T' command to Arduino...")
         self.send_arduino_command('T')  # Send command to Arduino
-        self.live_detection_var.set(False)
+        self.live_detection_var.set(True)  # Enable live detection for triggering
         self.auto_grade_var.set(False)
         self.update_detection_status_display() # Update the status label
         print(f"Trigger mode set - Python mode: {self.current_mode}")
@@ -3575,25 +3803,19 @@ class App(tk.Tk):
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
                 current_detections.append((bbox, standard_defect_type, size_mm, confidence))
 
-            # Update object tracker with current detections
-            if hasattr(self, 'trackers') and camera_name in self.trackers:
-                active_tracks = self.trackers[camera_name].update(current_detections)
-            else:
-                active_tracks = []
-
-            # Process active tracks for grading and display
+            # Process detections directly without object tracking
             detections_for_grading = []
             final_defect_dict = {}
 
-            for track in active_tracks:
-                # Use track information for grading
-                detections_for_grading.append((track.defect_type, track.size_mm, 0.0))  # percentage not needed for grading
+            for bbox, defect_type, size_mm, confidence in current_detections:
+                # Use detection information directly for grading
+                detections_for_grading.append((defect_type, size_mm, 0.0))  # percentage not needed for grading
 
                 # Count by defect type for display
-                if track.defect_type in final_defect_dict:
-                    final_defect_dict[track.defect_type] += 1
+                if defect_type in final_defect_dict:
+                    final_defect_dict[defect_type] += 1
                 else:
-                    final_defect_dict[track.defect_type] = 1
+                    final_defect_dict[defect_type] = 1
 
             # Use the model's default overlay annotations
             # The image_overlay from DeGirum already includes appropriate defect labels
@@ -4073,6 +4295,31 @@ class App(tk.Tk):
         """Manually generate a report"""
         self.generate_report()
         self.log_status_label.config(text="Log: Manual report generated", foreground="green")
+
+    def _reassign_cameras_ui(self):
+        """UI wrapper for camera reassignment"""
+        try:
+            success = self.camera_handler.reassign_cameras_runtime()
+            if success:
+                # Update the cap references
+                self.cap_top = self.camera_handler.top_camera
+                self.cap_bottom = self.camera_handler.bottom_camera
+                messagebox.showinfo("Success", "Cameras reassigned successfully!")
+            else:
+                messagebox.showerror("Error", "Camera reassignment failed. Check console for details.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Camera reassignment error: {e}")
+
+    def _reassign_arduino_ui(self):
+        """UI wrapper for Arduino reassignment"""
+        try:
+            success = self.reassign_arduino_runtime()
+            if success:
+                messagebox.showinfo("Success", "Arduino reassigned successfully!")
+            else:
+                messagebox.showerror("Error", "Arduino reassignment failed. Check console for details.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Arduino reassignment error: {e}")
 
     def simulate_ir_events(self):
         """Simulate IR beam events for testing TRIGGER mode"""
