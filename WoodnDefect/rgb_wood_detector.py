@@ -22,8 +22,8 @@ class ColorWoodDetector:
                 'name': 'Top Panel Wood'
             },
             'bottom_panel': {
-                'rgb_lower': np.array([134, 105, 109]),  # BGR
-                'rgb_upper': np.array([207, 176, 183]),
+                'rgb_lower': np.array([150, 180, 125]),  # BGR
+                'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Bottom Panel Wood'
             }
         }
@@ -544,8 +544,8 @@ class CameraHandler:
     def __init__(self):
         self.top_camera = None
         self.bottom_camera = None
-        self.top_camera_index = 0  # Cam0
-        self.bottom_camera_index = 2  # Cam2
+        self.top_camera_index = 2 # Cam0
+        self.bottom_camera_index = 4  # Cam2
         self.top_camera_settings = {
             'brightness': 0,
             'contrast': 32,
@@ -556,7 +556,7 @@ class CameraHandler:
             'gain': 0
         }
         self.bottom_camera_settings = {
-            'brightness': 85,
+            'brightness':110,
             'contrast': 125,
             'saturation': 125,
             'hue': 0,

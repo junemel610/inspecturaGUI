@@ -38,7 +38,7 @@ class CameraHandler:
             'gain': 0
         }
         self.bottom_camera_settings = {
-            'brightness': 150,
+            'brightness': 110,
             'contrast': 125,
             'saturation': 125,
             'hue': 0,
@@ -566,12 +566,12 @@ class ColorWoodDetector:
     def __init__(self):
         self.wood_color_profiles = {
             'top_panel': {
-                'rgb_lower': np.array([169, 180, 176]),  # BGR
+                'rgb_lower': np.array([170, 180, 175]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Top Panel Wood'
             },
             'bottom_panel': {
-                'rgb_lower': np.array([150, 180, 150]),  # BGR
+                'rgb_lower': np.array([150, 180, 125]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Bottom Panel Wood'
             }
@@ -2728,7 +2728,7 @@ class App(tk.Tk):
                         x, y, w, h = roi
                         # Draw dynamic ROI (blue border)
                         cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                        cv2.putText(frame_copy, "Dynamic ROI",
+                        cv2.putText(frame_copy, " ",
                                     (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
                 # Add wood detection summary
@@ -2755,14 +2755,18 @@ class App(tk.Tk):
     def update_single_feed(self, cap, label, camera_name):
         ret, frame = cap.read()
         if ret:
+            # Mirror the bottom camera horizontally from the start for consistent perspective
+            if camera_name == "bottom":
+                frame = cv2.flip(frame, 1)  # Horizontal flip
+
             # Skip detection processing if frame rate is too high
             if not hasattr(self, '_detection_frame_skip'):
                 self._detection_frame_skip = {"top": 0, "bottom": 0}
-            
+
             # Initialize memory management counter
             if not hasattr(self, '_memory_cleanup_counter'):
                 self._memory_cleanup_counter = 0
-            
+
             # Perform memory cleanup every 300 frames (~24 seconds at 125 FPS)
             self._memory_cleanup_counter += 1
             if self._memory_cleanup_counter % 300 == 0:
@@ -2777,6 +2781,13 @@ class App(tk.Tk):
             
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER")
+
+            # For bottom camera, only detect if top camera detected wood (synchronized detection)
+            if camera_name == "bottom" and should_detect:
+                top_wood_detected = self.wood_detection_results.get("top", {}).get('wood_detected', False)
+                if not top_wood_detected:
+                    should_detect = False
+                    print(f"Bottom camera detection skipped - no wood detected on top camera")
 
             # Only perform wood detection when detection is active (not in idle mode)
             if should_detect:
@@ -2966,10 +2977,6 @@ class App(tk.Tk):
                 # Update the live grading display every 3rd frame
                 if self._detection_frame_skip[camera_name] % 3 == 0:
                     self.update_live_grading_display()
-
-                # Mirror the bottom camera horizontally for consistent perspective
-                if camera_name == "bottom":
-                    annotated_frame = cv2.flip(annotated_frame, 1)  # Horizontal flip
 
                 cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             else:
