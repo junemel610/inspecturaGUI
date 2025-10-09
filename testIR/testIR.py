@@ -103,6 +103,14 @@ class CameraHandler:
                     # Try to read a frame to ensure camera is working
                     ret, frame = cap.read()
                     if ret and frame is not None:
+                        # Disable autofocus for consistent focus
+                        try:
+                            subprocess.run(['v4l2-ctl', '-d', device_path, '-c', 'focus_automatic_continuous=0'],
+                                         capture_output=True, timeout=2)
+                            print(f"Disabled autofocus for {device_path}")
+                        except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                            print(f"Warning: Could not disable autofocus for {device_path}")
+
                         camera_type = self._identify_camera_by_name(device_path)
                         print(f"Successfully opened {camera_name} camera at {device_path} (Type: {camera_type})")
                         return cap, device_path
@@ -304,6 +312,15 @@ class CameraHandler:
             self.bottom_camera = cv2.VideoCapture(bottom_device, cv2.CAP_V4L2)
             self.top_camera_device = top_device
             self.bottom_camera_device = bottom_device
+
+            # Disable autofocus for reconnected cameras
+            for device in [top_device, bottom_device]:
+                try:
+                    subprocess.run(['v4l2-ctl', '-d', device, '-c', 'focus_automatic_continuous=0'],
+                                 capture_output=True, timeout=2)
+                    print(f"Disabled autofocus for reconnected {device}")
+                except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                    print(f"Warning: Could not disable autofocus for reconnected {device}")
 
             # Apply settings
             self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
