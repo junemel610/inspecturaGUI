@@ -53,15 +53,13 @@ class CameraHandler:
         try:
             print("🔍 Running v4l2-ctl --list-devices to detect cameras...")
             result = subprocess.run(['v4l2-ctl', '--list-devices'], capture_output=True, text=True, timeout=5)
-            if result.returncode != 0:
-                print("❌ Failed to run v4l2-ctl --list-devices")
-                return {}
 
             # Print the raw output for visibility
             print("📋 v4l2-ctl output:")
             print(result.stdout)
             print("📋 End of v4l2-ctl output")
 
+            # Parse output even if returncode != 0, as v4l2-ctl may return 1 but still provide device list
             devices = {}
             lines = result.stdout.strip().split('\n')
             current_device = None
