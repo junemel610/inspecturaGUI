@@ -340,6 +340,9 @@ class CameraHandler:
             else:
                 print("⚠️ Top camera is not opened")
 
+            if not top_ok:
+                print("🔌 Top camera disconnection detected")
+
             if self.bottom_camera and self.bottom_camera.isOpened():
                 # Try to read a frame to ensure camera is responsive
                 ret, _ = self.bottom_camera.read()
@@ -349,6 +352,9 @@ class CameraHandler:
                     print("⚠️ Bottom camera is not responding")
             else:
                 print("⚠️ Bottom camera is not opened")
+
+            if not bottom_ok:
+                print("🔌 Bottom camera disconnection detected")
 
             # Log status periodically (not every check to avoid spam)
             if not (top_ok and bottom_ok):
@@ -1056,6 +1062,10 @@ class App(tk.Tk):
         self.current_test_case = None
         self.detection_log = []
         self.test_cases_data = {}
+
+        # Disconnection popup flags
+        self.camera_disconnected_popup_shown = False
+        self.arduino_disconnected_popup_shown = False
         
         # Detection tracking variables
         self.detection_session_id = None
@@ -2298,11 +2308,16 @@ class App(tk.Tk):
             # Check camera status and reconnect if needed
             if not self.camera_handler.check_camera_status():
                 print("Camera status check failed - attempting reconnection...")
+                if not self.camera_disconnected_popup_shown:
+                    messagebox.showwarning("Camera Disconnection", "Camera disconnection detected. Attempting reconnection...")
+                    self.camera_disconnected_popup_shown = True
                 if self.camera_handler.reassign_cameras_runtime():
                     # Update the cap references after successful reconnection
                     self.cap_top = self.camera_handler.top_camera
                     self.cap_bottom = self.camera_handler.bottom_camera
                     print("Camera reconnection successful during runtime")
+                    messagebox.showinfo("Camera Reconnection", "Cameras have been reconnected successfully.")
+                    self.camera_disconnected_popup_shown = False
                     if hasattr(self, 'status_label'):
                         self.status_label.config(text="Status: Cameras reconnected", foreground="green")
                 else:
@@ -3530,6 +3545,9 @@ class App(tk.Tk):
                     if reconnect_attempts < max_reconnect_attempts:
                         reconnect_attempts += 1
                         print(f"🔄 Arduino disconnected, attempting reconnection {reconnect_attempts}/{max_reconnect_attempts}...")
+                        if not self.arduino_disconnected_popup_shown:
+                            messagebox.showwarning("Arduino Disconnection", "Arduino has been disconnected. Attempting reconnection...")
+                            self.arduino_disconnected_popup_shown = True
                         time.sleep(3)  # Increased wait time for Arduino to stabilize
 
                         # Try to reconnect with multiple attempts per reconnection cycle
@@ -3539,6 +3557,8 @@ class App(tk.Tk):
                                 self.setup_arduino()
                                 if self.ser and self.ser.is_open:
                                     print(f"✅ Arduino reconnected successfully on {self.ser.port}")
+                                    messagebox.showinfo("Arduino Reconnection", f"Arduino has been reconnected on {self.ser.port}")
+                                    self.arduino_disconnected_popup_shown = False
                                     reconnect_attempts = 0
                                     reconnected = True
                                     break

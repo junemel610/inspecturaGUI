@@ -259,28 +259,28 @@ class ColorWoodDetector:
     def __init__(self):
         self.wood_color_profiles = {
             'top_panel': {
-                'hsv_lower': np.array([85, 10, 100]),  # Expanded minimum HSV values for the top panel
-                'hsv_upper': np.array([125, 40, 240]),  # Expanded maximum HSV values for the top panel
+                'rgb_lower': np.array([169, 180, 176]),  # BGR
+                'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Top Panel Wood'
             },
             'bottom_panel': {
-                'hsv_lower': np.array([70, 3, 130]),  # Expanded HSV range for wood detection
-                'hsv_upper': np.array([130, 6, 140]),  # Expanded HSV range for wood detection
+                'rgb_lower': np.array([150, 180, 150]),  # BGR
+                'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Bottom Panel Wood'
             }
         }
 
-        # Detection parameters
-        self.min_contour_area = 3000      # Minimum area for wood detection
-        self.max_contour_area = 500000    # Maximum area for wood detection
-        self.min_aspect_ratio = 1.0       # Minimum width/height ratio for plank
-        self.max_aspect_ratio = 10.0      # Maximum width/height ratio for plank
-        self.contour_approximation = 0.03 # Epsilon for contour approximation
+        # Detection parameters - Updated to match testIR/testIR.py exactly
+        self.min_contour_area = 2000      # Increased for more reliable detection with tighter RGB ranges
+        self.max_contour_area = 500000    # Slightly reduced for typical wood plank sizes
+        self.min_aspect_ratio = 1.0       # Tightened for more rectangular wood shapes
+        self.max_aspect_ratio = 10.0      # Reduced for more typical plank proportions
+        self.contour_approximation = 0.025 # Slightly tighter for better shape approximation
 
-        # Morphological operations
-        self.morph_kernel_size = 5
-        self.closing_iterations = 2
-        self.opening_iterations = 1
+        # Morphological operations - Updated to match testIR/testIR.py
+        self.morph_kernel_size = 11       # Larger kernel for better noise reduction
+        self.closing_iterations = 3       # More closing iterations
+        self.opening_iterations = 2        # More opening iterations
 
         # Pixel to mm conversion parameters for width measurement
         self.pixel_per_mm_top = 2.96     # Placeholder: calibrate based on top camera distance (31cm)
@@ -296,16 +296,21 @@ class ColorWoodDetector:
             raise ValueError("Camera must be 'top' or 'bottom'")
 
     def detect_wood_by_color(self, image: np.ndarray, profile_names: List[str] = None) -> Tuple[np.ndarray, List[Dict]]:
-        """Detect wood using color profiles"""
+        """Detect wood using RGB color profiles"""
         if profile_names is None:
             profile_names = list(self.wood_color_profiles.keys())
 
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         # Apply histogram equalization on V channel for better lighting compensation
-        h, s, v = cv2.split(hsv)
+        hsv_temp = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv_temp)
         v = cv2.equalizeHist(v)
-        hsv = cv2.merge([h, s, v])
-        combined_mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
+        hsv_temp = cv2.merge([h, s, v])
+        rgb = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
+
+        # Dynamically update RGB ranges based on dominant colors for better adaptation
+        self.update_rgb_ranges_based_on_dominant_colors(rgb)
+
+        combined_mask = np.zeros(rgb.shape[:2], dtype=np.uint8)
 
         detections = []
 
@@ -315,11 +320,11 @@ class ColorWoodDetector:
         for profile_name in profile_names:
             if profile_name in self.wood_color_profiles:
                 profile = self.wood_color_profiles[profile_name]
-                mask = cv2.inRange(hsv, profile['hsv_lower'], profile['hsv_upper'])
+                mask = cv2.inRange(rgb, profile['rgb_lower'], profile['rgb_upper'])
                 mask_pixels = cv2.countNonZero(mask)
-                total_pixels = hsv.shape[0] * hsv.shape[1]
+                total_pixels = rgb.shape[0] * rgb.shape[1]
                 mask_percentage = (mask_pixels / total_pixels) * 100
-                print(f"  📊 {profile_name}: HSV range {profile['hsv_lower']} - {profile['hsv_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
+                print(f"  📊 {profile_name}: RGB range {profile['rgb_lower']} - {profile['rgb_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
                 combined_mask = cv2.bitwise_or(combined_mask, mask)
 
         pre_morph_pixels = cv2.countNonZero(combined_mask)
@@ -336,7 +341,28 @@ class ColorWoodDetector:
         post_morph_percentage = (post_morph_pixels / total_pixels) * 100
         print(f"🔧 Post-morph combined mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
 
+        # Additional logging for dominant colors
+        rgb_flat = rgb.reshape(-1, 3)
+        r_values = rgb_flat[:, 0]
+        g_values = rgb_flat[:, 1]
+        b_values = rgb_flat[:, 2]
+        print(f"🎨 Dominant RGB in image: R={int(np.mean(r_values)):.0f}±{int(np.std(r_values)):.0f}, G={int(np.mean(g_values)):.0f}, B={int(np.mean(b_values)):.0f}")
+
         return combined_mask, detections
+
+    def update_rgb_ranges_based_on_dominant_colors(self, rgb):
+        """Dynamically adjust RGB ranges based on dominant colors in the image"""
+        rgb_flat = rgb.reshape(-1, 3)
+        r_mean = int(np.mean(rgb_flat[:, 0]))
+        g_mean = int(np.mean(rgb_flat[:, 1]))
+        b_mean = int(np.mean(rgb_flat[:, 2]))
+
+        # Update profiles based on dominant colors
+        self.wood_color_profiles['top_panel']['rgb_lower'] = np.array([max(0, r_mean - 30), max(0, g_mean - 30), max(0, b_mean - 30)])
+        self.wood_color_profiles['top_panel']['rgb_upper'] = np.array([min(255, r_mean + 30), min(255, g_mean + 30), min(255, b_mean + 30)])
+        self.wood_color_profiles['bottom_panel']['rgb_lower'] = np.array([max(0, r_mean - 30), max(0, g_mean - 30), max(0, b_mean - 30)])
+        self.wood_color_profiles['bottom_panel']['rgb_upper'] = np.array([min(255, r_mean + 30), min(255, g_mean + 30), min(255, b_mean + 30)])
+        print(f"🔧 Dynamically updated RGB ranges: R=[{r_mean-30}-{r_mean+30}], G=[{g_mean-30}-{g_mean+30}], B=[{b_mean-30}-{b_mean+30}]")
 
     def detect_rectangular_contours(self, mask: np.ndarray) -> List[Dict]:
         """Detect rectangular contours that could be wood planks"""
@@ -460,12 +486,15 @@ class ColorWoodDetector:
         wood_candidates = self.detect_rectangular_contours(color_mask)
         print(f"📐 Found {len(wood_candidates)} wood candidates after contour filtering")
 
-        # Step 3: Generate automatic ROI
-        auto_roi = self.generate_auto_roi(wood_candidates, image.shape)
-        if auto_roi:
-            print(f"🎯 Auto ROI generated: {auto_roi}")
+        # Step 3: Use exact wood bounding box as ROI (following testIR/testIR.py approach)
+        auto_roi = None
+        if wood_candidates:
+            best_candidate = wood_candidates[0]  # highest confidence
+            x, y, w, h = best_candidate['bbox']
+            auto_roi = (x, y, w, h)
+            print(f"🎯 Using exact wood bbox as ROI: {(x, y, w, h)}")
         else:
-            print("❌ No auto ROI generated (no candidates)")
+            print("❌ No wood detected, no ROI")
 
         # Step 4: Create result
         result = {
@@ -501,6 +530,34 @@ class ColorWoodDetector:
 
         return (roi_x1, roi_y1, roi_x2 - roi_x1, roi_y2 - roi_y1)
 
+    def draw_roi_overlay(self, frame, camera_name):
+        """Draw ROI rectangle overlay on frame for visualization"""
+        if not self.roi_enabled.get(camera_name, False):
+            return frame
+
+        roi_coords = self.roi_coordinates.get(camera_name, {})
+        if not roi_coords:
+            return frame
+
+        frame_copy = frame.copy()
+        x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
+        x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
+
+        # Ensure coordinates are within frame bounds
+        x1 = max(0, min(x1, frame.shape[1]))
+        y1 = max(0, min(y1, frame.shape[0]))
+        x2 = max(x1, min(x2, frame.shape[1]))
+        y2 = max(y1, min(y2, frame.shape[0]))
+
+        # Draw ROI rectangle (yellow border)
+        cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 255), 3)
+
+        # Add ROI label
+        cv2.putText(frame_copy, f"ROI - {camera_name.upper()}",
+                   (x1 + 10, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+
+        return frame_copy
+
     def detect_wood_presence(self, frame):
         color_conf = self._detect_wood_by_color(frame)
         texture_conf = self._detect_wood_by_texture(frame)
@@ -526,32 +583,24 @@ class ColorWoodDetector:
         return wood_detected
 
     def _detect_wood_by_color(self, frame):
-        """Detect wood using HSV color segmentation"""
+        """Detect wood using RGB color segmentation"""
         try:
-            hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            rgb_frame = frame
 
-            # Define multiple wood color ranges to handle different wood types
-            wood_ranges = [
-                # Light wood (pine, birch)
-                ([8, 50, 50], [25, 255, 255]),
-                # Medium wood (oak, maple)
-                ([10, 40, 40], [20, 200, 200]),
-                # Dark wood (walnut, mahogany)
-                ([5, 30, 30], [15, 150, 180])
-            ]
-
+            # Use calibrated wood color profiles
             combined_mask = None
-            for lower, upper in wood_ranges:
-                mask = cv2.inRange(hsv_frame, np.array(lower), np.array(upper))
+            for profile in self.wood_color_profiles.values():
+                mask = cv2.inRange(rgb_frame, profile['rgb_lower'], profile['rgb_upper'])
                 if combined_mask is None:
                     combined_mask = mask
                 else:
                     combined_mask = cv2.bitwise_or(combined_mask, mask)
 
-            # Clean up mask with morphological operations
+            # Clean up mask with morphological operations - Updated to match testIR/testIR.py
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
-            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
+            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
+            combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
+            combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
 
             # Calculate percentage of wood-like pixels
             wood_pixel_count = cv2.countNonZero(combined_mask)
@@ -2166,11 +2215,12 @@ class App(tk.Tk):
             if len(bbox) >= 4:
                 x1, y1, x2, y2 = bbox[:4]
 
-                # Scale from model coordinates (640x640) to canvas coordinates
-                x1_canvas = x1 * (self.canvas_width / 640.0)
-                y1_canvas = y1 * (self.canvas_height / 640.0)
-                x2_canvas = x2 * (self.canvas_width / 640.0)
-                y2_canvas = y2 * (self.canvas_height / 640.0)
+                # Use the same coordinate system as the original frame (no scaling issues)
+                # The frame is already resized to canvas size in update_single_feed
+                x1_canvas = x1
+                y1_canvas = y1
+                x2_canvas = x2
+                y2_canvas = y2
 
                 # Check if bounding box intersects with ROI
                 intersects_roi = self.bbox_intersects_roi(bbox, camera_name)
@@ -2208,11 +2258,12 @@ class App(tk.Tk):
             if len(bbox) >= 4:
                 x, y, w, h = bbox[:4]
 
-                # Scale from original frame coordinates to canvas coordinates
-                x1_canvas = x * (self.canvas_width / 1280.0)
-                y1_canvas = y * (self.canvas_height / 720.0)
-                x2_canvas = (x + w) * (self.canvas_width / 1280.0)
-                y2_canvas = (y + h) * (self.canvas_height / 720.0)
+                # Use the same coordinate system as the original frame (no scaling issues)
+                # The frame is already resized to canvas size in update_single_feed
+                x1_canvas = x
+                y1_canvas = y
+                x2_canvas = x + w
+                y2_canvas = y + h
 
                 # Use blue color for wood detection bounding boxes
                 box_color = "blue"
@@ -2340,6 +2391,9 @@ class App(tk.Tk):
 
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or self.live_detection_var.get()
+
+            # Process detection based on automatic IR beam OR live detection toggle
+            should_detect = self.auto_detection_active or self.live_detection_var.get()
             # Wood detection runs independently when enabled
             should_detect_wood = self.wood_detection_active and camera_name == "top"
 
@@ -2395,6 +2449,49 @@ class App(tk.Tk):
                                 # For now, just log the event
                                 self.log_action(f"Wood detected in wood_detection ROI - ready for Arduino trigger")
                                 # TODO: Add Arduino signal sending logic here
+
+                # Resize annotated frame to canvas size for display
+                if annotated_frame.shape[:2] != (self.canvas_height, self.canvas_width):
+                    annotated_frame = cv2.resize(annotated_frame, (self.canvas_width, self.canvas_height))
+
+                # Filter detections and measurements based on ROI intersection for grading
+                roi_filtered_defect_dict = {}
+                roi_filtered_measurements = []
+
+                if self.roi_enabled.get(camera_name, False) and detections:
+                    # Filter based on bounding box intersection with ROI
+                    roi_intersecting_detections = []
+
+                    for det in detections:
+                        bbox = det.get('bbox', [])
+                        if len(bbox) >= 4 and self.bbox_intersects_roi(bbox, camera_name):
+                            roi_intersecting_detections.append(det)
+
+                    # Re-calculate defect_dict and measurements from ROI-intersecting detections only
+                    for det in roi_intersecting_detections:
+                        model_label = det.get('label', '')
+                        standard_defect_type = self.map_model_output_to_standard(model_label)
+
+                        # Count defects by type
+                        if standard_defect_type in roi_filtered_defect_dict:
+                            roi_filtered_defect_dict[standard_defect_type] += 1
+                        else:
+                            roi_filtered_defect_dict[standard_defect_type] = 1
+
+                        # Calculate size for measurements
+                        bbox_info = {'bbox': det['bbox']}
+                        size_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
+                        roi_filtered_measurements.append((standard_defect_type, size_mm, percentage))
+                else:
+                    # No ROI filtering - use all detections
+                    roi_filtered_defect_dict = defect_dict.copy()
+                    roi_filtered_measurements = measurements.copy()
+
+                # Store filtered detection results (only ROI-intersecting for grading)
+                self.live_detections[camera_name] = roi_filtered_defect_dict
+                if not hasattr(self, 'live_measurements'):
+                    self.live_measurements = {"top": [], "bottom": []}
+                self.live_measurements[camera_name] = roi_filtered_measurements
 
                 # Resize annotated frame to canvas size for display
                 if annotated_frame.shape[:2] != (self.canvas_height, self.canvas_width):

@@ -20,7 +20,7 @@
 const int IR_SENSOR_PIN = 11;
 const int SERVO_1_PIN = 2;
 const int SERVO_2_PIN = 3;
-const int SERVO_3_PIN = 4;
+const int SERVO_3_PIN = 4;e
 const int SERVO_4_PIN = 5;
 const int STEPPER_ENA_PIN = 8;
 const int STEPPER_DIR_PIN = 9;

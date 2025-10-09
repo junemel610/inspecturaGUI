@@ -17,9 +17,9 @@ class ColorWoodDetector:
     def __init__(self):
         self.wood_color_profiles = {
             'top_panel': {
-                'rgb_lower': np.array([150, 160, 150]),  # BGR - expanded range
-                'rgb_upper': np.array([240, 235, 230]),
-                'name': 'Top Panel Wood'
+                'rgb_lower': np.array([120, 90, 95]),  # BGR - expanded range
+                'rgb_upper': np.array([220, 190, 200]),
+                'name': 'Top Panel Wood' 
             },
             'bottom_panel': {
                 'rgb_lower': np.array([120, 90, 95]),  # BGR - expanded range
