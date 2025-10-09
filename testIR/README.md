@@ -66,11 +66,13 @@ const int STEPPER_STEP_PIN = 10;   // Stepper motor step
 ## TestIR Application (Python)
 
 ### Features
-- Real-time dual camera defect detection
+- Real-time dual camera defect detection with synchronized wood detection
 - SS-EN 1611-1 wood grading standard implementation
-- IR beam trigger integration
+- IR beam trigger integration with automatic camera reconnection
 - Comprehensive statistics and reporting
 - Live grading display with detailed defect analysis
+- Automatic autofocus disable on camera connection
+- Bottom camera frame mirroring for consistent perspective
 
 ### Hardware Requirements
 - 2 USB cameras (top and bottom views)
@@ -111,17 +113,22 @@ numpy                # Numerical operations
 - **Frame Rate**: 30 FPS
 - **Top Camera Distance**: 37cm
 - **Bottom Camera Distance**: 29cm
+- **Autofocus**: Automatically disabled on connection for consistent focus
+- **Bottom Camera**: Frame mirrored horizontally for consistent perspective
 
 #### Grading Parameters
-- **Wood Width**: 115mm (11.5cm)
+- **Wood Width**: Measured dynamically from detected wood (typically 100-150mm)
 - **Pixel-to-mm Factors**:
   - Top Camera: 2.96 pixels/mm
   - Bottom Camera: 3.18 pixels/mm
 
-#### Grading Standards (SS-EN 1611-1)
+#### Grading Standards (SS-EN 161-1-1)
 ```
-Limit = (0.10 × wood_width) + constant
+Limit = (0.10 × measured_wood_width) + constant
 
+Where measured_wood_width is dynamically calculated from detected wood.
+
+Example for 115mm wood:
 Sound Knots:    G2-0: ≤21.5mm, G2-1: ≤31.5mm, G2-2: ≤46.5mm, G2-3: ≤61.5mm
 Dead Knots:     G2-0: ≤11.5mm, G2-1: ≤21.5mm, G2-2: ≤31.5mm, G2-3: ≤61.5mm
 Unsound Knots:  G2-2: ≤25.5mm, G2-3: ≤50.5mm
@@ -164,6 +171,11 @@ python testIR.py
 
 ### Grading Logic
 
+#### Wood Detection
+- Synchronized detection: Bottom camera only processes if top camera detects wood
+- Dynamic ROI generation based on detected wood boundaries
+- Color-based wood detection with morphological filtering
+
 #### Individual Defect Grading
 Each defect is graded using the formula: `Limit = (0.10 × wood_width) + constant`
 
@@ -200,8 +212,11 @@ testIR/
 
 #### Camera Issues
 - Ensure cameras are connected and not used by other applications
-- Check camera indices (0 for top, 2 for bottom)
+- Check camera device paths using `v4l2-ctl --list-devices`
 - Verify camera resolutions are supported
+- Cameras automatically reconnect on disconnection with retry logic
+- Autofocus is disabled automatically on connection
+- Bottom camera frames are mirrored for consistent perspective
 
 #### AI Model Issues
 - Ensure Hailo driver is installed and running
@@ -232,6 +247,8 @@ python testIR.py test
 - **Detection Accuracy**: >95% for major defects
 - **Response Time**: <500ms for IR trigger to grading completion
 - **Memory Usage**: ~200-300MB during operation
+- **Camera Reconnection**: Automatic with 3-attempt retry logic
+- **Wood Detection**: Synchronized across cameras for consistency
 
 ### Logs and Reports
 
@@ -252,6 +269,14 @@ python testIR.py test
 - Use appropriate power supplies for motors and servos
 - Implement emergency stop mechanisms
 - Regular maintenance of mechanical components
+
+### Recent Updates
+
+- **v4.1**: Added synchronized wood detection (bottom camera follows top)
+- **v4.0**: Implemented automatic camera reconnection with retry logic
+- **v3.9**: Added autofocus disable on camera connection
+- **v3.8**: Fixed v4l2-ctl parsing for device detection
+- **v3.7**: Added bottom camera frame mirroring from start
 
 ### Future Enhancements
 
