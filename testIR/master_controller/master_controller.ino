@@ -20,7 +20,7 @@
 const int IR_SENSOR_PIN = 11;
 const int SERVO_1_PIN = 2;
 const int SERVO_2_PIN = 3;
-const int SERVO_3_PIN = 4;e
+const int SERVO_3_PIN = 4;
 const int SERVO_4_PIN = 5;
 const int STEPPER_ENA_PIN = 8;
 const int STEPPER_DIR_PIN = 9;
@@ -172,14 +172,14 @@ void checkSerialCommands() {
     Serial.println(command);
     
     switch (command) {
-      case '1': 
-        activateAllServoGates(90); 
-        break;   
-      case '2': 
-        activateAllServoGates(45); 
-        break;   
-      case '3': 
-        activateAllServoGates(135); 
+      case '1':
+        activateAllServoGates(90);
+        break;
+      case '2':
+        activateAllServoGates(45);
+        break;
+      case '3':
+        activateAllServoGates(135);
         break;
       case '0':
         activateAllServoGates(0);
@@ -194,8 +194,8 @@ void checkSerialCommands() {
         break;
       case 'X':
         currentMode = IDLE;
-        delay(200);
         activateAllServoGates(90);
+        delay(200);
         // Stop motor in IDLE mode
         break;
       default:
@@ -213,13 +213,13 @@ void activateServoGate(Servo& gateServo, int angle) {
 
 void activateAllServoGates(int angle) {
   // Minimal serial output during servo operation
-  
+
   // Move all servos to the specified angle simultaneously
   servo1.write(angle);
   servo2.write(angle);
   servo3.write(angle);
   servo4.write(angle);
-  
+
   // Servos will hold this position until a new command is received
   // No automatic return to home position
 }

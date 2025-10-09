@@ -329,12 +329,16 @@ class CameraHandler:
             bottom_ok = False
 
             if self.top_camera and self.top_camera.isOpened():
-                # Try to read a frame to ensure camera is responsive
-                ret, _ = self.top_camera.read()
-                if ret:
-                    top_ok = True
-                else:
-                    print("⚠️ Top camera is not responding")
+                # Try to read a frame multiple times to account for temporary failures
+                for attempt in range(3):
+                    ret, _ = self.top_camera.read()
+                    if ret:
+                        top_ok = True
+                        break
+                    else:
+                        time.sleep(0.1)  # Short delay between retries
+                if not top_ok:
+                    print("⚠️ Top camera is not responding after retries")
             else:
                 print("⚠️ Top camera is not opened")
 
@@ -342,12 +346,16 @@ class CameraHandler:
                 print("🔌 Top camera disconnection detected")
 
             if self.bottom_camera and self.bottom_camera.isOpened():
-                # Try to read a frame to ensure camera is responsive
-                ret, _ = self.bottom_camera.read()
-                if ret:
-                    bottom_ok = True
-                else:
-                    print("⚠️ Bottom camera is not responding")
+                # Try to read a frame multiple times to account for temporary failures
+                for attempt in range(3):
+                    ret, _ = self.bottom_camera.read()
+                    if ret:
+                        bottom_ok = True
+                        break
+                    else:
+                        time.sleep(0.1)  # Short delay between retries
+                if not bottom_ok:
+                    print("⚠️ Bottom camera is not responding after retries")
             else:
                 print("⚠️ Bottom camera is not opened")
 
@@ -1046,6 +1054,7 @@ class App(tk.Tk):
         self.live_stats = {"grade1": 0, "grade2": 0, "grade3": 0, "grade4": 0, "grade5": 0}  # Arduino commands
         self._shutting_down = False  # Flag to indicate shutdown in progress
         self.session_log = [] # New: Log for individual piece details
+        self._camera_check_cooldown = 0  # Timestamp to skip camera checks after mode changes
 
 
         # Cache for preventing unnecessary UI updates
@@ -2303,25 +2312,26 @@ class App(tk.Tk):
 
         self._frame_counter += 1
         if self._frame_counter % 15 == 0:
-            # Check camera status and reconnect if needed
-            if not self.camera_handler.check_camera_status():
-                print("Camera status check failed - attempting reconnection...")
-                if not self.camera_disconnected_popup_shown:
-                    messagebox.showwarning("Camera Disconnection", "Camera disconnection detected. Attempting reconnection...")
-                    self.camera_disconnected_popup_shown = True
-                if self.camera_handler.reassign_cameras_runtime():
-                    # Update the cap references after successful reconnection
-                    self.cap_top = self.camera_handler.top_camera
-                    self.cap_bottom = self.camera_handler.bottom_camera
-                    print("Camera reconnection successful during runtime")
-                    messagebox.showinfo("Camera Reconnection", "Cameras have been reconnected successfully.")
-                    self.camera_disconnected_popup_shown = False
-                    if hasattr(self, 'status_label'):
-                        self.status_label.config(text="Status: Cameras reconnected", foreground="green")
-                else:
-                    print("Camera reconnection failed during runtime")
-                    if hasattr(self, 'status_label'):
-                        self.status_label.config(text="Status: Camera reconnection failed", foreground="red")
+            # Check camera status and reconnect if needed (skip during cooldown after mode changes)
+            if time.time() > self._camera_check_cooldown:
+                if not self.camera_handler.check_camera_status():
+                    print("Camera status check failed - attempting reconnection...")
+                    if not self.camera_disconnected_popup_shown:
+                        messagebox.showwarning("Camera Disconnection", "Camera disconnection detected. Attempting reconnection...")
+                        self.camera_disconnected_popup_shown = True
+                    if self.camera_handler.reassign_cameras_runtime():
+                        # Update the cap references after successful reconnection
+                        self.cap_top = self.camera_handler.top_camera
+                        self.cap_bottom = self.camera_handler.bottom_camera
+                        print("Camera reconnection successful during runtime")
+                        messagebox.showinfo("Camera Reconnection", "Cameras have been reconnected successfully.")
+                        self.camera_disconnected_popup_shown = False
+                        if hasattr(self, 'status_label'):
+                            self.status_label.config(text="Status: Cameras reconnected", foreground="green")
+                    else:
+                        print("Camera reconnection failed during runtime")
+                        if hasattr(self, 'status_label'):
+                            self.status_label.config(text="Status: Camera reconnection failed", foreground="red")
 
             # Update detection status
             self.update_detection_status_display()
