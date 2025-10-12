@@ -1966,3 +1966,114 @@
 [2025-10-10 11:24:34.960] [3329] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
 [2025-10-10 11:24:34.961] [3329] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
 [2025-10-10 11:24:34.961] [3329] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:51:04.409] [14789] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:51:04.411] [14789] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:51:04.412] [14789] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:51:04.478] [14789] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:51:04.481] [14789] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:51:04.486] [14789] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:54:37.799] [15329] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:54:37.800] [15329] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:54:37.801] [15329] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:54:37.854] [15329] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:54:37.855] [15329] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:54:37.856] [15329] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:55:45.293] [15344] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:55:45.295] [15344] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:55:45.296] [15344] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:55:45.338] [15344] [HailoRT] [info] [vdevice.cpp:523] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: ROUND_ROBIN, multi_process_service: true
+[2025-10-12 17:55:46.411] [15344] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:55:46.412] [15344] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:55:46.524] [15344] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:55:46.524] [15344] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:55:46.698] [15344] [HailoRT] [info] [infer_model.cpp:436] [configure] Configuring network group 'best_v8' with params: batch size: 1, power mode: ULTRA_PERFORMANCE, latency: NONE
+[2025-10-12 17:55:46.700] [15344] [HailoRT] [info] [multi_io_elements.cpp:756] [create] Created (AsyncHwEl)
+[2025-10-12 17:55:46.701] [15344] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (EntryPushQEl0best_v8/input_layer1 | timeout: 10s)
+[2025-10-12 17:55:46.701] [15344] [HailoRT] [info] [filter_elements.cpp:101] [create] Created (PreInferEl7best_v8/input_layer1 | Reorder - src_order: NHWC, src_shape: (640, 640, 3), dst_order: NHCW, dst_shape: (640, 640, 3))
+[2025-10-12 17:55:46.701] [15344] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (PushQEl7best_v8/input_layer1 | timeout: 10s)
+[2025-10-12 17:55:46.701] [15344] [HailoRT] [info] [multi_io_elements.cpp:135] [create] Created (NmsPPMuxEl0YOLOV8-Post-Process | Op YOLOV8, Name: YOLOV8-Post-Process, Score threshold: 0.300, IoU threshold: 0.60, Classes: 4, Cross classes: false, NMS results order: BY_CLASS, Max bboxes per class: 100, Image height: 640, Image width: 640)
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [queue_elements.cpp:942] [create] Created (MultiPushQEl0YOLOV8-Post-Process | timeout: 10s)
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [edge_elements.cpp:187] [create] Created (LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process)
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] EntryPushQEl0best_v8/input_layer1 | inputs: user | outputs: PreInferEl7best_v8/input_layer1(running in thread_id: 15592)
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PreInferEl7best_v8/input_layer1 | inputs: EntryPushQEl0best_v8/input_layer1[0] | outputs: PushQEl7best_v8/input_layer1
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PushQEl7best_v8/input_layer1 | inputs: PreInferEl7best_v8/input_layer1[0] | outputs: AsyncHwEl(running in thread_id: 15593)
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] AsyncHwEl | inputs: PushQEl7best_v8/input_layer1[0] | outputs: MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] MultiPushQEl0YOLOV8-Post-Process | inputs: AsyncHwEl[0] AsyncHwEl[1] AsyncHwEl[2] AsyncHwEl[3] AsyncHwEl[4] AsyncHwEl[5] | outputs: NmsPPMuxEl0YOLOV8-Post-Process(running in thread_id: 15594)
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] NmsPPMuxEl0YOLOV8-Post-Process | inputs: MultiPushQEl0YOLOV8-Post-Process[0] | outputs: LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:55:46.702] [15344] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:58:37.247] [15987] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:58:37.248] [15987] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:58:37.249] [15987] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:58:37.307] [15987] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:58:37.308] [15987] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:58:37.309] [15987] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:59:31.915] [16004] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:59:31.918] [16004] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:59:31.919] [16004] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:59:31.975] [16004] [HailoRT] [info] [vdevice.cpp:523] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: ROUND_ROBIN, multi_process_service: true
+[2025-10-12 17:59:32.992] [16004] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 17:59:32.993] [16004] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 17:59:33.082] [16004] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:59:33.082] [16004] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:59:33.242] [16004] [HailoRT] [info] [infer_model.cpp:436] [configure] Configuring network group 'best_v8' with params: batch size: 1, power mode: ULTRA_PERFORMANCE, latency: NONE
+[2025-10-12 17:59:33.243] [16004] [HailoRT] [info] [multi_io_elements.cpp:756] [create] Created (AsyncHwEl)
+[2025-10-12 17:59:33.243] [16004] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (EntryPushQEl0best_v8/input_layer1 | timeout: 10s)
+[2025-10-12 17:59:33.244] [16004] [HailoRT] [info] [filter_elements.cpp:101] [create] Created (PreInferEl7best_v8/input_layer1 | Reorder - src_order: NHWC, src_shape: (640, 640, 3), dst_order: NHCW, dst_shape: (640, 640, 3))
+[2025-10-12 17:59:33.244] [16004] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (PushQEl7best_v8/input_layer1 | timeout: 10s)
+[2025-10-12 17:59:33.244] [16004] [HailoRT] [info] [multi_io_elements.cpp:135] [create] Created (NmsPPMuxEl0YOLOV8-Post-Process | Op YOLOV8, Name: YOLOV8-Post-Process, Score threshold: 0.300, IoU threshold: 0.60, Classes: 4, Cross classes: false, NMS results order: BY_CLASS, Max bboxes per class: 100, Image height: 640, Image width: 640)
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [queue_elements.cpp:942] [create] Created (MultiPushQEl0YOLOV8-Post-Process | timeout: 10s)
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [edge_elements.cpp:187] [create] Created (LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process)
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] EntryPushQEl0best_v8/input_layer1 | inputs: user | outputs: PreInferEl7best_v8/input_layer1(running in thread_id: 16243)
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PreInferEl7best_v8/input_layer1 | inputs: EntryPushQEl0best_v8/input_layer1[0] | outputs: PushQEl7best_v8/input_layer1
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PushQEl7best_v8/input_layer1 | inputs: PreInferEl7best_v8/input_layer1[0] | outputs: AsyncHwEl(running in thread_id: 16244)
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] AsyncHwEl | inputs: PushQEl7best_v8/input_layer1[0] | outputs: MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] MultiPushQEl0YOLOV8-Post-Process | inputs: AsyncHwEl[0] AsyncHwEl[1] AsyncHwEl[2] AsyncHwEl[3] AsyncHwEl[4] AsyncHwEl[5] | outputs: NmsPPMuxEl0YOLOV8-Post-Process(running in thread_id: 16245)
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] NmsPPMuxEl0YOLOV8-Post-Process | inputs: MultiPushQEl0YOLOV8-Post-Process[0] | outputs: LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 17:59:33.245] [16004] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 20:07:19.355] [25271] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 20:07:19.356] [25271] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:07:19.357] [25271] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:07:19.439] [25271] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 20:07:19.440] [25271] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:07:19.441] [25271] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:08:30.197] [25295] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 20:08:30.198] [25295] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:08:30.200] [25295] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:08:30.251] [25295] [HailoRT] [info] [vdevice.cpp:523] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: ROUND_ROBIN, multi_process_service: true
+[2025-10-12 20:08:31.269] [25295] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 20:08:31.270] [25295] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:08:31.344] [25295] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 20:08:31.344] [25295] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 20:08:31.503] [25295] [HailoRT] [info] [infer_model.cpp:436] [configure] Configuring network group 'best_v8' with params: batch size: 1, power mode: ULTRA_PERFORMANCE, latency: NONE
+[2025-10-12 20:08:31.504] [25295] [HailoRT] [info] [multi_io_elements.cpp:756] [create] Created (AsyncHwEl)
+[2025-10-12 20:08:31.504] [25295] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (EntryPushQEl0best_v8/input_layer1 | timeout: 10s)
+[2025-10-12 20:08:31.504] [25295] [HailoRT] [info] [filter_elements.cpp:101] [create] Created (PreInferEl7best_v8/input_layer1 | Reorder - src_order: NHWC, src_shape: (640, 640, 3), dst_order: NHCW, dst_shape: (640, 640, 3))
+[2025-10-12 20:08:31.505] [25295] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (PushQEl7best_v8/input_layer1 | timeout: 10s)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [multi_io_elements.cpp:135] [create] Created (NmsPPMuxEl0YOLOV8-Post-Process | Op YOLOV8, Name: YOLOV8-Post-Process, Score threshold: 0.300, IoU threshold: 0.60, Classes: 4, Cross classes: false, NMS results order: BY_CLASS, Max bboxes per class: 100, Image height: 640, Image width: 640)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [queue_elements.cpp:942] [create] Created (MultiPushQEl0YOLOV8-Post-Process | timeout: 10s)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [edge_elements.cpp:187] [create] Created (LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] EntryPushQEl0best_v8/input_layer1 | inputs: user | outputs: PreInferEl7best_v8/input_layer1(running in thread_id: 25573)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PreInferEl7best_v8/input_layer1 | inputs: EntryPushQEl0best_v8/input_layer1[0] | outputs: PushQEl7best_v8/input_layer1
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PushQEl7best_v8/input_layer1 | inputs: PreInferEl7best_v8/input_layer1[0] | outputs: AsyncHwEl(running in thread_id: 25574)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] AsyncHwEl | inputs: PushQEl7best_v8/input_layer1[0] | outputs: MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] MultiPushQEl0YOLOV8-Post-Process | inputs: AsyncHwEl[0] AsyncHwEl[1] AsyncHwEl[2] AsyncHwEl[3] AsyncHwEl[4] AsyncHwEl[5] | outputs: NmsPPMuxEl0YOLOV8-Post-Process(running in thread_id: 25575)
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] NmsPPMuxEl0YOLOV8-Post-Process | inputs: MultiPushQEl0YOLOV8-Post-Process[0] | outputs: LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process
+[2025-10-12 20:08:31.506] [25295] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
+[2025-10-12 20:08:31.507] [25295] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 20:08:31.507] [25295] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-12 20:54:15.641] [30124] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 20:54:15.648] [30124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:54:15.650] [30124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:54:15.824] [30124] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 20:54:15.826] [30124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 20:54:15.827] [30124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 21:01:19.275] [31364] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 21:01:19.282] [31364] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 21:01:19.283] [31364] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 21:01:19.465] [31364] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-12 21:01:19.466] [31364] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-12 21:01:19.467] [31364] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0

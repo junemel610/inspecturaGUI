@@ -165,11 +165,8 @@ class CameraHandler:
     def __init__(self):
         self.top_camera = None
         self.bottom_camera = None
-        # Device paths for cameras (Rapoo for top, C922 for bottom)
-        self.top_camera_devices = ['/dev/video0','/dev/video1', '/dev/video3']  # Rapoo Camera
-        self.bottom_camera_devices = ['/dev/video2', '/dev/video4', '/dev/video5']  # C922 Pro Stream Webcam
-        self.top_camera_device = None  # Will be set to successful device path
-        self.bottom_camera_device = None  # Will be set to successful device path
+        self.top_camera_index = 0  # Cam0 - Rapoo
+        self.bottom_camera_index = 2  # Cam2 - C922
         self.top_camera_settings = {
             'brightness': 0,
             'contrast': 32,
@@ -180,14 +177,13 @@ class CameraHandler:
             'gain': 0
         }
         self.bottom_camera_settings = {
-            'brightness': 110,
-            'contrast': 125,
-            'saturation': 125,
+            'brightness': 135,
+            'contrast': 75,
+            'saturation': 155,
             'hue': 0,
             'exposure': -6,
-            'white_balance': 4850,
-            'gain': 0,
-            'backlight_compensation': 1
+            'white_balance': 5400,
+            'gain': 0
         }
 
     def _get_camera_device_info(self):
@@ -267,58 +263,47 @@ class CameraHandler:
         return None, None
 
     def initialize_cameras(self):
+        """Initialize both cameras with specific indices"""
         try:
-            # Try dynamic camera identification first
-            success = self._dynamic_reassign_cameras()
-            if success:
-                print("Cameras initialized successfully using dynamic identification")
-                return
+            # Initialize top camera (Cam0)
+            self.top_camera = cv2.VideoCapture(self.top_camera_index)
+            if not self.top_camera.isOpened():
+                raise RuntimeError(f"Could not open top camera (Cam0 - index {self.top_camera_index})")
 
-            # Fallback to specific device paths
-            print("Dynamic identification failed, trying specific device paths...")
-            # Initialize top camera (Rapoo)
-            self.top_camera, self.top_camera_device = self._initialize_camera_with_devices(
-                self.top_camera_devices, "top")
-            if self.top_camera is None:
-                raise RuntimeError("Could not open top camera (Rapoo) on any device")
-
-            # Initialize bottom camera (C922)
-            self.bottom_camera, self.bottom_camera_device = self._initialize_camera_with_devices(
-                self.bottom_camera_devices, "bottom")
-            if self.bottom_camera is None:
+            # Initialize bottom camera (Cam2)
+            self.bottom_camera = cv2.VideoCapture(self.bottom_camera_index)
+            if not self.bottom_camera.isOpened():
                 self.top_camera.release()
-                raise RuntimeError("Could not open bottom camera (C922) on any device")
+                raise RuntimeError(f"Could not open bottom camera (Cam2 - index {self.bottom_camera_index})")
 
-            # Set resolution and apply settings
+            # Set resolution to 720p for both cameras
             self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
+            # Apply camera settings
             self._apply_camera_settings(self.top_camera, self.top_camera_settings)
             self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
 
             print("Cameras initialized successfully at 720p (1280x720)")
-            print(f"Top camera (Rapoo): {self.top_camera_device}")
-            print(f"Bottom camera (C922): {self.bottom_camera_device}")
 
         except Exception as e:
             self.release_cameras()
             raise RuntimeError(f"Failed to initialize cameras: {str(e)}")
 
     def _apply_camera_settings(self, camera, settings):
+        """Apply settings to a camera"""
         try:
             camera.set(cv2.CAP_PROP_BRIGHTNESS, settings['brightness'])
             camera.set(cv2.CAP_PROP_CONTRAST, settings['contrast'])
             camera.set(cv2.CAP_PROP_SATURATION, settings['saturation'])
             camera.set(cv2.CAP_PROP_HUE, settings['hue'])
-            camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
+            camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Manual exposure
             camera.set(cv2.CAP_PROP_EXPOSURE, settings['exposure'])
-            camera.set(cv2.CAP_PROP_AUTO_WB, 0)
+            camera.set(cv2.CAP_PROP_AUTO_WB, 0)  # Manual white balance
             camera.set(cv2.CAP_PROP_WB_TEMPERATURE, settings['white_balance'])
             camera.set(cv2.CAP_PROP_GAIN, settings['gain'])
-            camera.set(cv2.CAP_PROP_SHARPNESS, settings['sharpness'])
-            camera.set(cv2.CAP_PROP_BACKLIGHT, settings['backlight_compensation'])
         except Exception as e:
             print(f"Warning: Some camera settings may not be supported: {e}")
 
@@ -632,7 +617,9 @@ WOOD_PALLET_HEIGHT_MM = 0  # Will be updated dynamically when wood is detected
 GRADING_CONSTANTS = {
     "Sound_Knot": {"G2-0": 10, "G2-1": 20, "G2-2": 35, "G2-3": 50},
     "Dead_Knot": {"G2-0": 0, "G2-1": 10, "G2-2": 20, "G2-3": 50},  # Using stricter limits
-    "Unsound_Knot": {"G2-2": 15, "G2-3": 40}  # Not permitted in G2-0, G2-1
+    "Unsound_Knot": {"G2-2": 15, "G2-3": 40},  # Not permitted in G2-0, G2-1
+    "Missing_Knot": {"G2-2": 15, "G2-3": 40},  # Same as Unsound_Knot
+    "Crack_Knot": {"G2-2": 15, "G2-3": 40}  # Same as Unsound_Knot
 }
 
 # Knot count limits per meter for Dead and Unsound knots
@@ -1288,8 +1275,17 @@ class App(tk.Tk):
         self.current_piece_data = None
         
         # System mode tracking
-        self.current_mode = "IDLE"  # Can be "IDLE", "TRIGGER", or "CONTINUOUS"
-        
+        self.current_mode = "IDLE"  # Can be "IDLE", "TRIGGER", "CONTINUOUS", or "SCAN_PHASE"
+
+        # SCAN_PHASE mode variables
+        self.scan_phase_active = False
+        self.current_wood_number = 0
+        self.scan_session_data = {}
+        self.captured_frames = {"top": [], "bottom": []}
+        self.segment_defects = {"top": [], "bottom": []}
+        self.scan_session_start_time = None
+        self.scan_session_folder = None
+
         # Automatic detection state (triggered by IR beam)
         self.live_detection_var = tk.BooleanVar(value=False) # For live inference mode
         self.auto_grade_var = tk.BooleanVar(value=False) # For auto grading in live mode
@@ -1369,6 +1365,9 @@ class App(tk.Tk):
         self.roi_enabled = {"top": True, "bottom": False, "wood_detection": True, "exit_wood": True}  # Enable ROI for top camera and wood detection
         self.roi_coordinates = ROI_COORDINATES.copy()
 
+        # UI colors
+        self.roi_overlay_color = ROI_OVERLAY_COLOR
+
         # Create canvases for camera feeds taking full width
         self.canvas_width = screen_width // 2 - 25
         self.canvas_height = 360
@@ -1417,15 +1416,19 @@ class App(tk.Tk):
         tk.Button(control_frame, text="Continuous",
                   command=self.set_continuous_mode, bg=BUTTON_BACKGROUND_COLOR,
                   fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=0, y=0, width=218, height=125)
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=0, y=0, width=164, height=125)
         tk.Button(control_frame, text="Trigger",
                   command=self.set_trigger_mode, bg=BUTTON_BACKGROUND_COLOR,
                   fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=218, y=0, width=218, height=125)
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=164, y=0, width=164, height=125)
+        tk.Button(control_frame, text="Scan Phase",
+                  command=self.set_scan_mode, bg=BUTTON_BACKGROUND_COLOR,
+                  fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=328, y=0, width=164, height=125)
         tk.Button(control_frame, text="IDLE",
                   command=self.set_idle_mode, bg=BUTTON_BACKGROUND_COLOR,
                   fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=436, y=0, width=219, height=125)
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=492, y=0, width=163, height=125)
 
         # Reports panel at fixed position (no overlap)
         REPORT_W, REPORT_H = 300, 125
@@ -1679,14 +1682,14 @@ class App(tk.Tk):
         label_mapping = {
             # Your actual model outputs (case-insensitive)
             "dead knots": "Dead_Knot",
-            "knots with crack": "Unsound_Knot",
+            "knots with crack": "Crack_Knot",
             "live knots": "Sound_Knot",
-            "missing knots": "Unsound_Knot",
+            "missing knots": "Missing_Knot",
             # Variations and alternatives
             "dead_knots": "Dead_Knot",
-            "knots_with_crack": "Unsound_Knot",
+            "knots_with_crack": "Crack_Knot",
             "live_knots": "Sound_Knot",
-            "missing_knots": "Unsound_Knot",
+            "missing_knots": "Missing_Knot",
             # Legacy mappings for backward compatibility
             "sound_knots": "Sound_Knot",
             "dead_knots": "Dead_Knot",
@@ -1696,8 +1699,8 @@ class App(tk.Tk):
             "unsound knots": "Unsound_Knot",
             "live_knot": "Sound_Knot",
             "dead_knot": "Dead_Knot",
-            "missing_knot": "Unsound_Knot",
-            "crack_knot": "Unsound_Knot",
+            "missing_knot": "Missing_Knot",
+            "crack_knot": "Crack_Knot",
             # Generic fallback
             "knot": "Unsound_Knot"
         }
@@ -3663,7 +3666,7 @@ class App(tk.Tk):
                     # --- IR BEAM HANDLING (Arduino sends "B" for beam broken) ---
                     if message == "B":
                         print("🔥 ARDUINO SENT 'B' - IR BEAM BROKEN DETECTED! 🔥")
-                        # ONLY respond to IR triggers in TRIGGER mode
+                        # Respond to IR triggers in TRIGGER or SCAN_PHASE mode
                         if self.current_mode == "TRIGGER":
                             if not self.auto_detection_active:
                                 print("✅ TRIGGER MODE: Starting detection...")
@@ -3681,9 +3684,48 @@ class App(tk.Tk):
                                 print(f"After 'B': live_detection_var: {self.live_detection_var.get()}, auto_grade_var: {self.auto_grade_var.get()}")
                             else:
                                 print("⚠️ IR beam broken but detection already active")
+                        elif self.current_mode == "SCAN_PHASE":
+                            if not self.scan_phase_active:
+                                print("✅ SCAN_PHASE MODE: Starting segmented scanning...")
+                                print("🔧 Arduino should now start segmented scanning")
+                                print("⚡ Stepper motor should start running NOW!")
+
+                                if hasattr(self, 'status_label'):
+                                    self.status_label.config(state=tk.NORMAL)
+                                    self.status_label.delete(1.0, tk.END)
+                                    self.status_label.insert(1.0, "Status: SCAN_PHASE STARTED - Scanning segments...")
+                                    self.status_label.config(foreground="orange", state=tk.DISABLED)
+                                self.start_scan_phase()
+                            else:
+                                print("⚠️ IR beam broken but scan already active")
                         else:
                             # In IDLE or CONTINUOUS mode, just log the IR signal but don't act on it
                             print(f"❌ IR beam broken received but system is in {self.current_mode} mode - ignoring trigger")
+                        continue  # skip other checks for this message
+
+                    # --- SCAN PHASE SEGMENT HANDLING ---
+                    if "complete. Pausing" in message and self.scan_phase_active:
+                        # Extract segment number
+                        try:
+                            segment_num = int(message.split()[1])
+                            self.capture_segment_frame(segment_num)
+                        except (ValueError, IndexError):
+                            print(f"Could not parse segment number from: {message}")
+                        continue
+
+                    # --- SCAN PHASE COMPLETION ---
+                    if "Last scan phase complete" in message and self.scan_phase_active:
+                        self.grade_all_woods()
+                        continue
+
+                    # --- CAPTURE HANDLING (Arduino sends "CAPTURE:X" for frame capture) ---
+                    if message.startswith("CAPTURE:"):
+                        try:
+                            segment_num = int(message.split(':')[1])
+                            print(f"Arduino signaled to capture segment {segment_num}")
+                            self.capture_segment_frame(segment_num)
+                        except (ValueError, IndexError):
+                            print(f"Could not parse CAPTURE message: {message}")
                         continue  # skip other checks for this message
 
                     # --- LENGTH HANDLING (Arduino sends "L:duration" when beam clears) ---
@@ -3720,6 +3762,12 @@ class App(tk.Tk):
                         except (ValueError, IndexError):
                             print(f"Could not parse length message: {message}")
                         continue  # skip other checks for this message
+
+                    # --- SCAN COMPLETE HANDLING ---
+                    elif "Last scan phase complete" in message:
+                        print("Arduino signaled scan phase complete")
+                        self.grade_all_woods()
+                        continue
 
                     # --- OTHER ARDUINO MESSAGES ---
                     else:
@@ -3962,6 +4010,153 @@ class App(tk.Tk):
         self.status_label.insert(1.0, "Status: IDLE - Conveyor Stopped")
         self.status_label.config(foreground="gray", state=tk.DISABLED)
 
+    def set_scan_mode(self):
+        """Sets the system to SCAN_PHASE mode for segmented scanning."""
+        print("Setting SCAN_PHASE Mode")
+        self.current_mode = "SCAN_PHASE"
+        self.send_arduino_command('S')  # Send scan phase command to Arduino
+        self.live_detection_var.set(False)  # Disable live detection - only show live feed with ROI
+        self.auto_grade_var.set(False)  # Grading happens after scan completion
+        self.update_detection_status_display()
+        print(f"Scan mode set - Python mode: {self.current_mode}")
+
+    def start_scan_phase(self):
+        """Initialize scan phase when Arduino detects beam break in SCAN_PHASE mode."""
+        print("Starting SCAN_PHASE detection...")
+        self.scan_phase_active = True
+        self.current_wood_number += 1  # Increment for each new wood piece
+        self.scan_session_start_time = time.time()
+        if not hasattr(self, 'scan_session_folder') or not self.scan_session_folder:
+            self.scan_session_folder = self.create_session_folder()
+        self.captured_frames = {"top": [], "bottom": []}
+        self.segment_defects = {"top": [], "bottom": []}
+        self.scan_session_data = {}
+        self.update_status_text("Status: SCAN_PHASE active - waiting for segments", STATUS_READY_COLOR)
+
+    def create_segment_visualization(self, frame, wood_detection_result, camera_name):
+        """Create visualization - currently just returns the frame as-is (no overlays)."""
+        # For now, return the frame without any overlays to focus on basic capture
+        return frame.copy()
+
+    def create_session_folder(self):
+        """Create session folder with timestamp."""
+        timestamp = datetime.now().strftime("%m%d%Y:%H%M") + "H-Session"
+        folder = os.path.join("testIR", "Detections", timestamp)
+        os.makedirs(folder, exist_ok=True)
+        print(f"Created session folder: {folder}")
+        return folder
+
+    def capture_segment_frame(self, segment_num):
+        """Capture and save frames for a specific segment."""
+        print(f"Capturing frames for segment {segment_num}...")
+
+        # Capture frames from both cameras
+        ret_top, frame_top = self.cap_top.read()
+        ret_bottom, frame_bottom = self.cap_bottom.read()
+
+        if not ret_top or not ret_bottom:
+            print(f"Failed to capture frames for segment {segment_num}")
+            return
+
+        # Flip bottom camera frame horizontally (matching the other app)
+        frame_bottom = cv2.flip(frame_bottom, 1)
+
+        # Create visualization with ROI overlays (no wood detection for now)
+        vis_top = self.create_segment_visualization(frame_top, None, 'top')
+        vis_bottom = self.create_segment_visualization(frame_bottom, None, 'bottom')
+
+        print(f"Segment {segment_num} - Top frame shape: {vis_top.shape}, Bottom frame shape: {vis_bottom.shape}")
+
+        # Save segment frames
+        self.save_segment_frames(self.current_wood_number, segment_num, vis_top, vis_bottom)
+
+        # Update UI with captured frames
+        self.display_captured_frames(vis_top, vis_bottom)
+
+        print(f"Frames captured and saved for segment {segment_num}")
+
+    def save_segment_frames(self, wood_number, segment_num, top_frame, bottom_frame):
+        """Save captured frames for a specific segment of a wood piece."""
+        wood_folder = os.path.join(self.scan_session_folder, f"Wood ({wood_number})")
+        top_folder = os.path.join(wood_folder, "Top Panel")
+        bottom_folder = os.path.join(wood_folder, "Bottom Panel")
+
+        os.makedirs(top_folder, exist_ok=True)
+        os.makedirs(bottom_folder, exist_ok=True)
+
+        # Save frames with segment-specific names
+        top_filename = f"detection_segment_{segment_num}.jpg"
+        bottom_filename = f"detection_segment_{segment_num}.jpg"
+
+        top_path = os.path.join(top_folder, top_filename)
+        bottom_path = os.path.join(bottom_folder, bottom_filename)
+
+        success_top = cv2.imwrite(top_path, cv2.cvtColor(top_frame, cv2.COLOR_RGB2BGR))
+        success_bottom = cv2.imwrite(bottom_path, cv2.cvtColor(bottom_frame, cv2.COLOR_RGB2BGR))
+
+        if success_top and success_bottom:
+            print(f"Saved segment {segment_num} frames for Wood {wood_number}")
+        else:
+            print(f"Failed to save segment {segment_num} frames: top={success_top}, bottom={success_bottom}")
+
+    def save_final_wood_data(self, wood_number):
+        """Save accumulated defect data after all segments are captured for a wood piece."""
+        if wood_number not in self.scan_session_data:
+            return
+
+        wood_folder = os.path.join(self.scan_session_folder, f"Wood ({wood_number})")
+        data = self.scan_session_data[wood_number]
+
+        # Defect display name mapping
+        defect_display_names = {
+            "Sound_Knot": "Live Knot",
+            "Dead_Knot": "Dead Knot",
+            "Missing_Knot": "Missing Knot",
+            "Crack_Knot": "Knot with Crack",
+            "Unsound_Knot": "Unsound Knot"  # Fallback
+        }
+
+        # Save accumulated defect details
+        with open(os.path.join(wood_folder, "defects.txt"), "w") as f:
+            f.write(f"Wood No. ({wood_number}) - {data['width_mm']}mm\n\n")
+            f.write("Top Panel Defects:\n")
+            for i, (defect_type, size_mm, percentage) in enumerate(data['top_defects'], 1):
+                display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
+                f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+            f.write("\nBottom Panel Defects:\n")
+            for i, (defect_type, size_mm, percentage) in enumerate(data['bottom_defects'], 1):
+                display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
+                f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+
+        print(f"Saved final defect data for Wood {wood_number}")
+
+    def display_captured_frames(self, top_frame, bottom_frame):
+        """Display captured frames with overlays in the UI canvases."""
+        # Convert to PhotoImage and display
+        self._display_frame_on_canvas(top_frame, self.top_canvas)
+        self._display_frame_on_canvas(bottom_frame, self.bottom_canvas)
+
+    def grade_all_woods(self):
+        """Grade all detected woods after scan phase completion."""
+        print("Grading all detected woods...")
+
+        # Save final defect data for all woods
+        for wood_num in sorted(self.scan_session_data.keys()):
+            self.save_final_wood_data(wood_num)
+
+            data = self.scan_session_data[wood_num]
+            all_measurements = data['top_defects'] + data['bottom_defects']
+
+            top_grade = self.determine_surface_grade(data['top_defects'])
+            bottom_grade = self.determine_surface_grade(data['bottom_defects'])
+            final_grade = self.determine_final_grade(top_grade, bottom_grade)
+
+            print(f"Wood {wood_num}: Final grade {final_grade}")
+            self.finalize_grading(final_grade, all_measurements)
+
+        self.scan_phase_active = False
+        self.update_status_text("Status: SCAN_PHASE completed", STATUS_READY_COLOR)
+
     def finalize_grading(self, final_grade, all_measurements):
         """Central function to log piece details, update stats, and send Arduino command."""
         # 1. Convert grade to Arduino command for sorting and stats
@@ -4192,20 +4387,46 @@ class App(tk.Tk):
         else:
             ttk.Label(current_frame, text="No defects currently detected", font=self.font_small).pack(anchor="w")
         
-        # Grading thresholds reference
+        # Grading thresholds reference - Dynamic based on current wood width
         thresholds_frame = ttk.LabelFrame(self.defect_details_frame, text="SS-EN 1611-1 Grading Thresholds", padding="5")
         thresholds_frame.pack(fill="x", pady=2)
-        
-        threshold_text = "SS-EN 1611-1 Grading Thresholds (Limit = 0.10 * width + constant):\n\n"
+
+        # Calculate dynamic thresholds based on current wood width
+        wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 115  # Default to 115mm if not detected
+
+        threshold_text = f"SS-EN 1611-1 Grading Thresholds (Wood Width: {wood_width}mm):\n"
+        threshold_text += "Limit = (0.10 × width) + constant\n\n"
+
+        # Sound Knots thresholds
+        sound_limits = {}
+        for grade, constant in GRADING_CONSTANTS["Sound_Knot"].items():
+            limit = (0.10 * wood_width) + constant
+            sound_limits[grade] = limit
+
         threshold_text += "Sound Knots:\n"
-        threshold_text += "  G2-0: ≤21.5mm  |  G2-1: ≤31.5mm  |  G2-2: ≤46.5mm  |  G2-3: ≤61.5mm\n\n"
+        threshold_text += f"  G2-0: ≤{sound_limits.get('G2-0', 21.5):.1f}mm  |  G2-1: ≤{sound_limits.get('G2-1', 31.5):.1f}mm  |  G2-2: ≤{sound_limits.get('G2-2', 46.5):.1f}mm  |  G2-3: ≤{sound_limits.get('G2-3', 61.5):.1f}mm\n\n"
+
+        # Dead Knots thresholds
+        dead_limits = {}
+        for grade, constant in GRADING_CONSTANTS["Dead_Knot"].items():
+            limit = (0.10 * wood_width) + constant
+            dead_limits[grade] = limit
+
         threshold_text += "Dead Knots:\n"
-        threshold_text += "  G2-0: ≤11.5mm  |  G2-1: ≤21.5mm  |  G2-2: ≤31.5mm  |  G2-3: ≤61.5mm\n\n"
+        threshold_text += f"  G2-0: ≤{dead_limits.get('G2-0', 11.5):.1f}mm  |  G2-1: ≤{dead_limits.get('G2-1', 21.5):.1f}mm  |  G2-2: ≤{dead_limits.get('G2-2', 31.5):.1f}mm  |  G2-3: ≤{dead_limits.get('G2-3', 61.5):.1f}mm\n\n"
+
+        # Unsound Knots thresholds
+        unsound_limits = {}
+        for grade, constant in GRADING_CONSTANTS["Unsound_Knot"].items():
+            limit = (0.10 * wood_width) + constant
+            unsound_limits[grade] = limit
+
         threshold_text += "Unsound Knots:\n"
-        threshold_text += "  G2-2: ≤25.5mm  |  G2-3: ≤50.5mm\n\n"
+        threshold_text += f"  G2-2: ≤{unsound_limits.get('G2-2', 25.5):.1f}mm  |  G2-3: ≤{unsound_limits.get('G2-3', 50.5):.1f}mm\n\n"
+
         threshold_text += "Count Limits (Dead/Unsound per meter):\n"
         threshold_text += "  G2-0: 0  |  G2-1: 1  |  G2-2: 2  |  G2-3: 5"
-        
+
         ttk.Label(thresholds_frame, text=threshold_text, font=self.font_small, justify="left").pack(anchor="w")
 
     def update_performance_tab(self):
@@ -4613,6 +4834,30 @@ class App(tk.Tk):
         # Wait a moment then simulate 'L' message (beam clear with duration)
         self.after(2000, lambda: self.simulate_beam_clear())
 
+    def simulate_scan_events(self):
+        """Simulate SCAN_PHASE events for testing"""
+        print("Simulating SCAN_PHASE events for testing...")
+
+        # Simulate 'B' message (beam broken)
+        print("Simulating 'B' message (beam broken)...")
+        self.message_queue.put(("arduino_message", "B"))
+
+        # Simulate segment captures
+        self.after(1000, lambda: self.simulate_segment_capture(1))
+        self.after(3000, lambda: self.simulate_segment_capture(2))
+        self.after(5000, lambda: self.simulate_segment_capture(3))
+        self.after(7000, lambda: self.simulate_scan_complete())
+
+    def simulate_segment_capture(self, segment_num):
+        """Simulate segment capture message"""
+        print(f"Simulating 'CAPTURE:{segment_num}'")
+        self.message_queue.put(("arduino_message", f"CAPTURE:{segment_num}"))
+
+    def simulate_scan_complete(self):
+        """Simulate scan completion"""
+        print("Simulating 'Last scan phase complete. Clearing tail...'")
+        self.message_queue.put(("arduino_message", "Last scan phase complete. Clearing tail..."))
+
     def simulate_beam_clear(self):
         """Simulate beam clear message"""
         print("Simulating 'L:1000' message (beam clear, 1000ms duration)...")
@@ -4651,5 +4896,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == 'test':
         app.set_trigger_mode()
         app.after(1000, app.simulate_ir_events)  # Start simulation after 1 second
+    elif len(sys.argv) > 1 and sys.argv[1] == 'scan':
+        app.set_scan_mode()
+        app.after(1000, app.simulate_scan_events)  # Start scan simulation after 1 second
     app.mainloop()
 

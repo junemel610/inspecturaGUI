@@ -158,9 +158,10 @@ void handleScanPhase() {
           waitingForPause = true;
           pauseStartTime = millis();
           pauseCount++;
-          Serial.print("Segment ");
-          Serial.print(currentSegment + 1);
-          Serial.println(" complete. Pausing...");
+          Serial.print("CAPTURE:");
+          Serial.println(currentSegment + 1);
+          Serial.print("P:");
+          Serial.println(currentSegment + 1);
         } else {
           scanInProgress = false;
           clearTailAfterScan();
