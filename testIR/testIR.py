@@ -2999,31 +2999,25 @@ class App(tk.Tk):
             should_detect = self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER")
 
             # For bottom camera, only detect if top camera detected wood (synchronized detection)
-            if camera_name == "bottom" and should_detect:
-                top_wood_detected = self.wood_detection_results.get("top", {}).get('wood_detected', False)
-                if not top_wood_detected:
-                    should_detect = False
-                    print(f"Bottom camera detection skipped - no wood detected on top camera")
+            # But wood detection is done per camera, so bottom camera can detect wood independently
+            # Defect detection on bottom camera only happens if wood was detected on bottom camera
 
             # Only perform wood detection when detection is active (not in idle mode)
             if should_detect:
                 try:
-                    # For scan mode, use yellow ROI for wood detection
-                    if self.current_mode == "SCAN_PHASE" and self.roi_enabled.get(camera_name, False):
-                        roi_coords = self.roi_coordinates.get(camera_name, {})
-                        if roi_coords:
-                            x1, y1 = roi_coords.get("x1", 0), roi_coords.get("y1", 0)
-                            x2, y2 = roi_coords.get("x2", frame.shape[1]), roi_coords.get("y2", frame.shape[0])
-                            cropped_frame = frame[y1:y2, x1:x2]
-                            wood_detection = self.rgb_wood_detector.detect_wood_comprehensive(cropped_frame, camera=camera_name)
-                            # Adjust auto_roi coordinates back to full frame
-                            if wood_detection.get('auto_roi'):
-                                ax, ay, aw, ah = wood_detection['auto_roi']
-                                wood_detection['auto_roi'] = (x1 + ax, y1 + ay, aw, ah)
-                        else:
-                            wood_detection = self.rgb_wood_detector.detect_wood_comprehensive(frame, camera=camera_name)
+                    # Always use wood_detection ROI (Yellow ROI) for wood detection to maintain hierarchy
+                    wood_roi_coords = self.roi_coordinates.get("wood_detection", {})
+                    if wood_roi_coords and self.roi_enabled.get("wood_detection", True):
+                        x1, y1 = wood_roi_coords.get("x1", 0), wood_roi_coords.get("y1", 0)
+                        x2, y2 = wood_roi_coords.get("x2", frame.shape[1]), wood_roi_coords.get("y2", frame.shape[0])
+                        cropped_frame = frame[y1:y2, x1:x2]
+                        wood_detection = self.rgb_wood_detector.detect_wood_comprehensive(cropped_frame, camera=camera_name)
+                        # Adjust auto_roi coordinates back to full frame
+                        if wood_detection.get('auto_roi'):
+                            ax, ay, aw, ah = wood_detection['auto_roi']
+                            wood_detection['auto_roi'] = (x1 + ax, y1 + ay, aw, ah)
                     else:
-                        # Detect wood on current frame (full frame for other modes)
+                        # Fallback to full frame if wood_detection ROI not configured
                         wood_detection = self.rgb_wood_detector.detect_wood_comprehensive(frame, camera=camera_name)
 
                     # Store wood detection results for overlay display
@@ -3084,25 +3078,17 @@ class App(tk.Tk):
                 self.dynamic_roi[camera_name] = None
                 self.wood_detection_results[camera_name] = None
 
-            # Only proceed with defect detection if we have dynamic ROI (wood was detected)
-            has_dynamic_roi = (hasattr(self, 'dynamic_roi') and self.dynamic_roi and
-                             camera_name in self.dynamic_roi and self.dynamic_roi[camera_name] is not None)
+            # Only proceed with defect detection if wood was detected (for hierarchy)
+            has_wood_detected = (hasattr(self, 'wood_detection_results') and
+                                self.wood_detection_results.get(camera_name) and
+                                self.wood_detection_results[camera_name].get('wood_detected', False))
 
-            if should_detect and has_dynamic_roi:
-                # STEP 3 CONTINUED: Use the generated Dynamic ROI for the Defect Detection
-                # Convert ROI format from (x, y, w, h) to coordinates for apply_roi
-                roi_coords = self.dynamic_roi[camera_name]
-                roi_x, roi_y, roi_w, roi_h = roi_coords
-                # Create ROI coordinates dict in the format expected by apply_roi
-                dynamic_roi_coords = {
-                    "x1": roi_x,
-                    "y1": roi_y,
-                    "x2": roi_x + roi_w,
-                    "y2": roi_y + roi_h
-                }
-                detection_frame, roi_info = self.apply_roi(frame, camera_name, dynamic_roi_coords)
-                print(f"🎯 Using dynamic ROI for {camera_name}: {dynamic_roi_coords}")
-                
+            if should_detect and has_wood_detected:
+                # STEP 3: Detect Defects only in the Green ROI (static camera ROI)
+                # Use the static Green ROI for defect detection to maintain hierarchy
+                detection_frame, roi_info = self.apply_roi(frame, camera_name)
+                print(f"🎯 Using Green ROI for {camera_name} defect detection")
+
                 # Pre-resize frame for faster processing if it's very large
                 height, width = detection_frame.shape[:2]
                 if width > 1280 or height > 720:
@@ -3111,7 +3097,7 @@ class App(tk.Tk):
                     new_width = int(width * scale_factor)
                     new_height = int(height * scale_factor)
                     resized_frame = cv2.resize(detection_frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-                    
+
                     # Run detection on resized ROI frame
                     result = self.analyze_frame(resized_frame, camera_name, run_defect_model=True)
 
@@ -3134,7 +3120,7 @@ class App(tk.Tk):
                     else:
                         annotated_frame, defect_dict = result
                         detections_for_grading = []
-                
+
                 # If ROI was applied, place the annotated ROI back into the full frame
                 if roi_info is not None:
                     full_frame_annotated = frame.copy()
@@ -3211,7 +3197,7 @@ class App(tk.Tk):
 
                 cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             else:
-                # No defect detection (either not should_detect or no dynamic ROI)
+                # No defect detection (either not should_detect or no wood detected)
                 # Just show raw feed without detection processing
                 # Add ROI overlay to show the detection area even when not detecting
                 frame_with_roi = self.draw_roi_overlay(frame, camera_name)
@@ -4110,22 +4096,49 @@ class App(tk.Tk):
         for camera_name, frame in [("top", frame_top), ("bottom", frame_bottom)]:
             print(f"Processing {camera_name} camera for segment {segment_num}")
 
-            # Step 1: Run wood detection on full frame first
-            wood_detection_result = self.rgb_wood_detector.detect_wood_comprehensive(
-                frame, camera=camera_name
-            )
+            # Step 1: Run wood detection ONLY within Yellow ROI (camera ROI)
+            wood_detection_result = None
+            if self.roi_enabled.get(camera_name, True):
+                roi_coords = self.roi_coordinates.get(camera_name)
+                if roi_coords:
+                    x1, y1, x2, y2 = roi_coords["x1"], roi_coords["y1"], roi_coords["x2"], roi_coords["y2"]
+                    yellow_roi_frame = frame[y1:y2, x1:x2]
+                    print(f"Running wood detection on Yellow ROI: x1={x1}, y1={y1}, x2={x2}, y2={y2}")
+
+                    wood_detection_result = self.rgb_wood_detector.detect_wood_comprehensive(
+                        yellow_roi_frame, camera=camera_name
+                    )
+
+                    # Adjust bounding boxes back to full frame coordinates
+                    if wood_detection_result.get('wood_detected', False):
+                        for candidate in wood_detection_result['wood_candidates']:
+                            bbox_x, bbox_y, bbox_w, bbox_h = candidate['bbox']
+                            candidate['bbox'] = (bbox_x + x1, bbox_y + y1, bbox_w, bbox_h)
+
+                        if wood_detection_result.get('auto_roi'):
+                            roi_x, roi_y, roi_w, roi_h = wood_detection_result['auto_roi']
+                            wood_detection_result['auto_roi'] = (roi_x + x1, roi_y + y1, roi_w, roi_h)
+                else:
+                    print(f"No Yellow ROI defined, skipping wood detection")
+            else:
+                print(f"Wood detection ROI disabled")
 
             # Store wood detection results
             self.wood_detection_results[camera_name] = wood_detection_result
 
-            # Step 2: Apply ROI cropping for defect detection (if wood detected)
-            roi_frame, roi_info = self.apply_roi(frame, camera_name)
+            # Step 2: Apply defect detection ONLY within detected wood area (Green ROI based on wood detection)
+            if wood_detection_result and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
+                wood_roi = wood_detection_result['auto_roi']
+                x1, y1, w, h = wood_roi
+                x2, y2 = x1 + w, y1 + h
 
-            if roi_info is not None and wood_detection_result.get('wood_detected', False):
-                print(f"Wood detected on {camera_name}, processing ROI: {roi_info}")
+                print(f"Wood detected on {camera_name}, running defect detection on wood ROI: x1={x1}, y1={y1}, x2={x2}, y2={y2}")
 
-                # Step 3: Run defect detection on ROI-cropped frame
-                result = self.analyze_frame(roi_frame, camera_name, run_defect_model=True)
+                # Crop frame to detected wood area
+                wood_roi_frame = frame[y1:y2, x1:x2]
+
+                # Step 3: Run defect detection on wood ROI-cropped frame
+                result = self.analyze_frame(wood_roi_frame, camera_name, run_defect_model=True)
 
                 if len(result) == 3:
                     annotated_roi, defect_dict, detections_for_grading = result
@@ -4133,9 +4146,9 @@ class App(tk.Tk):
                     annotated_roi, defect_dict = result
                     detections_for_grading = []
 
-                # Step 4: Place annotated ROI back onto full frame
+                # Step 4: Place annotated wood ROI back onto full frame
                 full_frame_annotated = frame.copy()
-                full_frame_annotated[roi_info["y1"]:roi_info["y2"], roi_info["x1"]:roi_info["x2"]] = annotated_roi
+                full_frame_annotated[y1:y2, x1:x2] = annotated_roi
 
                 # Step 5: Add wood detection overlay to show detected wood pieces
                 final_frame = self.draw_wood_detection_overlay(full_frame_annotated, camera_name)
@@ -4155,15 +4168,15 @@ class App(tk.Tk):
                 })
 
             else:
-                # No wood detected or no ROI, show wood detection attempt
-                print(f"No wood detected on {camera_name} or ROI disabled")
+                # No wood detected, show wood detection attempt
+                print(f"No wood detected on {camera_name} in Yellow ROI")
                 final_frame = self.draw_wood_detection_overlay(frame, camera_name)
                 final_frame = self.draw_roi_overlay(final_frame, camera_name)
                 processed_frames[camera_name] = final_frame
 
         # Save processed frames with ROI-based detection results
         self.save_segment_frames(self.current_wood_number, segment_num,
-                               processed_frames["top"], processed_frames["bottom"])
+                                processed_frames["top"], processed_frames["bottom"])
 
         # Update UI with processed frames
         self.display_captured_frames(processed_frames["top"], processed_frames["bottom"])
@@ -4397,21 +4410,19 @@ class App(tk.Tk):
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
                 current_detections.append((bbox, standard_defect_type, size_mm, confidence))
 
-            # Process detections with ROI filtering
+            # Process detections (no ROI filtering since frame is already cropped to relevant area)
             detections_for_grading = []
             final_defect_dict = {}
 
             for bbox, defect_type, size_mm, confidence in current_detections:
-                # Check if detection intersects with ROI (only count detections within ROI)
-                if self.bbox_intersects_roi(bbox, camera_name):
-                    # Use detection information directly for grading
-                    detections_for_grading.append((defect_type, size_mm, 0.0))  # percentage not needed for grading
+                # Use detection information directly for grading (already within cropped area)
+                detections_for_grading.append((defect_type, size_mm, 0.0))  # percentage not needed for grading
 
-                    # Count by defect type for display
-                    if defect_type in final_defect_dict:
-                        final_defect_dict[defect_type] += 1
-                    else:
-                        final_defect_dict[defect_type] = 1
+                # Count by defect type for display
+                if defect_type in final_defect_dict:
+                    final_defect_dict[defect_type] += 1
+                else:
+                    final_defect_dict[defect_type] = 1
 
             # Use the model's default overlay annotations
             # The image_overlay from DeGirum already includes appropriate defect labels
