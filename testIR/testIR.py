@@ -165,8 +165,11 @@ class CameraHandler:
     def __init__(self):
         self.top_camera = None
         self.bottom_camera = None
-        self.top_camera_index = 0  # Cam0 - Rapoo
-        self.bottom_camera_index = 2  # Cam2 - C922
+        # Device paths for cameras (Rapoo for top, C922 for bottom)
+        self.top_camera_devices = ['/dev/video0','/dev/video1', '/dev/video3']  # Rapoo Camera
+        self.bottom_camera_devices = ['/dev/video2', '/dev/video4', '/dev/video5']  # C922 Pro Stream Webcam
+        self.top_camera_device = None  # Will be set to successful device path
+        self.bottom_camera_device = None  # Will be set to successful device path
         self.top_camera_settings = {
             'brightness': 0,
             'contrast': 32,
@@ -177,13 +180,14 @@ class CameraHandler:
             'gain': 0
         }
         self.bottom_camera_settings = {
-            'brightness': 135,
-            'contrast': 75,
-            'saturation': 155,
+            'brightness': 110,
+            'contrast': 125,
+            'saturation': 125,
             'hue': 0,
             'exposure': -6,
-            'white_balance': 5400,
-            'gain': 0
+            'white_balance': 4850,
+            'gain': 0,
+            'backlight_compensation': 1
         }
 
     def _get_camera_device_info(self):
@@ -244,7 +248,7 @@ class CameraHandler:
                         # Disable autofocus for consistent focus
                         try:
                             subprocess.run(['v4l2-ctl', '-d', device_path, '-c', 'focus_automatic_continuous=0'],
-                                         capture_output=True, timeout=2)
+                                          capture_output=True, timeout=2)
                             print(f"Disabled autofocus for {device_path}")
                         except (subprocess.SubprocessError, subprocess.TimeoutExpired):
                             print(f"Warning: Could not disable autofocus for {device_path}")
@@ -263,47 +267,58 @@ class CameraHandler:
         return None, None
 
     def initialize_cameras(self):
-        """Initialize both cameras with specific indices"""
         try:
-            # Initialize top camera (Cam0)
-            self.top_camera = cv2.VideoCapture(self.top_camera_index)
-            if not self.top_camera.isOpened():
-                raise RuntimeError(f"Could not open top camera (Cam0 - index {self.top_camera_index})")
+            # Try dynamic camera identification first
+            success = self._dynamic_reassign_cameras()
+            if success:
+                print("Cameras initialized successfully using dynamic identification")
+                return
 
-            # Initialize bottom camera (Cam2)
-            self.bottom_camera = cv2.VideoCapture(self.bottom_camera_index)
-            if not self.bottom_camera.isOpened():
+            # Fallback to specific device paths
+            print("Dynamic identification failed, trying specific device paths...")
+            # Initialize top camera (Rapoo)
+            self.top_camera, self.top_camera_device = self._initialize_camera_with_devices(
+                self.top_camera_devices, "top")
+            if self.top_camera is None:
+                raise RuntimeError("Could not open top camera (Rapoo) on any device")
+
+            # Initialize bottom camera (C922)
+            self.bottom_camera, self.bottom_camera_device = self._initialize_camera_with_devices(
+                self.bottom_camera_devices, "bottom")
+            if self.bottom_camera is None:
                 self.top_camera.release()
-                raise RuntimeError(f"Could not open bottom camera (Cam2 - index {self.bottom_camera_index})")
+                raise RuntimeError("Could not open bottom camera (C922) on any device")
 
-            # Set resolution to 720p for both cameras
+            # Set resolution and apply settings
             self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
             self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-            # Apply camera settings
             self._apply_camera_settings(self.top_camera, self.top_camera_settings)
             self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
 
             print("Cameras initialized successfully at 720p (1280x720)")
+            print(f"Top camera (Rapoo): {self.top_camera_device}")
+            print(f"Bottom camera (C922): {self.bottom_camera_device}")
 
         except Exception as e:
             self.release_cameras()
             raise RuntimeError(f"Failed to initialize cameras: {str(e)}")
 
     def _apply_camera_settings(self, camera, settings):
-        """Apply settings to a camera"""
         try:
             camera.set(cv2.CAP_PROP_BRIGHTNESS, settings['brightness'])
             camera.set(cv2.CAP_PROP_CONTRAST, settings['contrast'])
             camera.set(cv2.CAP_PROP_SATURATION, settings['saturation'])
             camera.set(cv2.CAP_PROP_HUE, settings['hue'])
-            camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Manual exposure
+            camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
             camera.set(cv2.CAP_PROP_EXPOSURE, settings['exposure'])
-            camera.set(cv2.CAP_PROP_AUTO_WB, 0)  # Manual white balance
+            camera.set(cv2.CAP_PROP_AUTO_WB, 0)
             camera.set(cv2.CAP_PROP_WB_TEMPERATURE, settings['white_balance'])
             camera.set(cv2.CAP_PROP_GAIN, settings['gain'])
+            camera.set(cv2.CAP_PROP_SHARPNESS, settings['sharpness'])
+            camera.set(cv2.CAP_PROP_BACKLIGHT, settings['backlight_compensation'])
         except Exception as e:
             print(f"Warning: Some camera settings may not be supported: {e}")
 
@@ -444,7 +459,7 @@ class CameraHandler:
             for device in [top_device, bottom_device]:
                 try:
                     subprocess.run(['v4l2-ctl', '-d', device, '-c', 'focus_automatic_continuous=0'],
-                                 capture_output=True, timeout=2)
+                                  capture_output=True, timeout=2)
                     print(f"Disabled autofocus for reconnected {device}")
                 except (subprocess.SubprocessError, subprocess.TimeoutExpired):
                     print(f"Warning: Could not disable autofocus for reconnected {device}")
@@ -4091,8 +4106,9 @@ class App(tk.Tk):
         top_path = os.path.join(top_folder, top_filename)
         bottom_path = os.path.join(bottom_folder, bottom_filename)
 
-        success_top = cv2.imwrite(top_path, cv2.cvtColor(top_frame, cv2.COLOR_RGB2BGR))
-        success_bottom = cv2.imwrite(bottom_path, cv2.cvtColor(bottom_frame, cv2.COLOR_RGB2BGR))
+        # Save frames directly (already in BGR format from camera)
+        success_top = cv2.imwrite(top_path, top_frame)
+        success_bottom = cv2.imwrite(bottom_path, bottom_frame)
 
         if success_top and success_bottom:
             print(f"Saved segment {segment_num} frames for Wood {wood_number}")
