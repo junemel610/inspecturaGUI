@@ -11,7 +11,7 @@ import degirum_tools
 import json
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -631,10 +631,10 @@ WOOD_PALLET_HEIGHT_MM = 0  # Will be updated dynamically when wood is detected
 # SS-EN 1611-1 Grading constants for size limits: limit = (0.10 * wood_width) + constant
 GRADING_CONSTANTS = {
     "Sound_Knot": {"G2-0": 10, "G2-1": 20, "G2-2": 35, "G2-3": 50},
-    "Dead_Knot": {"G2-0": 0, "G2-1": 10, "G2-2": 20, "G2-3": 50},  # Using stricter limits
+    "Dead_Knot": {"G2-0": 0, "G2-1": 10, "G2-2": 20, "G2-3": 50},
     "Unsound_Knot": {"G2-2": 15, "G2-3": 40},  # Not permitted in G2-0, G2-1
     "Missing_Knot": {"G2-2": 15, "G2-3": 40},  # Same as Unsound_Knot
-    "Crack_Knot": {"G2-2": 15, "G2-3": 40}  # Same as Unsound_Knot
+    "Crack_Knot": {"G2-2": 15, "G2-3": 40}  # Same as Unsound_Knot for "Knot with Crack"
 }
 
 # Knot count limits per meter for Dead and Unsound knots
@@ -721,7 +721,6 @@ class DetectionDeduplicator:
 
     def _timestamp_to_seconds(self, timestamp_str):
         """Convert ISO timestamp to seconds since epoch"""
-        from datetime import datetime
         dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
         return dt.timestamp()
 
@@ -742,9 +741,9 @@ class ColorWoodDetector:
         }
 
         # Detection parameters
-        self.min_contour_area = 2000      # Increased for more reliable detection with tighter RGB ranges
+        self.min_contour_area = 1000      # Lowered for better detection of smaller wood pieces
         self.max_contour_area = 500000    # Slightly reduced for typical wood plank sizes
-        self.min_aspect_ratio = 1.0       # Tightened for more rectangular wood shapes
+        self.min_aspect_ratio = 0.1       # Lowered to allow horizontal wood orientation
         self.max_aspect_ratio = 10.0      # Reduced for more typical plank proportions
         self.contour_approximation = 0.025 # Slightly tighter for better shape approximation
 
@@ -884,14 +883,14 @@ class ColorWoodDetector:
 
             # Filter by minimum size to prevent small detections
             if camera == 'top':
-                min_height = 266
-                min_width = 100
+                min_height = 50   # Lowered for better detection
+                min_width = 50
             elif camera == 'bottom':
-                min_height = 286
-                min_width = 100
+                min_height = 50   # Lowered for better detection
+                min_width = 50
             else:
-                min_height = 100
-                min_width = 100
+                min_height = 50
+                min_width = 50
 
             if h < min_height or w < min_width:
                 rejected_area += 1
@@ -1709,7 +1708,7 @@ class App(tk.Tk):
         label_mapping = {
             # Your actual model outputs (case-insensitive)
             "dead knots": "Dead_Knot",
-            "knots with crack": "Crack_Knot",
+            "knots with crack": "Unsound_Knot",
             "live knots": "Sound_Knot",
             "missing knots": "Missing_Knot",
             # Variations and alternatives
@@ -1724,10 +1723,13 @@ class App(tk.Tk):
             "sound knots": "Sound_Knot",
             "dead knots": "Dead_Knot",
             "unsound knots": "Unsound_Knot",
+            "knot with crack": "Unsound_Knot",
             "live_knot": "Sound_Knot",
             "dead_knot": "Dead_Knot",
             "missing_knot": "Missing_Knot",
-            "crack_knot": "Crack_Knot",
+            "crack_knot": "Unsound_Knot",
+            "live knot": "Sound_Knot",
+            "knot with crack": "Unsound_Knot",
             # Generic fallback
             "knot": "Unsound_Knot"
         }
@@ -2314,7 +2316,7 @@ class App(tk.Tk):
         """Save detection log entry to file for test case documentation"""
         import json
         import os
-        from datetime import datetime
+        from datetime import datetime, timedelta
         
         # Create logs directory if it doesn't exist
         log_dir = "detection_logs"
@@ -2355,7 +2357,7 @@ class App(tk.Tk):
     def export_test_case_summary(self, test_case_number):
         """Export summary of a specific test case for documentation"""
         import json
-        from datetime import datetime
+        from datetime import datetime, timedelta
         
         # Filter detections for this test case
         test_case_name = f"TEST_CASE_{test_case_number:02d}"
@@ -3355,39 +3357,45 @@ class App(tk.Tk):
         # Update individual camera grades
         top_grade = self.live_grades["top"]
         bottom_grade = self.live_grades["bottom"]
-        
+
         if isinstance(top_grade, dict):
             self.top_grade_label.config(text=top_grade['text'], foreground=top_grade['color'])
         else:
             self.top_grade_label.config(text=top_grade, foreground="gray")
-        
+
         if isinstance(bottom_grade, dict):
             self.bottom_grade_label.config(text=bottom_grade['text'], foreground=bottom_grade['color'])
         else:
             self.bottom_grade_label.config(text=bottom_grade, foreground="gray")
-        
+
         # Calculate combined grade using sophisticated method
         wood_detected = False
         top_surface_grade = None
         bottom_surface_grade = None
-        
+
         # Get sophisticated grades from measurements if available
         if hasattr(self, 'live_measurements'):
             if self.live_measurements.get("top"):
                 wood_detected = True
                 top_surface_grade = self.determine_surface_grade(self.live_measurements["top"])
-            
+
             if self.live_measurements.get("bottom"):
                 wood_detected = True
                 bottom_surface_grade = self.determine_surface_grade(self.live_measurements["bottom"])
-        
+
         # Fallback to detection-based grading if measurements not available
         if not wood_detected:
             for camera_name in ["top", "bottom"]:
                 if self.live_detections[camera_name]:
                     wood_detected = True
                     break
-        
+
+        # For scan mode, use the per-side grades from live_grades if available
+        if self.current_mode == "SCAN_PHASE" and isinstance(top_grade, dict) and isinstance(bottom_grade, dict):
+            top_surface_grade = top_grade['grade']
+            bottom_surface_grade = bottom_grade['grade']
+            wood_detected = True
+
         if wood_detected:
             # Use sophisticated grading if measurements available
             if top_surface_grade is not None or bottom_surface_grade is not None:
@@ -3401,14 +3409,14 @@ class App(tk.Tk):
                     if self.live_detections[camera_name]:
                         for defect, count in self.live_detections[camera_name].items():
                             combined_defects[defect] = combined_defects.get(defect, 0) + count
-                
+
                 combined_grade = self.calculate_grade(combined_defects)
                 combined_text = combined_grade['text']
                 combined_color = combined_grade['color']
                 final_grade = None
-            
+
             self.combined_grade_label.config(text=combined_text, foreground=combined_color)
-            
+
             # Auto-grade functionality - COMPLETELY DISABLED
             # Grading only happens when beam clears in TRIGGER mode
             # This ensures accurate grading based on complete defect tracking
@@ -4154,6 +4162,14 @@ class App(tk.Tk):
             # Store wood detection results
             self.wood_detection_results[camera_name] = wood_detection_result
 
+            # Update wood height if wood was detected (only from top camera)
+            if camera_name == "top" and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
+                x, y, w, h = wood_detection_result['auto_roi']
+                detected_width_mm = self.rgb_wood_detector.calculate_width_mm(w, camera_name)
+                global WOOD_PALLET_HEIGHT_MM
+                WOOD_PALLET_HEIGHT_MM = detected_width_mm
+                print(f"Updated WOOD_PALLET_HEIGHT_MM to {detected_width_mm:.1f}mm from {camera_name} camera")
+
             # Step 2: Apply defect detection ONLY within detected wood area (Green ROI based on wood detection)
             if wood_detection_result and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
                 wood_roi = wood_detection_result['auto_roi']
@@ -4236,7 +4252,7 @@ class App(tk.Tk):
         else:
             print(f"Failed to save segment {segment_num} frames: top={success_top}, bottom={success_bottom}")
 
-    def save_final_wood_data(self, wood_number):
+    def save_final_wood_data(self, wood_number, top_grade=None, bottom_grade=None, final_grade=None):
         """Save accumulated defect data after all segments are captured for a wood piece."""
         if wood_number not in self.scan_session_data:
             return
@@ -4244,26 +4260,43 @@ class App(tk.Tk):
         wood_folder = os.path.join(self.scan_session_folder, f"Wood ({wood_number})")
         data = self.scan_session_data[wood_number]
 
+        # Use provided grades or get from live_grades
+        if top_grade is None:
+            top_grade = self.live_grades.get("top", {}).get("grade", "Unknown") if isinstance(self.live_grades.get("top"), dict) else "Unknown"
+        if bottom_grade is None:
+            bottom_grade = self.live_grades.get("bottom", {}).get("grade", "Unknown") if isinstance(self.live_grades.get("bottom"), dict) else "Unknown"
+        if final_grade is None:
+            final_grade = self.determine_final_grade(top_grade, bottom_grade)
+
         # Defect display name mapping
         defect_display_names = {
             "Sound_Knot": "Live Knot",
             "Dead_Knot": "Dead Knot",
             "Missing_Knot": "Missing Knot",
             "Crack_Knot": "Knot with Crack",
-            "Unsound_Knot": "Unsound Knot"  # Fallback
+            "Unsound_Knot": "Unsound Knot"  # Includes Crack Knots
         }
 
         # Save accumulated defect details
         with open(os.path.join(wood_folder, "defects.txt"), "w") as f:
-            f.write(f"Wood No. ({wood_number}) - {data['width_mm']}mm\n\n")
+            f.write(f"Wood No. ({wood_number}) - {data['width_mm']}mm\n")
+            f.write(f"Top Panel Grade: {top_grade}\n")
+            f.write(f"Bottom Panel Grade: {bottom_grade}\n")
+            f.write(f"Final Grade: {final_grade}\n\n")
             f.write("Top Panel Defects:\n")
-            for i, (defect_type, size_mm, percentage) in enumerate(data['top_defects'], 1):
-                display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
-                f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+            if data['top_defects']:
+                for i, (defect_type, size_mm, percentage) in enumerate(data['top_defects'], 1):
+                    display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
+                    f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+            else:
+                f.write("No defects detected\n")
             f.write("\nBottom Panel Defects:\n")
-            for i, (defect_type, size_mm, percentage) in enumerate(data['bottom_defects'], 1):
-                display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
-                f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+            if data['bottom_defects']:
+                for i, (defect_type, size_mm, percentage) in enumerate(data['bottom_defects'], 1):
+                    display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
+                    f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+            else:
+                f.write("No defects detected\n")
 
         print(f"Saved final defect data for Wood {wood_number}")
 
@@ -4347,24 +4380,83 @@ class App(tk.Tk):
                 if segment_data.get("measurements"):
                     wood_bottom_defects.extend(segment_data["measurements"])
 
-            # Store in scan session data for compatibility
+            # Deduplicate defects before grading to prevent overcounting
+            # Convert defect tuples to detection dicts for deduplication
+            top_detections_for_dedup = []
+            bottom_detections_for_dedup = []
+
+            # Create detection dicts with proper ISO timestamps based on segment order
+            base_time = datetime.now()
+            segment_timestamp = 0
+            for segment_data in self.segment_defects["top"]:
+                if segment_data.get("measurements"):
+                    segment_time = base_time + timedelta(seconds=segment_timestamp)
+                    for defect_type, size_mm, percentage in segment_data["measurements"]:
+                        top_detections_for_dedup.append({
+                            'timestamp': segment_time.isoformat(),
+                            'defect_type': defect_type,
+                            'size_mm': size_mm,
+                            'percentage': percentage
+                        })
+                segment_timestamp += 0.1  # Increment timestamp for each segment
+
+            segment_timestamp = 0
+            for segment_data in self.segment_defects["bottom"]:
+                if segment_data.get("measurements"):
+                    segment_time = base_time + timedelta(seconds=segment_timestamp)
+                    for defect_type, size_mm, percentage in segment_data["measurements"]:
+                        bottom_detections_for_dedup.append({
+                            'timestamp': segment_time.isoformat(),
+                            'defect_type': defect_type,
+                            'size_mm': size_mm,
+                            'percentage': percentage
+                        })
+                segment_timestamp += 0.1  # Increment timestamp for each segment
+
+            # Deduplicate detections
+            deduplicated_top = self.deduplicator.deduplicate(top_detections_for_dedup)
+            deduplicated_bottom = self.deduplicator.deduplicate(bottom_detections_for_dedup)
+
+            # Convert back to defect tuples for grading
+            deduplicated_top_defects = [(d['defect_type'], d['size_mm'], d['percentage']) for d in deduplicated_top]
+            deduplicated_bottom_defects = [(d['defect_type'], d['size_mm'], d['percentage']) for d in deduplicated_bottom]
+
+            print(f"  Top defects: {len(wood_top_defects)} raw -> {len(deduplicated_top_defects)} deduplicated")
+            print(f"  Bottom defects: {len(wood_bottom_defects)} raw -> {len(deduplicated_bottom_defects)} deduplicated")
+
+            # Store deduplicated defects in scan session data
             self.scan_session_data[wood_num] = {
-                'top_defects': wood_top_defects,
-                'bottom_defects': wood_bottom_defects,
+                'top_defects': deduplicated_top_defects,
+                'bottom_defects': deduplicated_bottom_defects,
                 'width_mm': WOOD_PALLET_HEIGHT_MM  # Use current wood height
             }
 
-            # Save final defect data
-            self.save_final_wood_data(wood_num)
-
-            # Grade the wood piece
-            all_measurements = wood_top_defects + wood_bottom_defects
-            top_grade = self.determine_surface_grade(wood_top_defects)
-            bottom_grade = self.determine_surface_grade(wood_bottom_defects)
+            # Grade the wood piece per side using deduplicated defects
+            all_measurements = deduplicated_top_defects + deduplicated_bottom_defects
+            top_grade = self.determine_surface_grade(deduplicated_top_defects)
+            bottom_grade = self.determine_surface_grade(deduplicated_bottom_defects)
             final_grade = self.determine_final_grade(top_grade, bottom_grade)
+
+            # Save final defect data
+            self.save_final_wood_data(wood_num, top_grade, bottom_grade, final_grade)
 
             print(f"Wood {wood_num}: Top={top_grade}, Bottom={bottom_grade}, Final={final_grade}")
             print(f"  Total defects: Top={len(wood_top_defects)}, Bottom={len(wood_bottom_defects)}")
+
+            # Update live grades for UI display (per-side grading)
+            self.live_grades["top"] = {
+                'grade': top_grade,
+                'text': f'{top_grade} - SS-EN 1611-1 (Top Camera)',
+                'color': self.get_grade_color(top_grade)
+            }
+            self.live_grades["bottom"] = {
+                'grade': bottom_grade,
+                'text': f'{bottom_grade} - SS-EN 1611-1 (Bottom Camera)',
+                'color': self.get_grade_color(bottom_grade)
+            }
+
+            # Update the live grading display to show per-side grades
+            self.update_live_grading_display()
 
             self.finalize_grading(final_grade, all_measurements)
 
@@ -4627,17 +4719,18 @@ class App(tk.Tk):
         threshold_text += "Dead Knots:\n"
         threshold_text += f"  G2-0: ≤{dead_limits.get('G2-0', 11.5):.1f}mm  |  G2-1: ≤{dead_limits.get('G2-1', 21.5):.1f}mm  |  G2-2: ≤{dead_limits.get('G2-2', 31.5):.1f}mm  |  G2-3: ≤{dead_limits.get('G2-3', 61.5):.1f}mm\n\n"
 
-        # Unsound Knots thresholds
+        # Unsound Knots thresholds (includes Crack Knots)
         unsound_limits = {}
         for grade, constant in GRADING_CONSTANTS["Unsound_Knot"].items():
             limit = (0.10 * wood_width) + constant
             unsound_limits[grade] = limit
 
-        threshold_text += "Unsound Knots:\n"
+        threshold_text += "Unsound Knots (incl. Crack Knots):\n"
         threshold_text += f"  G2-2: ≤{unsound_limits.get('G2-2', 25.5):.1f}mm  |  G2-3: ≤{unsound_limits.get('G2-3', 50.5):.1f}mm\n\n"
 
         threshold_text += "Count Limits (Dead/Unsound per meter):\n"
-        threshold_text += "  G2-0: 0  |  G2-1: 1  |  G2-2: 2  |  G2-3: 5"
+        threshold_text += "  G2-0: 0  |  G2-1: 1  |  G2-2: 2  |  G2-3: 5\n\n"
+        threshold_text += "Note: 'Knot with Crack' is classified as Unsound Knot"
 
         ttk.Label(thresholds_frame, text=threshold_text, font=self.font_small, justify="left").pack(anchor="w")
 
