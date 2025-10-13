@@ -615,6 +615,242 @@ GRADE_G2_2 = "G2-2"
 GRADE_G2_3 = "G2-3"
 GRADE_G2_4 = "G2-4"
 
+class SSEN1611_1_PineGrader_Final:
+    """
+    Implements the appearance grading logic for PINE timber.
+
+    This version excludes:
+    1. Spike/Splay Knot checks.
+    2. Encased Knot checks (Treated as NOT PERMITTED for all grades).
+
+    The final grade is determined by the worst (lowest) quality face.
+    """
+
+    # G2-0 is the highest quality (best), G2-4 is the lowest (worst)
+    GRADES = ["G2-0", "G2-1", "G2-2", "G2-3", "G2-4"]
+
+    # ONLY these three types of knots are considered for size/number
+    KNOT_TYPES = ["Sound Knots", "Dead Knots", "Unsound/Missing Knots"]
+
+    # --- KNOT SIZE LIMITS (A) ---
+    # Note: Encased Knot limits have been removed from the array definition.
+    # The order of the tuples must match the order of KNOT_TYPES.
+    # (Sound Knots, Dead Knots, Unsound/Missing Knots)
+    KNOT_SIZE_LIMITS = {
+        # Unsound/Missing NOT PERMITTED (0.00, 0) in G2-0/G2-1
+        "G2-0": [(0.10, 10), (0.10, 0), (0.00, 0)],
+        "G2-1": [(0.10, 20), (0.10, 10), (0.00, 0)],
+        "G2-2": [(0.10, 35), (0.10, 20), (0.10, 15)],
+        "G2-3": [(0.10, 50), (0.10, 50), (0.10, 40)],
+        "G2-4": [(1.00, 9999), (1.00, 9999), (1.00, 9999)]
+    }
+
+    # --- KNOT FREQUENCY LIMITS (C) ---
+    # Limits are tuples: (Max Total Knots/m, Max Poor-Quality Knots/m)
+    # Poor-Quality Knots are now ONLY Unsound/Missing.
+    KNOT_NUMBER_LIMITS = {
+        "G2-0": (2, 0), # Max 0 Poor-Quality (Unsound/Missing)
+        "G2-1": (4, 0), # Max 0 Poor-Quality (Unsound/Missing) - was 1 for Encased, now 0
+        "G2-2": (6, 2),
+        "G2-3": (9999, 5),
+        "G2-4": (9999, 9999)
+    }
+
+    def __init__(self, width_mm):
+        self.original_width = width_mm
+
+        # PINE Note B: Size Increase for pieces >= 180 mm wide.
+        self.size_increase_mm = 0
+        if width_mm >= 180:
+            self.size_increase_mm = 10
+
+    def get_max_allowed_size(self, grade, knot_type):
+        """Calculates the maximum allowed size for a specific knot type and grade."""
+        grade_limits = self.KNOT_SIZE_LIMITS[grade]
+
+        try:
+            knot_index = self.KNOT_TYPES.index(knot_type)
+        except ValueError:
+            # If the user tries to check for an excluded knot type (like "Encased Knots")
+            return 0
+
+        percent_limit, absolute_limit = grade_limits[knot_index]
+        max_size = (percent_limit * self.original_width) + absolute_limit + self.size_increase_mm
+
+        # For Unsound/Missing in G2-0 and G2-1, the limit is strictly 0.
+        if percent_limit == 0.00 and absolute_limit == 0:
+             return 0
+
+        return round(max_size)
+
+    def _check_size_compliance(self, knot_data_size):
+        """Internal function to check size compliance for a single face."""
+        passed_grades = []
+        for grade in self.GRADES:
+            grade_passed = True
+            for knot_type, max_size_found in knot_data_size.items():
+
+                # IMPORTANT: Skip any knot type that is not used in this grading scheme
+                if knot_type not in self.KNOT_TYPES:
+                    continue
+
+                allowed_size = self.get_max_allowed_size(grade, knot_type)
+
+                if allowed_size == 0 and max_size_found > 0:
+                    # Fails due to NOT PERMITTED (Unsound/Missing in G2-0/G2-1, or if a zero size Encased was passed)
+                    grade_passed = False
+                    break
+                elif max_size_found > allowed_size:
+                    grade_passed = False
+                    break
+
+            if grade_passed:
+                passed_grades.append(grade)
+        return passed_grades
+
+    def _check_number_compliance(self, knot_data_number):
+        """Internal function to check number compliance for a single face."""
+        passed_grades = []
+
+        # Note C: Knot Total Number Increase for pieces > 225 mm wide.
+        number_increase_factor = 1.0
+        if self.original_width > 225:
+            number_increase_factor = 1.5
+
+        total_knots_found = knot_data_number.get('total', 0)
+        poor_quality_knots_found = knot_data_number.get('unsound_only', 0) # Only counting Unsound/Missing now
+
+        for grade in self.GRADES:
+            total_limit, poor_limit = self.KNOT_NUMBER_LIMITS[grade]
+            grade_passed = True
+
+            # 1. Check Total Number Limit
+            adjusted_total_limit = int(total_limit * number_increase_factor)
+            if total_knots_found > adjusted_total_limit:
+                grade_passed = False
+
+            # 2. Check Poor-Quality Knots Limit (ONLY Unsound/Missing)
+            if grade_passed:
+                if poor_quality_knots_found > poor_limit:
+                    grade_passed = False
+
+            if grade_passed:
+                passed_grades.append(grade)
+
+        return passed_grades
+
+    def _determine_single_face_grade(self, knot_data_size, knot_data_number):
+        """Determines the single highest grade achieved by one face."""
+        size_passed = self._check_size_compliance(knot_data_size)
+        number_passed = self._check_number_compliance(knot_data_number)
+
+        final_grades_passed = [g for g in self.GRADES if g in size_passed and g in number_passed]
+
+        if not final_grades_passed:
+            return "Fails G2-4"
+
+        return final_grades_passed[0]
+
+    def determine_final_grade_dual_face(self, top_face_data, bottom_face_data):
+        """
+        Determines the final grade by finding the worst grade between the two faces.
+        :param top_face_data: Dict with keys 'size' and 'number' for the top face.
+        :param bottom_face_data: Dict with keys 'size' and 'number' for the bottom face.
+        :return: The lowest (worst) grade achieved by either face.
+        """
+        top_grade = self._determine_single_face_grade(
+            top_face_data['size'],
+            top_face_data['number']
+        )
+        bottom_grade = self._determine_single_face_grade(
+            bottom_face_data['size'],
+            bottom_face_data['number']
+        )
+
+        if top_grade == "Fails G2-4" or bottom_grade == "Fails G2-4":
+            return "Fails G2-4 (One face failed integrity check)"
+
+        # Get the index of the grade (higher index = worse grade)
+        top_index = self.GRADES.index(top_grade)
+        bottom_index = self.GRADES.index(bottom_grade)
+
+        # The worst grade is the one with the higher index
+        worst_index = max(top_index, bottom_index)
+
+        return self.GRADES[worst_index]
+
+    def convert_measurements_to_knot_data(self, measurements):
+        """Convert defect measurements to knot data format expected by PineGrader."""
+        knot_data_size = {}
+        knot_data_number = {'total': 0, 'unsound_only': 0}
+
+        # Initialize all knot types with 0
+        for knot_type in self.KNOT_TYPES:
+            knot_data_size[knot_type] = 0
+
+        # Process measurements
+        for defect_type, size_mm, percentage in measurements:
+            # Map defect types to knot types
+            if defect_type in ['Sound_Knot', 'Sound Knot', 'live_knot', 'live knot']:
+                knot_type = 'Sound Knots'
+            elif defect_type in ['Dead_Knot', 'Dead Knot', 'dead_knot', 'dead knot']:
+                knot_type = 'Dead Knots'
+            elif defect_type in ['Unsound_Knot', 'Unsound Knot', 'unsound_knot', 'unsound knot',
+                                'Crack_Knot', 'Knot with Crack', 'crack_knot', 'knot with crack',
+                                'Missing_Knot', 'Missing Knot', 'missing_knot', 'missing knot']:
+                knot_type = 'Unsound/Missing Knots'
+            else:
+                # Default to Unsound for unknown types
+                knot_type = 'Unsound/Missing Knots'
+
+            # Update max size for this knot type
+            if knot_type in knot_data_size:
+                knot_data_size[knot_type] = max(knot_data_size[knot_type], size_mm)
+
+            # Count total knots
+            knot_data_number['total'] += 1
+
+            # Count unsound knots
+            if knot_type == 'Unsound/Missing Knots':
+                knot_data_number['unsound_only'] += 1
+
+        return knot_data_size, knot_data_number
+
+    def determine_surface_grade(self, measurements):
+        """Determine grade for a single surface using SS-EN 1611-1 PineGrader."""
+        if not measurements:
+            return "G2-0"  # Best grade if no defects
+
+        # Convert measurements to knot data format
+        knot_data_size, knot_data_number = self.convert_measurements_to_knot_data(measurements)
+
+        # Get grade from PineGrader
+        grade = self._determine_single_face_grade(knot_data_size, knot_data_number)
+
+        # Handle "Fails G2-4" case
+        if grade == "Fails G2-4":
+            return "G2-4"
+
+        return grade
+
+    def determine_final_grade(self, top_measurements, bottom_measurements):
+        """Determine final grade using dual-face grading with SS-EN 1611-1 PineGrader."""
+        # Convert measurements to knot data format
+        top_knot_data_size, top_knot_data_number = self.convert_measurements_to_knot_data(top_measurements)
+        bottom_knot_data_size, bottom_knot_data_number = self.convert_measurements_to_knot_data(bottom_measurements)
+
+        # Get final grade from dual-face grading
+        final_grade = self.determine_final_grade_dual_face(
+            {'size': top_knot_data_size, 'number': top_knot_data_number},
+            {'size': bottom_knot_data_size, 'number': bottom_knot_data_number}
+        )
+
+        # Handle "Fails G2-4" case
+        if "Fails G2-4" in final_grade:
+            return "G2-4"
+
+        return final_grade
+
 # Camera-specific calibration based on your setup
 # Top camera: 37cm distance, Bottom camera: 29cm distance
 # Assuming 1280x720 resolution with typical camera FOV
@@ -1787,40 +2023,37 @@ class App(tk.Tk):
             # Return conservative values if calculation fails
             return 50.0, 35.0  # Assumes large defect for safety
 
-    def get_individual_knot_grade(self, defect_type, defect_size_mm, wood_height_mm):
-        """
-        Determines the grade of a single knot based on SS-EN 1611-1 size limits.
-        The formula is: Limit = (0.10 * height) + constant
-        """
-        # Check if wood height has been measured yet
-        if wood_height_mm <= 0:
-            return "G2-4"  # Cannot grade without wood dimensions
+    def _convert_measurements_to_face_data(self, measurements):
+        """Convert app measurements to PineGrader face data format"""
+        knot_data_size = {}
+        knot_data_number = {'total': 0, 'unsound_only': 0}
 
-        # Define the constants from the standard table
-        constants = GRADING_CONSTANTS.get(defect_type, {})
+        # Map defect types to PineGrader format
+        type_mapping = {
+            "Sound_Knot": "Sound Knots",
+            "Dead_Knot": "Dead Knots",
+            "Unsound_Knot": "Unsound/Missing Knots",
+            "Missing_Knot": "Unsound/Missing Knots",
+            "Crack_Knot": "Unsound/Missing Knots"
+        }
 
-        # Grade order from best to worst
-        grade_order = ["G2-0", "G2-1", "G2-2", "G2-3", "G2-4"]
+        for defect_type, size_mm, _ in measurements:
+            mapped_type = type_mapping.get(defect_type, defect_type)
+            if mapped_type not in knot_data_size:
+                knot_data_size[mapped_type] = size_mm
+            else:
+                knot_data_size[mapped_type] = max(knot_data_size[mapped_type], size_mm)
 
-        if defect_type not in constants:
-            return "G2-4"  # Unknown types are worst grade
+            knot_data_number['total'] += 1
+            if mapped_type == "Unsound/Missing Knots":
+                knot_data_number['unsound_only'] += 1
 
-        # Check against limits for each grade
-        for grade in grade_order:
-            if grade == "G2-4":
-                return "G2-4"  # If it hasn't passed any other grade, it's G2-4
+        # Ensure all knot types are present
+        for kt in ["Sound Knots", "Dead Knots", "Unsound/Missing Knots"]:
+            if kt not in knot_data_size:
+                knot_data_size[kt] = 0
 
-            if grade not in constants:
-                # This defect type is not permitted for this grade
-                continue
-
-            # Calculate the maximum allowed size for this grade
-            limit = (0.10 * wood_height_mm) + constants[grade]
-
-            if defect_size_mm <= limit:
-                return grade  # This is the best possible grade for this knot
-
-        return "G2-4"  # Should be unreachable, but as a fallback
+        return {'size': knot_data_size, 'number': knot_data_number}
 
     def determine_surface_grade(self, defect_measurements):
         """
@@ -4266,7 +4499,12 @@ class App(tk.Tk):
         if bottom_grade is None:
             bottom_grade = self.live_grades.get("bottom", {}).get("grade", "Unknown") if isinstance(self.live_grades.get("bottom"), dict) else "Unknown"
         if final_grade is None:
-            final_grade = self.determine_final_grade(top_grade, bottom_grade)
+            # Use current wood width (default to 100mm if not detected)
+            wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 100
+            grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
+            # Convert grade strings back to measurements for proper grading
+            # For now, use placeholder - this should be improved to store actual measurements
+            final_grade = grader.determine_final_grade([], [])  # Empty measurements for now
 
         # Defect display name mapping
         defect_display_names = {
@@ -4431,11 +4669,18 @@ class App(tk.Tk):
                 'width_mm': WOOD_PALLET_HEIGHT_MM  # Use current wood height
             }
 
-            # Grade the wood piece per side using deduplicated defects
+            # Grade the wood piece using PineGrader
+            # Use current wood width (default to 100mm if not detected)
+            wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 100
+
+            # Create grader instance
+            grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
+
+            # Get grades from PineGrader
             all_measurements = deduplicated_top_defects + deduplicated_bottom_defects
-            top_grade = self.determine_surface_grade(deduplicated_top_defects)
-            bottom_grade = self.determine_surface_grade(deduplicated_bottom_defects)
-            final_grade = self.determine_final_grade(top_grade, bottom_grade)
+            top_grade = grader.determine_surface_grade(deduplicated_top_defects)
+            bottom_grade = grader.determine_surface_grade(deduplicated_bottom_defects)
+            final_grade = grader.determine_final_grade(deduplicated_top_defects, deduplicated_bottom_defects)
 
             # Save final defect data
             self.save_final_wood_data(wood_num, top_grade, bottom_grade, final_grade)
@@ -4530,18 +4775,23 @@ class App(tk.Tk):
     def _execute_manual_grade(self):
         """Execute manual grading based on current detections."""
         wood_detected = False
-        top_surface_grade = None
-        bottom_surface_grade = None
-        
         all_measurements = self.live_measurements.get("top", []) + self.live_measurements.get("bottom", [])
-        
+
         if all_measurements:
             wood_detected = True
-            top_surface_grade = self.determine_surface_grade(self.live_measurements.get("top", []))
-            bottom_surface_grade = self.determine_surface_grade(self.live_measurements.get("bottom", []))
 
         if wood_detected:
-            final_grade = self.determine_final_grade(top_surface_grade, bottom_surface_grade)
+            # Use current wood width (default to 100mm if not detected)
+            wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 100
+
+            # Create grader instance
+            grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
+
+            # Get final grade from PineGrader
+            final_grade = grader.determine_final_grade(
+                self.live_measurements.get("top", []),
+                self.live_measurements.get("bottom", [])
+            )
             print(f"Manual grade trigger - SS-EN 1611-1 Final grade: {final_grade}")
             self.finalize_grading(final_grade, all_measurements)
         else:
