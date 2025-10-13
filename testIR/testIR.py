@@ -1387,14 +1387,14 @@ class App(tk.Tk):
         # UI colors
         self.roi_overlay_color = ROI_OVERLAY_COLOR
 
-        # Create canvases for camera feeds taking full width
+        # Create canvases for camera feeds maintaining dynamic width and fixed height of 360 pixels
         self.canvas_width = screen_width // 2 - 25
         self.canvas_height = 360
         self.top_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
         self.top_canvas.place(x=25, y=25, width=self.canvas_width, height=self.canvas_height)
 
         self.bottom_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
-        self.bottom_canvas.place(x=self.canvas_width + 25, y=25, width=self.canvas_width, height=self.canvas_height)
+        self.bottom_canvas.place(x=self.canvas_width + 50, y=25, width=self.canvas_width, height=self.canvas_height)
 
         # Initialize canvas images
         self._top_photo = None
@@ -4268,24 +4268,18 @@ class App(tk.Tk):
         print(f"Saved final defect data for Wood {wood_number}")
 
     def _display_frame_on_canvas(self, frame, canvas):
-        """Convert frame to PhotoImage and display on canvas"""
+        """Convert frame to PhotoImage and display on canvas at 360p resolution, centered"""
         try:
-            print(f"Displaying frame on canvas: shape={frame.shape}, canvas={canvas}")
-
             # Convert BGR to RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             # Convert to PIL Image
             pil_image = Image.fromarray(frame_rgb)
 
-            # Resize to canvas size if needed
-            canvas_width = canvas.winfo_width()
-            canvas_height = canvas.winfo_height()
-            print(f"Canvas size: {canvas_width}x{canvas_height}")
-
-            if canvas_width > 1 and canvas_height > 1:  # Canvas has been sized
-                pil_image = pil_image.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
-                print(f"Resized image to {canvas_width}x{canvas_height}")
+            # Always resize to 360p (640x360) resolution for display
+            display_width = 640
+            display_height = 360
+            pil_image = pil_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
 
             # Convert to PhotoImage
             photo = ImageTk.PhotoImage(pil_image)
@@ -4293,15 +4287,19 @@ class App(tk.Tk):
             # Store reference to prevent garbage collection
             if canvas == self.top_canvas:
                 self._top_photo = photo
-                print("Stored as top photo")
             elif canvas == self.bottom_canvas:
                 self._bottom_photo = photo
-                print("Stored as bottom photo")
 
-            # Clear canvas and display on canvas
+            # Clear canvas and display on canvas, centered
             canvas.delete("all")  # Clear any existing content
-            canvas.create_image(0, 0, anchor=tk.NW, image=photo)
-            print("Frame displayed on canvas successfully")
+
+            # Calculate center position
+            canvas_width = self.canvas_width
+            canvas_height = self.canvas_height
+            x = (canvas_width - display_width) // 2
+            y = (canvas_height - display_height) // 2
+
+            canvas.create_image(x, y, anchor=tk.NW, image=photo)
 
         except Exception as e:
             print(f"Error displaying frame on canvas: {e}")
@@ -4896,17 +4894,26 @@ class App(tk.Tk):
             return
 
         try:
-            # Read frames from cameras
-            ret_top, frame_top = self.cap_top.read()
-            ret_bottom, frame_bottom = self.cap_bottom.read()
+            # Read frames from cameras independently
+            ret_top, frame_top = self.cap_top.read() if self.cap_top else (False, None)
+            ret_bottom, frame_bottom = self.cap_bottom.read() if self.cap_bottom else (False, None)
 
+            # Process top camera frame if available
             if ret_top and frame_top is not None:
-                # Flip bottom frame if needed
-                if ret_bottom and frame_bottom is not None:
-                    frame_bottom = cv2.flip(frame_bottom, 1)
-
-                # Display on canvases
+                # Apply ROI overlay to live feed if enabled
+                if self.roi_enabled.get("top", True):
+                    frame_top = self.draw_roi_overlay(frame_top, "top")
+                # Display on top canvas
                 self._display_frame_on_canvas(frame_top, self.top_canvas)
+
+            # Process bottom camera frame if available
+            if ret_bottom and frame_bottom is not None:
+                # Flip bottom frame horizontally (matching the other app)
+                frame_bottom = cv2.flip(frame_bottom, 1)
+                # Apply ROI overlay to live feed if enabled
+                if self.roi_enabled.get("bottom", True):
+                    frame_bottom = self.draw_roi_overlay(frame_bottom, "bottom")
+                # Display on bottom canvas
                 self._display_frame_on_canvas(frame_bottom, self.bottom_canvas)
 
         except Exception as e:
