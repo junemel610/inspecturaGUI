@@ -1541,6 +1541,7 @@ class App(tk.Tk):
         self.auto_grade_var = tk.BooleanVar(value=False) # For auto grading in live mode
         self._last_auto_grade_time = 0
         self._in_active_inference = False  # Flag to prevent UI conflicts during inference
+        self.has_current_grade = False  # Track if we have a current grade to display
 
         self.auto_detection_active = False
         self.detection_frames = []  # Store frames during detection
@@ -1613,7 +1614,7 @@ class App(tk.Tk):
 
         # Live detection tracking
         self.live_detections = {"top": {}, "bottom": {}}
-        self.live_grades = {"top": "No wood detected", "bottom": "No wood detected"}
+        self.live_grades = {"top": "", "bottom": ""}
 
         # ROI (Region of Interest) settings
         self.roi_enabled = {"top": True, "bottom": True, "wood_detection": True, "exit_wood": True}  # Enable ROI for both cameras and wood detection
@@ -1747,14 +1748,14 @@ class App(tk.Tk):
         top_grade_container = ttk.Frame(individual_grades_frame)
         top_grade_container.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         ttk.Label(top_grade_container, text="Top Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.top_grade_label = ttk.Label(top_grade_container, text="No wood detected",
+        self.top_grade_label = ttk.Label(top_grade_container, text="No Wood Graded",
                                         foreground="gray", font=self.font_small)
         self.top_grade_label.pack(anchor="w")
 
         bottom_grade_container = ttk.Frame(individual_grades_frame)
         bottom_grade_container.grid(row=0, column=1, sticky="ew", padx=(0, 5))
         ttk.Label(bottom_grade_container, text="Bottom Camera:", font=("Arial", 10, "bold")).pack(anchor="w")
-        self.bottom_grade_label = ttk.Label(bottom_grade_container, text="No wood detected",
+        self.bottom_grade_label = ttk.Label(bottom_grade_container, text="No Wood Graded",
                                            foreground="gray", font=self.font_small)
         self.bottom_grade_label.pack(anchor="w")
 
@@ -1762,7 +1763,7 @@ class App(tk.Tk):
         combined_container = ttk.Frame(individual_grades_frame)
         combined_container.grid(row=0, column=2, sticky="ew")
         ttk.Label(combined_container, text="Final Grade:", font=("Arial", 12, "bold")).pack(anchor="w")
-        self.combined_grade_label = ttk.Label(combined_container, text="No wood detected",
+        self.combined_grade_label = ttk.Label(combined_container, text="No Wood Graded",
                                              font=("Arial", 11, "bold"), foreground="gray")
         self.combined_grade_label.pack(anchor="w")
 
@@ -1776,20 +1777,22 @@ class App(tk.Tk):
         grade_counts_container.grid_columnconfigure(1, weight=1)
         grade_counts_container.grid_columnconfigure(2, weight=1)
         grade_counts_container.grid_columnconfigure(3, weight=1)
+        grade_counts_container.grid_columnconfigure(4, weight=1)
 
         # Initialize stats labels with consistent spacing and fonts
         self.live_stats_labels = {}
         grade_info = [
-            ("grade0", "Perfect\n(No Defects)", GRADE_PERFECT_COLOR),
-            ("grade1", "Good\n(G2-0)", GRADE_GOOD_COLOR),
-            ("grade2", "Fair\n(G2-1,G2-2,G2-3)", GRADE_FAIR_COLOR),
-            ("grade3", "Poor\n(G2-4)", GRADE_POOR_COLOR)
+            ("grade1", "G2-0", GRADE_PERFECT_COLOR),
+            ("grade2", "G2-1", GRADE_GOOD_COLOR),
+            ("grade3", "G2-2", GRADE_FAIR_COLOR),
+            ("grade4", "G2-3", GRADE_FAIR_COLOR),
+            ("grade5", "G2-4", GRADE_POOR_COLOR)
         ]
 
         for i, (grade_key, label_text, color) in enumerate(grade_info):
             # Create a container frame that can expand
             grade_container = ttk.Frame(grade_counts_container, relief="solid", borderwidth=2)
-            grade_container.grid(row=0, column=i, sticky="nsew", padx=5, pady=5)
+            grade_container.grid(row=0, column=i, sticky="nsew", padx=2, pady=5)
             grade_container.grid_columnconfigure(0, weight=1)
             grade_container.grid_rowconfigure(0, weight=1)
             grade_container.grid_rowconfigure(1, weight=1)
@@ -1802,15 +1805,15 @@ class App(tk.Tk):
             inner_frame.grid_rowconfigure(1, weight=1)
 
             # Title label with responsive font - centered
-            title_label = ttk.Label(inner_frame, text=label_text, font=("Arial", 9, "bold"),
-                                   justify="center", wraplength=120, anchor="center")
-            title_label.grid(row=0, column=0, sticky="ew", padx=4, pady=(8, 2))
+            title_label = ttk.Label(inner_frame, text=label_text, font=("Arial", 12, "bold"),
+                                   justify="center", wraplength=80, anchor="center")
+            title_label.grid(row=0, column=0, sticky="ew", padx=2, pady=(8, 2))
 
             # Count label with responsive font and consistent positioning - centered
             self.live_stats_labels[grade_key] = ttk.Label(inner_frame, text="0",
-                                                         foreground=color, font=("Arial", 16, "bold"),
-                                                         anchor="center")
-            self.live_stats_labels[grade_key].grid(row=1, column=0, sticky="ew", padx=4, pady=(2, 8))
+                                                          foreground=color, font=("Arial", 32, "bold"),
+                                                          anchor="center")
+            self.live_stats_labels[grade_key].grid(row=1, column=0, sticky="ew", padx=2, pady=(2, 8))
 
         # Tab 2: Defect Details
         defect_details_tab = ttk.Frame(self.stats_notebook)
@@ -1891,24 +1894,54 @@ class App(tk.Tk):
         # Initialize live statistics display
         self.update_live_stats_display()
 
-        # Initialize missing grading_status_label
-        self.grading_status_label = ttk.Label(self, text="Ready for grading", foreground="blue")
-        self.grading_status_label.place(x=1600, y=570, width=300, height=30)
+        # Removed grading_status_label as requested
 
         # --- Arduino Communication ---
         self.setup_arduino()
 
         # Start the video feed update loop
         self.update_feeds()
-        
+
         # Start processing messages from background threads
         self.process_message_queue()
 
-        # --- Inactivity and Reporting --- 
+        # --- Inactivity and Reporting ---
         self.check_inactivity()
 
         # Set the action for when the window is closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def update_live_grading_display(self):
+        if self.current_mode == "IDLE":
+            self.top_grade_label.config(text="No Wood Graded", foreground="gray")
+            self.bottom_grade_label.config(text="No Wood Graded", foreground="gray")
+            self.combined_grade_label.config(text="No Wood Graded", foreground="gray")
+        else:
+            # Show current grades if available
+            top_grade = self.live_grades.get("top", "No Wood Graded")
+            bottom_grade = self.live_grades.get("bottom", "No Wood Graded")
+            if isinstance(top_grade, dict):
+                top_text = top_grade.get("text", "No Wood Graded")
+                top_color = top_grade.get("color", "gray")
+            else:
+                top_text = top_grade
+                top_color = "gray"
+            if isinstance(bottom_grade, dict):
+                bottom_text = bottom_grade.get("text", "No Wood Graded")
+                bottom_color = bottom_grade.get("color", "gray")
+            else:
+                bottom_text = bottom_grade
+                bottom_color = "gray"
+            self.top_grade_label.config(text=top_text, foreground=top_color)
+            self.bottom_grade_label.config(text=bottom_text, foreground=bottom_color)
+            combined_info = self.live_grades.get("combined")
+            if combined_info:
+                combined_text = combined_info.get("text", "No Wood Graded")
+                combined_color = combined_info.get("color", "gray")
+            else:
+                combined_text = self.live_grades.get("combined", "No Wood Graded")
+                combined_color = "gray"
+            self.combined_grade_label.config(text=combined_text, foreground=combined_color)
 
     def calibrate_pixel_to_mm(self, reference_object_width_px, reference_object_width_mm, camera_name="top"):
         """Calibrate the pixel-to-millimeter conversion factor for specific camera"""
@@ -3463,7 +3496,7 @@ class App(tk.Tk):
                 # Reset detections only when automatic detection is not active
                 if not self.auto_detection_active:
                     self.live_detections[camera_name] = {}
-                    self.live_grades[camera_name] = "No wood detected"
+                    self.live_grades[camera_name] = " "
                     if hasattr(self, 'live_measurements'):
                         self.live_measurements[camera_name] = []
                     # Update dashboard every 10th frame when no detection
@@ -3587,6 +3620,19 @@ class App(tk.Tk):
 
     def update_live_grading_display(self):
         """Update the live grading display with current detection results using SS-EN 1611-1"""
+        # Update mode status display
+        if hasattr(self, 'mode_status_label'):
+            if self.current_mode == "IDLE":
+                self.mode_status_label.config(text=" ", foreground="gray")
+            elif self.current_mode == "TRIGGER":
+                self.mode_status_label.config(text="Waiting for Detection Process", foreground="blue")
+            elif self.current_mode == "SCAN_PHASE":
+                self.mode_status_label.config(text="Waiting for Detection Process", foreground="blue")
+            elif self.current_mode == "CONTINUOUS":
+                self.mode_status_label.config(text="Live Detection Active", foreground="green")
+            else:
+                self.mode_status_label.config(text="", foreground="black")
+
         # Update individual camera grades
         top_grade = self.live_grades["top"]
         bottom_grade = self.live_grades["bottom"]
@@ -3656,7 +3702,7 @@ class App(tk.Tk):
             pass
 
         else:
-            self.combined_grade_label.config(text="No wood detected", foreground="gray")
+            self.combined_grade_label.config(text=" ", foreground="gray")
 
     def update_detection_details(self, camera_name, defect_dict, measurements=None):
         """Update the detection details display for a specific camera with SS-EN 1611-1 details"""
@@ -4016,6 +4062,11 @@ class App(tk.Tk):
                         try:
                             segment_num = int(message.split(':')[1])
                             print(f"Arduino signaled to capture segment {segment_num}")
+
+                            # Set display to "No Wood Graded" when beam is blocked (moved here as cue)
+                            self.live_grades = {"top": " ", "bottom": " "}
+                            self.update_live_grading_display()
+
                             self.capture_segment_frame(segment_num)
                         except (ValueError, IndexError):
                             print(f"Could not parse CAPTURE message: {message}")
@@ -4279,6 +4330,7 @@ class App(tk.Tk):
         self.send_arduino_command('C')  # Send command to Arduino
         self.live_detection_var.set(True)
         self.auto_grade_var.set(True)
+        self.update_status_text("Status: CONTINUOUS", STATUS_READY_COLOR)
         self.update_detection_status_display() # Update the status label
 
     def set_trigger_mode(self):
@@ -4289,6 +4341,7 @@ class App(tk.Tk):
         self.send_arduino_command('T')  # Send command to Arduino
         self.live_detection_var.set(True)  # Enable live detection for triggering
         self.auto_grade_var.set(False)
+        self.update_status_text("Status: TRIGGER", STATUS_READY_COLOR)
         self.update_detection_status_display() # Update the status label
         print(f"Trigger mode set - Python mode: {self.current_mode}")
 
@@ -4303,10 +4356,13 @@ class App(tk.Tk):
         # Clear wood detection results when entering idle mode
         self.wood_detection_results = {"top": None, "bottom": None}
         self.dynamic_roi = {}
+        # Reset grades to empty when entering idle mode
+        self.live_grades = {"top": "", "bottom": ""}
+        self.update_live_grading_display()
         # status_label is a Text widget, not a Label widget
         self.status_label.config(state=tk.NORMAL)
         self.status_label.delete(1.0, tk.END)
-        self.status_label.insert(1.0, "Status: IDLE - Conveyor Stopped")
+        self.status_label.insert(1.0, "Status: IDLE")
         self.status_label.config(foreground="gray", state=tk.DISABLED)
 
     def set_scan_mode(self):
@@ -4316,6 +4372,7 @@ class App(tk.Tk):
         self.send_arduino_command('S')  # Send scan phase command to Arduino
         self.live_detection_var.set(False)  # Disable live detection - only show live feed with ROI
         self.auto_grade_var.set(False)  # Grading happens after scan completion
+        self.update_status_text("Status: SCAN_PHASE", STATUS_READY_COLOR)
         self.update_detection_status_display()
         print(f"Scan mode set - Python mode: {self.current_mode}")
 
@@ -4330,7 +4387,16 @@ class App(tk.Tk):
         self.captured_frames = {"top": [], "bottom": []}
         self.segment_defects = {"top": [], "bottom": []}
         self.scan_session_data = {}
-        self.update_status_text("Status: SCAN_PHASE active - waiting for segments", STATUS_READY_COLOR)
+
+        # Update live grading display to show scanning in progress
+        self.live_grades = {
+            "top": "",
+            "bottom": "",
+            "combined": ""
+        }
+        self.update_live_grading_display()
+
+        self.update_status_text("Status: SCAN_PHASE active", STATUS_READY_COLOR)
 
     def create_segment_visualization(self, frame, wood_detection_result, camera_name):
         """Create visualization - currently just returns the frame as-is (no overlays)."""
@@ -4706,7 +4772,7 @@ class App(tk.Tk):
             self.finalize_grading(final_grade, all_measurements)
 
         self.scan_phase_active = False
-        self.update_status_text("Status: SCAN_PHASE completed", STATUS_READY_COLOR)
+        self.update_status_text("Status: SCAN_PHASE completed - grading finished", STATUS_READY_COLOR)
 
     def finalize_grading(self, final_grade, all_measurements):
         """Central function to log piece details, update stats, and send Arduino command."""
@@ -5027,18 +5093,18 @@ class App(tk.Tk):
         # Grade distribution
         distribution_frame = ttk.LabelFrame(self.performance_frame, text="Grade Distribution", padding="5")
         distribution_frame.pack(fill="x", pady=2)
-        
+
         if total_processed > 0:
             grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
             distribution_text = ""
-            grade_names = {1: "Perfect (G2-0)", 2: "Good (G2-1)", 3: "Fair (G2-2)", 4: "Poor (G2-3)", 5: "Reject (G2-4)"}
+            grade_names = {1: "G2-0", 2: "G2-1", 3: "G2-2", 4: "G2-3", 5: "G2-4"}
 
             for grade, count in grade_counts.items():
                 percentage = (count / total_processed) * 100 if total_processed > 0 else 0
                 distribution_text += f"Grade {grade} ({grade_names.get(grade, 'Unknown')}): {count} pieces ({percentage:.1f}%)\n"
         else:
             distribution_text = "No processing data available yet"
-        
+
         ttk.Label(distribution_frame, text=distribution_text, font=self.font_small, justify="left").pack(anchor="w")
 
     def update_recent_activity_tab(self):
@@ -5086,7 +5152,7 @@ class App(tk.Tk):
                 
                 grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
                 grade_stats = "Grade Distribution:\n"
-                grade_names = {1: "Perfect (G2-0)", 2: "Good (G2-1)", 3: "Fair (G2-2)", 4: "Poor (G2-3)", 5: "Reject (G2-4)"}
+                grade_names = {1: "G2-0", 2: "G2-1", 3: "G2-2", 4: "G2-3", 5: "G2-4"}
 
                 for grade, count in grade_counts.items():
                     percentage = (count / total_processed) * 100 if total_processed > 0 else 0
@@ -5277,11 +5343,11 @@ class App(tk.Tk):
         content += f"Generated at: {timestamp}\n\n"
         content += "--- Session Summary ---\n"
         content += f"Total Pieces Processed: {self.total_pieces_processed}\n"
-        content += f"Grade G2-0 (Perfect): {self.grade_counts.get(1, 0)}\n"
-        content += f"Grade G2-1 (Good): {self.grade_counts.get(2, 0)}\n"
-        content += f"Grade G2-2 (Fair): {self.grade_counts.get(3, 0)}\n"
-        content += f"Grade G2-3 (Poor): {self.grade_counts.get(4, 0)}\n"
-        content += f"Grade G2-4 (Reject): {self.grade_counts.get(5, 0)}\n"
+        content += f"Grade G2-0: {self.grade_counts.get(1, 0)}\n"
+        content += f"Grade G2-1: {self.grade_counts.get(2, 0)}\n"
+        content += f"Grade G2-2: {self.grade_counts.get(3, 0)}\n"
+        content += f"Grade G2-3: {self.grade_counts.get(4, 0)}\n"
+        content += f"Grade G2-4: {self.grade_counts.get(5, 0)}\n"
         
         content += "\n\n--- Individual Piece Log ---\n"
         if not self.session_log:
@@ -5332,11 +5398,11 @@ class App(tk.Tk):
             text.textLine("Session Summary")
             text.setFont("Helvetica", 12)
             text.textLine(f"Total Pieces Processed: {self.total_pieces_processed}")
-            text.textLine(f"Grade G2-0 (Perfect): {self.grade_counts.get(1, 0)}")
-            text.textLine(f"Grade G2-1 (Good): {self.grade_counts.get(2, 0)}")
-            text.textLine(f"Grade G2-2 (Fair): {self.grade_counts.get(3, 0)}")
-            text.textLine(f"Grade G2-3 (Poor): {self.grade_counts.get(4, 0)}")
-            text.textLine(f"Grade G2-4 (Reject): {self.grade_counts.get(5, 0)}")
+            text.textLine(f"Grade G2-0: {self.grade_counts.get(1, 0)}")
+            text.textLine(f"Grade G2-1: {self.grade_counts.get(2, 0)}")
+            text.textLine(f"Grade G2-2: {self.grade_counts.get(3, 0)}")
+            text.textLine(f"Grade G2-3: {self.grade_counts.get(4, 0)}")
+            text.textLine(f"Grade G2-4: {self.grade_counts.get(5, 0)}")
             text.textLine("")
             text.textLine("")
             text.setFont("Helvetica-Bold", 12)

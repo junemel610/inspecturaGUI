@@ -1,0 +1,11 @@
+Wood No. (1) - 137.16216216216216mm
+Top Panel Grade: G2-1
+Bottom Panel Grade: G2-2
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Dead Knot - 20.8mm
+2. Live Knot - 21.2mm
+
+Bottom Panel Defects:
+1. Unsound Knot - 26.3mm
