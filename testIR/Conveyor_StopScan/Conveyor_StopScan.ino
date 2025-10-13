@@ -39,7 +39,7 @@ bool beamIsBroken = false;
 
 // --- Conveyor Parameters ---
 const float CONVEYOR_SPEED_IN_PER_SEC = 1.2395;   // physical conveyor speed (in/s)
-const unsigned long STOP_DURATION_MS = 3000;      // 3-second pauses between scans
+const unsigned long STOP_DURATION_MS = 5000;      // 5-second pauses between scans
 const float WOOD_TOTAL_LENGTH_INCH = 21.0;        // <-- change this for each wood length
 const int NUM_SEGMENTS = 4;
 
@@ -158,6 +158,8 @@ void handleScanPhase() {
           waitingForPause = true;
           pauseStartTime = millis();
           pauseCount++;
+          // Wait 2 seconds before sending CAPTURE
+          delay(2000);
           Serial.print("CAPTURE:");
           Serial.println(currentSegment + 1);
           Serial.print("P:");
