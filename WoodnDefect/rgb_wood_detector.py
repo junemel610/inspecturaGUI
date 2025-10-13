@@ -17,12 +17,12 @@ class ColorWoodDetector:
     def __init__(self):
         self.wood_color_profiles = {
             'top_panel': {
-                'rgb_lower': np.array([169, 180, 176]),  # BGR
+                'rgb_lower': np.array([135, 155, 135]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Top Panel Wood'
             },
             'bottom_panel': {
-                'rgb_lower': np.array([150, 180, 125]),  # BGR
+                'rgb_lower': np.array([60, 80, 50]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Bottom Panel Wood'
             }
@@ -544,8 +544,8 @@ class CameraHandler:
     def __init__(self):
         self.top_camera = None
         self.bottom_camera = None
-        self.top_camera_index = 2 # Cam0
-        self.bottom_camera_index = 4  # Cam2
+        self.top_camera_index = 0 # Cam0
+        self.bottom_camera_index = 2  # Cam2
         self.top_camera_settings = {
             'brightness': 0,
             'contrast': 32,
@@ -614,20 +614,9 @@ def main():
     camera_handler.initialize_cameras()
     detector = ColorWoodDetector()
 
-    # Define center ROIs (top camera 70% height, full width, centered; bottom camera 80% of frame, centered)
-    frame_width = 1280
-    frame_height = 720
-    roi_height_top = int(frame_height * 0.7)
-    roi_y_top = (frame_height - roi_height_top) // 2
-    roi_width_top = frame_width
-    roi_x_top = 0
-    roi_top = (roi_x_top, roi_y_top, roi_width_top, roi_height_top)
-
-    roi_width_bottom = int(frame_width * 0.8)
-    roi_height_bottom = int(frame_height * 0.8)
-    roi_x_bottom = (frame_width - roi_width_bottom) // 2
-    roi_y_bottom = (frame_height - roi_height_bottom) // 2
-    roi_bottom = (roi_x_bottom, roi_y_bottom, roi_width_bottom, roi_height_bottom)  # Same for both cameras
+    # Define ROIs following the same coordinates as testIR.py
+    roi_top = (370, 0, 880-370, 720-0)  # x1=370, y1=0, width=510, height=720
+    roi_bottom = (350, 0, 965-350, 720-0)  # x1=350, y1=0, width=615, height=720
 
     cap0 = camera_handler.top_camera
     cap2 = camera_handler.bottom_camera

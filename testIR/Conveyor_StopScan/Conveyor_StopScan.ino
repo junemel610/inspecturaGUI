@@ -170,6 +170,7 @@ void handleScanPhase() {
     } else if (millis() - pauseStartTime >= STOP_DURATION_MS) {
       waitingForPause = false;
       currentSegment++;
+      Serial.println("RESUME_LIVE_FEED");
       Serial.print("Resuming segment ");
       Serial.println(currentSegment + 1);
     }
@@ -268,7 +269,7 @@ void checkIrSensor() {
 void checkSerialCommands() {
   if (Serial.available() > 0) {
     char cmd = Serial.read();
-    Serial.println(cmd);
+    // Don't echo single character commands back to avoid confusion
     switch (cmd) {
       case '1': activateAllServoGates(90); break;
       case '2': activateAllServoGates(45); break;

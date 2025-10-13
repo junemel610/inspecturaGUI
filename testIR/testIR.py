@@ -132,9 +132,9 @@ MAX_DETECTION_ENTRIES = 50         # Maximum number of detection entries to keep
 # ------------------------------------------------------------------------------
 ROI_COORDINATES = {
     "top": {
-        "x1": 400,  # Left boundary - exclude left equipment
+        "x1": 370,  # Left boundary - exclude left equipment
         "y1": 0,   # Top boundary - exclude top area
-        "x2": 850, # Right boundary - exclude right equipment
+        "x2": 880, # Right boundary - exclude right equipment
         "y2": 720   # Bottom boundary - focus on wood area
     },
     "bottom": {
@@ -1321,6 +1321,10 @@ class App(tk.Tk):
         self.session_detections = {"top": [], "bottom": []}
         self.final_deduplicated_defects = {"top": [], "bottom": []}
 
+        # Flag to control processed frame display in SCAN_PHASE
+        self.displaying_processed_frame = False
+        self.processed_frame_timer = None  # Timer for processed frame display duration
+
         # --- DeGirum Model and Camera Initialization ---
         # DeGirum Configuration
         self.inference_host_address = "@local"
@@ -1652,6 +1656,10 @@ class App(tk.Tk):
         # Initialize live statistics display
         self.update_live_stats_display()
 
+        # Initialize missing grading_status_label
+        self.grading_status_label = ttk.Label(self, text="Ready for grading", foreground="blue")
+        self.grading_status_label.place(x=1600, y=570, width=300, height=30)
+
         # --- Arduino Communication ---
         self.setup_arduino()
 
@@ -1751,11 +1759,19 @@ class App(tk.Tk):
             else:  # bottom camera
                 pixel_to_mm = BOTTOM_CAMERA_PIXEL_TO_MM
 
+            # Prevent division by zero
+            if pixel_to_mm <= 0:
+                pixel_to_mm = 2.96 if camera_name == "top" else 3.18
+                print(f"Warning: pixel_to_mm was zero, using default {pixel_to_mm}")
+
             # Convert to millimeters using division (pixels per mm factor)
             size_mm = defect_size_px / pixel_to_mm
 
             # Calculate percentage of actual wood pallet height
-            percentage = (size_mm / WOOD_PALLET_HEIGHT_MM) * 100
+            if WOOD_PALLET_HEIGHT_MM > 0:
+                percentage = (size_mm / WOOD_PALLET_HEIGHT_MM) * 100
+            else:
+                percentage = 0.0  # Avoid division by zero
 
             # Debug logging to understand bounding box sizes
             print(f"DEBUG [{camera_name}]: bbox=({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}) "
@@ -3743,6 +3759,12 @@ class App(tk.Tk):
                             print(f"Could not parse segment number from: {message}")
                         continue
 
+                    # --- PAUSE COMPLETE HANDLING ---
+                    if message == "PAUSE_COMPLETE":
+                        print("Arduino signaled pause complete - resuming live feed")
+                        self.resume_live_feed()
+                        continue
+
                     # --- SCAN PHASE COMPLETION ---
                     if "Last scan phase complete" in message and self.scan_phase_active:
                         self.grade_all_woods()
@@ -3756,6 +3778,12 @@ class App(tk.Tk):
                             self.capture_segment_frame(segment_num)
                         except (ValueError, IndexError):
                             print(f"Could not parse CAPTURE message: {message}")
+                        continue  # skip other checks for this message
+
+                    # --- RESUME LIVE FEED HANDLING (Arduino sends "RESUME_LIVE_FEED" after pause) ---
+                    if message == "RESUME_LIVE_FEED":
+                        print("Arduino signaled to resume live feed")
+                        self.resume_live_feed()
                         continue  # skip other checks for this message
 
                     # --- LENGTH HANDLING (Arduino sends "L:duration" when beam clears) ---
@@ -4174,12 +4202,12 @@ class App(tk.Tk):
                 final_frame = self.draw_roi_overlay(final_frame, camera_name)
                 processed_frames[camera_name] = final_frame
 
-        # Save processed frames with ROI-based detection results
+        # Update UI with processed frames FIRST (so user can see them before saving)
+        self.display_captured_frames(processed_frames["top"], processed_frames["bottom"])
+
+        # Save processed frames with ROI-based detection results AFTER display
         self.save_segment_frames(self.current_wood_number, segment_num,
                                 processed_frames["top"], processed_frames["bottom"])
-
-        # Update UI with processed frames
-        self.display_captured_frames(processed_frames["top"], processed_frames["bottom"])
 
         print(f"Frames captured, ROI-processed, and saved for segment {segment_num}")
 
@@ -4239,11 +4267,66 @@ class App(tk.Tk):
 
         print(f"Saved final defect data for Wood {wood_number}")
 
+    def _display_frame_on_canvas(self, frame, canvas):
+        """Convert frame to PhotoImage and display on canvas"""
+        try:
+            print(f"Displaying frame on canvas: shape={frame.shape}, canvas={canvas}")
+
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Convert to PIL Image
+            pil_image = Image.fromarray(frame_rgb)
+
+            # Resize to canvas size if needed
+            canvas_width = canvas.winfo_width()
+            canvas_height = canvas.winfo_height()
+            print(f"Canvas size: {canvas_width}x{canvas_height}")
+
+            if canvas_width > 1 and canvas_height > 1:  # Canvas has been sized
+                pil_image = pil_image.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+                print(f"Resized image to {canvas_width}x{canvas_height}")
+
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(pil_image)
+
+            # Store reference to prevent garbage collection
+            if canvas == self.top_canvas:
+                self._top_photo = photo
+                print("Stored as top photo")
+            elif canvas == self.bottom_canvas:
+                self._bottom_photo = photo
+                print("Stored as bottom photo")
+
+            # Clear canvas and display on canvas
+            canvas.delete("all")  # Clear any existing content
+            canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+            print("Frame displayed on canvas successfully")
+
+        except Exception as e:
+            print(f"Error displaying frame on canvas: {e}")
+            import traceback
+            traceback.print_exc()
+
     def display_captured_frames(self, top_frame, bottom_frame):
         """Display captured frames with overlays in the UI canvases."""
-        # Convert to PhotoImage and display
+        # Convert to PhotoImage and display both processed frames immediately
         self._display_frame_on_canvas(top_frame, self.top_canvas)
         self._display_frame_on_canvas(bottom_frame, self.bottom_canvas)
+
+        # Set flag to indicate we're displaying processed frames
+        self.displaying_processed_frame = True
+
+        # Schedule live feed resumption after 3000ms
+        if self.processed_frame_timer:
+            self.after_cancel(self.processed_frame_timer)
+        self.processed_frame_timer = self.after(3000, self.resume_live_feed)
+
+    def resume_live_feed(self):
+        """Resume live feed after processed frame display period"""
+        self.displaying_processed_frame = False
+        self.processed_frame_timer = None
+        print("Resumed live feed after processed frame display")
 
     def grade_all_woods(self):
         """Grade all detected woods after scan phase completion using segment defect data."""
@@ -4798,12 +4881,39 @@ class App(tk.Tk):
 
     def check_inactivity(self):
         # Generate report after 30 seconds of inactivity (auto-log feature)
-        if (not self.report_generated and 
+        if (not self.report_generated and
             (time.time() - self.last_activity_time > 30) and
             self.total_pieces_processed > 0): # Only generate if something was processed
             self.generate_report()
             self.report_generated = True
         self.after(1000, self.check_inactivity)
+
+    def update_feeds(self):
+        """Update camera feeds on canvases, but skip if displaying processed frame"""
+        if self.displaying_processed_frame:
+            # Skip updating live feed while showing processed frame
+            self.after(100, self.update_feeds)
+            return
+
+        try:
+            # Read frames from cameras
+            ret_top, frame_top = self.cap_top.read()
+            ret_bottom, frame_bottom = self.cap_bottom.read()
+
+            if ret_top and frame_top is not None:
+                # Flip bottom frame if needed
+                if ret_bottom and frame_bottom is not None:
+                    frame_bottom = cv2.flip(frame_bottom, 1)
+
+                # Display on canvases
+                self._display_frame_on_canvas(frame_top, self.top_canvas)
+                self._display_frame_on_canvas(frame_bottom, self.bottom_canvas)
+
+        except Exception as e:
+            print(f"Error updating feeds: {e}")
+
+        # Schedule next update
+        self.after(100, self.update_feeds)
 
     def generate_report(self):
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
