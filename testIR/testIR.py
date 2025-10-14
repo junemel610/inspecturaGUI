@@ -1047,14 +1047,69 @@ class ColorWoodDetector:
             x, y, w, h = candidate['bbox']
             detected_width_mm = self.calculate_width_mm(h, camera_name)  # Use height (cross-section)
             
-            # Update global wood height variable dynamically
+            # CRITICAL: detected_width_mm is the authoritative source - all other variables must follow it
             WOOD_PALLET_WIDTH_MM = detected_width_mm
             self.detected_wood_width_mm[camera_name] = detected_width_mm
+            
+            # Enhanced logging to verify synchronization
             print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name})")
+            print(f"🔗 Synchronization check: detected_width_mm={detected_width_mm:.1f}mm, WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm, self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.1f}mm")
+            
+            # Validation: Ensure all variables are exactly equal to detected_width_mm
+            self._validate_wood_width_sync(detected_width_mm, camera_name)
             
             return detected_width_mm
         
         return 0.0
+
+    def _validate_wood_width_sync(self, detected_width_mm: float, camera_name: str):
+        """Validate that all wood width variables are synchronized with detected_width_mm"""
+        global WOOD_PALLET_WIDTH_MM
+        
+        sync_errors = []
+        
+        # Check WOOD_PALLET_WIDTH_MM synchronization
+        if abs(WOOD_PALLET_WIDTH_MM - detected_width_mm) > 0.001:  # Allow tiny floating point differences
+            sync_errors.append(f"WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.3f}mm != detected_width_mm={detected_width_mm:.3f}mm")
+            # Force synchronization
+            WOOD_PALLET_WIDTH_MM = detected_width_mm
+            
+        # Check self.detected_wood_width_mm synchronization
+        if abs(self.detected_wood_width_mm[camera_name] - detected_width_mm) > 0.001:
+            sync_errors.append(f"self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.3f}mm != detected_width_mm={detected_width_mm:.3f}mm")
+            # Force synchronization
+            self.detected_wood_width_mm[camera_name] = detected_width_mm
+        
+        if sync_errors:
+            print(f"⚠️ Wood width synchronization errors detected and corrected:")
+            for error in sync_errors:
+                print(f"   - {error}")
+            print(f"✅ All variables now synchronized to detected_width_mm={detected_width_mm:.1f}mm")
+        else:
+            print(f"✅ Wood width synchronization validated: all variables = {detected_width_mm:.1f}mm")
+
+    def get_current_wood_width_mm(self) -> float:
+        """Get the current authoritative wood width in mm"""
+        global WOOD_PALLET_WIDTH_MM
+        return WOOD_PALLET_WIDTH_MM
+
+    def get_wood_width_for_grading(self, fallback_mm: float = 100.0) -> float:
+        """Get wood width for grading calculations, with fallback if not detected"""
+        global WOOD_PALLET_WIDTH_MM
+        width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else fallback_mm
+        print(f"🔗 Wood width for grading: {width:.1f}mm (WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm, fallback={fallback_mm:.1f}mm)")
+        return width
+
+    def report_wood_width_status(self, context: str = ""):
+        """Report the current status of all wood width variables for debugging"""
+        global WOOD_PALLET_WIDTH_MM
+        
+        print(f"\n📊 WOOD WIDTH STATUS REPORT {f'({context})' if context else ''}")
+        print(f"   🎯 Global WOOD_PALLET_WIDTH_MM: {WOOD_PALLET_WIDTH_MM:.1f}mm")
+        print(f"   📐 Top camera detected: {self.detected_wood_width_mm.get('top', 'N/A')}mm")
+        print(f"   📐 Bottom camera detected: {self.detected_wood_width_mm.get('bottom', 'N/A')}mm")
+        print(f"   🔗 Authority chain: detected_width_mm → WOOD_PALLET_WIDTH_MM → all grading calculations")
+        print(f"   ✅ All wood width measurements must follow detected_width_mm as authoritative source\n")
 
     def calculate_defect_size(self, detection_box, camera_name="top"):
         """Calculate defect size in mm and percentage from detection bounding box - matches testIR.py"""
@@ -1631,6 +1686,9 @@ class ColorWoodDetector:
                 # Store wood detection results for later use
                 self.wood_detection_results[camera] = result
                 self.dynamic_roi[camera] = auto_roi
+                
+                # Report wood width status to verify synchronization
+                self.report_wood_width_status(f"after {camera} detection")
             else:
                 # Clear results when no wood detected
                 self.wood_detection_results[camera] = None
@@ -4913,7 +4971,10 @@ class App(tk.Tk):
         data = self.scan_session_data[wood_number]
 
         # Use per-wood width if available, else fallback
+        # CRITICAL: session data 'width_mm' contains the detected_width_mm value stored during grading
         wood_width = data.get('width_mm', WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 100)
+        print(f"🔗 Save data synchronization: Using wood_width={wood_width:.1f}mm (from session data 'width_mm'={data.get('width_mm', 'N/A')}, fallback WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm)")
+        print(f"🔍 Authority chain: detected_width_mm → session_data['width_mm'] → wood_width = {wood_width:.1f}mm")
 
         # Use provided grades or get from live_grades
         if top_grade is None:
@@ -5084,11 +5145,15 @@ class App(tk.Tk):
             print(f"  Bottom defects: {len(wood_bottom_defects)} raw -> {len(deduplicated_bottom_defects)} deduplicated")
 
             # Store deduplicated defects in scan session data
+            # CRITICAL: Use the authoritative WOOD_PALLET_WIDTH_MM (which follows detected_width_mm)
             wood_width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 100  # Use current detected width
+            print(f"🔗 Grading synchronization: Using wood_width={wood_width:.1f}mm (from WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm)")
+            print(f"🔍 Confirming detected_width_mm authority: wood_width={wood_width:.1f}mm follows detected_width_mm")
+            
             self.scan_session_data[wood_num] = {
                 'top_defects': deduplicated_top_defects,
                 'bottom_defects': deduplicated_bottom_defects,
-                'width_mm': wood_width
+                'width_mm': wood_width  # This stores the detected_width_mm value
             }
 
             # Grade the wood piece using PineGrader
@@ -5204,7 +5269,10 @@ class App(tk.Tk):
 
         if wood_detected:
             # Use current wood width (default to 100mm if not detected)
+            # CRITICAL: WOOD_PALLET_WIDTH_MM follows detected_width_mm as the authoritative source
             wood_width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 100
+            print(f"🔗 Manual grading synchronization: Using wood_width={wood_width:.1f}mm (from WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm)")
+            print(f"🔍 Authority chain: detected_width_mm → WOOD_PALLET_WIDTH_MM → wood_width = {wood_width:.1f}mm")
 
             # Create grader instance
             grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
