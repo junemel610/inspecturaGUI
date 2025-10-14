@@ -1047,24 +1047,34 @@ class ColorWoodDetector:
             x, y, w, h = candidate['bbox']
             detected_width_mm = self.calculate_width_mm(h, camera_name)  # Use height (cross-section)
             
-            # CRITICAL: detected_width_mm is the authoritative source - all other variables must follow it
-            WOOD_PALLET_WIDTH_MM = detected_width_mm
+            # Store the detected width for this camera
             self.detected_wood_width_mm[camera_name] = detected_width_mm
             
-            # Enhanced logging to verify synchronization
-            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name})")
-            print(f"🔗 Synchronization check: detected_width_mm={detected_width_mm:.1f}mm, WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm, self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.1f}mm")
-            
-            # Validation: Ensure all variables are exactly equal to detected_width_mm
-            self._validate_wood_width_sync(detected_width_mm, camera_name)
+            # CRITICAL: Only use TOP CAMERA as the authoritative source for global wood width
+            if camera_name == 'top':
+                # TOP CAMERA: Update global wood width (authoritative source)
+                WOOD_PALLET_WIDTH_MM = detected_width_mm
+                print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, TOP camera - AUTHORITATIVE)")
+                print(f"🔗 Synchronization check: detected_width_mm={detected_width_mm:.1f}mm, WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm, self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.1f}mm")
+                
+                # Validation: Ensure all variables are exactly equal to detected_width_mm
+                self._validate_wood_width_sync(detected_width_mm, camera_name)
+            else:
+                # BOTTOM CAMERA: Only store locally, do NOT update global width
+                print(f"📐 Bottom camera wood width detected: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name}) - NOT used for global width")
+                print(f"🔒 Global WOOD_PALLET_WIDTH_MM remains: {WOOD_PALLET_WIDTH_MM:.1f}mm (controlled by TOP camera only)")
             
             return detected_width_mm
         
         return 0.0
 
     def _validate_wood_width_sync(self, detected_width_mm: float, camera_name: str):
-        """Validate that all wood width variables are synchronized with detected_width_mm"""
+        """Validate that all wood width variables are synchronized with detected_width_mm (TOP CAMERA ONLY)"""
         global WOOD_PALLET_WIDTH_MM
+        
+        # Only validate synchronization for top camera since it's the authoritative source
+        if camera_name != 'top':
+            return
         
         sync_errors = []
         
@@ -1074,7 +1084,7 @@ class ColorWoodDetector:
             # Force synchronization
             WOOD_PALLET_WIDTH_MM = detected_width_mm
             
-        # Check self.detected_wood_width_mm synchronization
+        # Check self.detected_wood_width_mm synchronization for top camera
         if abs(self.detected_wood_width_mm[camera_name] - detected_width_mm) > 0.001:
             sync_errors.append(f"self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.3f}mm != detected_width_mm={detected_width_mm:.3f}mm")
             # Force synchronization
@@ -1084,9 +1094,9 @@ class ColorWoodDetector:
             print(f"⚠️ Wood width synchronization errors detected and corrected:")
             for error in sync_errors:
                 print(f"   - {error}")
-            print(f"✅ All variables now synchronized to detected_width_mm={detected_width_mm:.1f}mm")
+            print(f"✅ All variables now synchronized to TOP camera detected_width_mm={detected_width_mm:.1f}mm")
         else:
-            print(f"✅ Wood width synchronization validated: all variables = {detected_width_mm:.1f}mm")
+            print(f"✅ Wood width synchronization validated: TOP camera controls all variables = {detected_width_mm:.1f}mm")
 
     def get_current_wood_width_mm(self) -> float:
         """Get the current authoritative wood width in mm"""
@@ -1101,15 +1111,15 @@ class ColorWoodDetector:
         return width
 
     def report_wood_width_status(self, context: str = ""):
-        """Report the current status of all wood width variables for debugging"""
+        """Report current status of all wood width variables - TOP CAMERA AUTHORITY"""
         global WOOD_PALLET_WIDTH_MM
         
         print(f"\n📊 WOOD WIDTH STATUS REPORT {f'({context})' if context else ''}")
-        print(f"   🎯 Global WOOD_PALLET_WIDTH_MM: {WOOD_PALLET_WIDTH_MM:.1f}mm")
-        print(f"   📐 Top camera detected: {self.detected_wood_width_mm.get('top', 'N/A')}mm")
-        print(f"   📐 Bottom camera detected: {self.detected_wood_width_mm.get('bottom', 'N/A')}mm")
-        print(f"   🔗 Authority chain: detected_width_mm → WOOD_PALLET_WIDTH_MM → all grading calculations")
-        print(f"   ✅ All wood width measurements must follow detected_width_mm as authoritative source\n")
+        print(f"   � AUTHORITATIVE SOURCE: Global WOOD_PALLET_WIDTH_MM: {WOOD_PALLET_WIDTH_MM:.1f}mm")
+        print(f"   📐 Top camera detected: {self.detected_wood_width_mm.get('top', 'N/A')}mm (CONTROLS GLOBAL)")
+        print(f"   � Bottom camera detected: {self.detected_wood_width_mm.get('bottom', 'N/A')}mm (LOCAL ONLY)")
+        print(f"   🔗 Authority chain: TOP camera detected_width_mm → WOOD_PALLET_WIDTH_MM → all grading calculations")
+        print(f"   ⚠️  Bottom camera measurements are for reference only and DO NOT affect global variables\n")
 
     def calculate_defect_size(self, detection_box, camera_name="top"):
         """Calculate defect size in mm and percentage from detection bounding box - matches testIR.py"""

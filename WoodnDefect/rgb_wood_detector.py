@@ -103,7 +103,7 @@ class ColorWoodDetector:
         return top_factor, bottom_factor
 
     def update_wood_width_dynamic(self, camera_name: str, wood_candidates: List[Dict]) -> float:
-        """Update global wood width based on detected wood dimensions - matches testIR.py algorithm"""
+        """Update global wood width based on detected wood dimensions - TOP CAMERA AUTHORITY ONLY"""
         global WOOD_PALLET_WIDTH_MM
         
         if wood_candidates:
@@ -111,10 +111,15 @@ class ColorWoodDetector:
             x, y, w, h = candidate['bbox']
             detected_width_mm = self.calculate_width_mm(h, camera_name)  # Use height (cross-section)
             
-            # Update global wood height variable dynamically
-            WOOD_PALLET_WIDTH_MM = detected_width_mm
+            # Store detected width for this camera
             self.detected_wood_width_mm[camera_name] = detected_width_mm
-            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name})")
+            
+            # Only update global WOOD_PALLET_WIDTH_MM if this is the top camera (authoritative source)
+            if camera_name == 'top':
+                WOOD_PALLET_WIDTH_MM = detected_width_mm
+                print(f"� TOP CAMERA AUTHORITY: Global wood width updated to {detected_width_mm:.1f}mm (from bbox {w}x{h}px)")
+            else:
+                print(f"📊 {camera_name.upper()} CAMERA: Local measurement {detected_width_mm:.1f}mm (from bbox {w}x{h}px) - DOES NOT UPDATE GLOBAL")
             
             return detected_width_mm
         

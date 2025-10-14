@@ -3335,11 +3335,16 @@ class App(tk.Tk):
                             x, y, w, h = candidate['bbox']
                             detected_width_mm = self.rgb_wood_detector.calculate_width_mm(h, camera_name)
 
-                            # Update global wood height variable dynamically
-                            global WOOD_PALLET_WIDTH_MM
-                            WOOD_PALLET_WIDTH_MM = detected_width_mm
+                            # Store detected width for this camera
                             self.detected_wood_width_mm[camera_name] = detected_width_mm
-                            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name})")
+                            
+                            # Only update global WOOD_PALLET_WIDTH_MM if this is the top camera (authoritative source)
+                            global WOOD_PALLET_WIDTH_MM
+                            if camera_name == 'top':
+                                WOOD_PALLET_WIDTH_MM = detected_width_mm
+                                print(f"🏆 TOP CAMERA AUTHORITY: Global wood width updated to {detected_width_mm:.1f}mm (from bbox {w}x{h}px)")
+                            else:
+                                print(f"📊 {camera_name.upper()} CAMERA: Local measurement {detected_width_mm:.1f}mm (from bbox {w}x{h}px) - DOES NOT UPDATE GLOBAL")
 
                         # STEP 4: List wood detection details (only once per camera per detection session in auto mode)
                         if self.auto_detection_active and (not hasattr(self, '_wood_reported') or not self._wood_reported.get(camera_name, False)):
@@ -4470,13 +4475,18 @@ class App(tk.Tk):
             # Store wood detection results
             self.wood_detection_results[camera_name] = wood_detection_result
 
-            # Update wood width if wood was detected (from any camera)
+            # Update wood width if wood was detected (TOP CAMERA AUTHORITY ONLY)
             if wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
                 x, y, w, h = wood_detection_result['auto_roi']
                 detected_width_mm = self.rgb_wood_detector.calculate_width_mm(h, camera_name)
+                
+                # Only update global WOOD_PALLET_WIDTH_MM if this is the top camera (authoritative source)
                 global WOOD_PALLET_WIDTH_MM
-                WOOD_PALLET_WIDTH_MM = detected_width_mm
-                print(f"Updated WOOD_PALLET_WIDTH_MM to {detected_width_mm:.1f}mm from {camera_name} camera")
+                if camera_name == 'top':
+                    WOOD_PALLET_WIDTH_MM = detected_width_mm
+                    print(f"🏆 TOP CAMERA AUTHORITY: Updated WOOD_PALLET_WIDTH_MM to {detected_width_mm:.1f}mm")
+                else:
+                    print(f"📊 {camera_name.upper()} CAMERA: Local measurement {detected_width_mm:.1f}mm - DOES NOT UPDATE GLOBAL")
 
             # Step 2: Apply defect detection ONLY within detected wood area (Green ROI based on wood detection)
             if wood_detection_result and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
