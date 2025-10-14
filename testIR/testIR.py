@@ -1130,12 +1130,12 @@ class ColorWoodDetector:
             x1, y1, x2, y2 = detection_box['bbox']
 
             # Calculate defect dimensions in pixels
-            width_px = abs(x2 - x1)   # Horizontal dimension (across wood width)
-            height_px = abs(y2 - y1) # Vertical dimension (along wood length)
+            width_px = abs(x2 - x1)   # Horizontal dimension (X-axis)
+            height_px = abs(y2 - y1) # Vertical dimension (Y-axis)
 
-            # For wood width measurement, use the horizontal dimension (width_px)
-            # This matches rgb_wood_detector.py which uses bbox width (w) for width calculation
-            defect_size_px = width_px
+            # For wood width measurement, use the vertical dimension (height_px) because camera is in landscape
+            # Wood runs vertically in the camera view, so Y-axis represents wood width
+            defect_size_px = height_px
 
             # Use camera-specific conversion factor
             if camera_name == "top":
@@ -1160,7 +1160,7 @@ class ColorWoodDetector:
             # Debug logging to understand bounding box sizes
             print(f"DEBUG [{camera_name}]: bbox=({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}) "
                   f"-> width_px={width_px:.1f}, height_px={height_px:.1f} "
-                  f"-> defect_size_px={defect_size_px:.1f} -> size_mm={size_mm:.1f}")
+                  f"-> defect_size_px={defect_size_px:.1f} (using Y-axis) -> size_mm={size_mm:.1f}")
 
             return size_mm, percentage
 
@@ -2458,12 +2458,12 @@ class App(tk.Tk):
             x1, y1, x2, y2 = detection_box['bbox']
 
             # Calculate defect dimensions in pixels
-            width_px = abs(x2 - x1)   # Horizontal dimension (across wood width)
-            height_px = abs(y2 - y1) # Vertical dimension (along wood length)
+            width_px = abs(x2 - x1)   # Horizontal dimension (X-axis)
+            height_px = abs(y2 - y1) # Vertical dimension (Y-axis)
 
-            # For wood width measurement, use the horizontal dimension (width_px)
-            # This matches rgb_wood_detector.py which uses bbox width (w) for width calculation
-            defect_size_px = width_px
+            # For wood width measurement, use the vertical dimension (height_px) because camera is in landscape
+            # Wood runs vertically in the camera view, so Y-axis represents wood width
+            defect_size_px = height_px
 
             # Use camera-specific conversion factor
             if camera_name == "top":
@@ -2488,7 +2488,7 @@ class App(tk.Tk):
             # Debug logging to understand bounding box sizes
             print(f"DEBUG [{camera_name}]: bbox=({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}) "
                   f"-> width_px={width_px:.1f}, height_px={height_px:.1f} "
-                  f"-> defect_size_px={defect_size_px:.1f} -> size_mm={size_mm:.1f}")
+                  f"-> defect_size_px={defect_size_px:.1f} (using Y-axis) -> size_mm={size_mm:.1f}")
 
             return size_mm, percentage
 
