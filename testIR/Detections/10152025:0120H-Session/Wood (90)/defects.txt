@@ -1,0 +1,10 @@
+Wood No. (90) - 103.37837837837839mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-2
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Missing Knot - 31.6mm
+
+Bottom Panel Defects:
+1. Missing Knot - 20.5mm

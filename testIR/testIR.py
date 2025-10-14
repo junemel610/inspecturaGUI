@@ -132,7 +132,7 @@ MAX_DETECTION_ENTRIES = 50         # Maximum number of detection entries to keep
 # ------------------------------------------------------------------------------
 ROI_COORDINATES = {
     "top": {
-        "x1": 370,  # Left boundary - exclude left equipment
+        "x1": 345,  # Left boundary - exclude left equipment
         "y1": 0,   # Top boundary - exclude top area
         "x2": 880, # Right boundary - exclude right equipment
         "y2": 720   # Bottom boundary - focus on wood area
@@ -2473,6 +2473,39 @@ class App(tk.Tk):
         
         return display_mapping.get(defect_type, defect_type)
 
+    def get_color_for_defect(self, defect_type):
+        """Get BGR color for defect bounding boxes and backgrounds"""
+        # Color mapping (BGR format for OpenCV - note: BGR is reversed from RGB)
+        color_mapping = {
+            # Sound & Live Knots = Light Blue (RGB: 100, 200, 255)
+            "Sound_Knot": (255, 200, 100),    
+            "Live_Knot": (255, 200, 100),     
+            "sound_knot": (255, 200, 100),    
+            "live_knot": (255, 200, 100),     
+            
+            # Dead Knots = Yellow (RGB: 255, 255, 0)
+            "Dead_Knot": (0, 255, 255),       
+            "dead_knot": (0, 255, 255),       
+            
+            # Missing Knots = Red (RGB: 255, 0, 0)
+            "Missing_Knot": (0, 0, 255),      
+            "missing_knot": (0, 0, 255),      
+            "missing_knots": (0, 0, 255),     
+            
+            # Knots with Crack = Orange (RGB: 255, 165, 0)
+            "Crack_Knot": (0, 165, 255),      
+            "crack_knot": (0, 165, 255),      
+            "Knots_With_Crack": (0, 165, 255), 
+            "knots_with_crack": (0, 165, 255), 
+            
+            # Default for Unsound and unknown types = Orange (RGB: 255, 165, 0)
+            "Unsound_Knot": (0, 165, 255),    
+            "unsound_knot": (0, 165, 255),    
+        }
+        
+        # Return color or default to green if not found
+        return color_mapping.get(defect_type, (0, 255, 0))
+
     def calculate_defect_size(self, detection_box, camera_name="top"):
         """Calculate defect size in mm and percentage from detection bounding box"""
         try:
@@ -3730,17 +3763,29 @@ class App(tk.Tk):
             if not hasattr(self, '_memory_cleanup_counter'):
                 self._memory_cleanup_counter = 0
 
-            # Perform memory cleanup every 300 frames (~24 seconds at 125 FPS)
+            # Perform memory cleanup every 100 frames (~8 seconds at 12.5 FPS) - more frequent
             self._memory_cleanup_counter += 1
-            if self._memory_cleanup_counter % 300 == 0:
+            if self._memory_cleanup_counter % 100 == 0:
                 import gc
                 gc.collect()  # Force garbage collection
                 
                 # Clear cached dimensions periodically to handle window resizing
                 if hasattr(self, '_label_dimensions'):
                     self._label_dimensions.clear()
+                
+                # Limit detection frames to prevent memory buildup
+                if hasattr(self, 'detection_frames') and len(self.detection_frames) > 30:
+                    # Keep only the most recent 30 frames
+                    self.detection_frames = self.detection_frames[-30:]
+                
+                # Clear old PhotoImage references
+                if hasattr(self, '_old_photos'):
+                    if len(self._old_photos) > 20:  # Keep last 20 references
+                        self._old_photos = self._old_photos[-20:]
+                else:
+                    self._old_photos = []
                     
-                print(f"Memory cleanup performed at frame {self._memory_cleanup_counter}")
+                print(f"Memory cleanup performed at frame {self._memory_cleanup_counter} - Frames: {len(self.detection_frames) if hasattr(self, 'detection_frames') else 0}")
             
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER")
@@ -3891,17 +3936,20 @@ class App(tk.Tk):
                     # Save best frame (frame with most detections or first significant detection)
                     if (self.detection_session_data["best_frames"][camera_name] is None or
                         sum(defect_dict.values()) > 0):
-                        # Convert frame to RGB for saving
+                        # Convert frame to RGB and resize for memory efficiency
                         frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                        self.detection_session_data["best_frames"][camera_name] = frame_rgb.copy()
+                        frame_rgb_resized = cv2.resize(frame_rgb, (640, 360), interpolation=cv2.INTER_LINEAR)
+                        self.detection_session_data["best_frames"][camera_name] = frame_rgb_resized
 
-                    # Store frame for potential PDF report
-                    if len(self.detection_frames) < 50:  # Limit stored frames to prevent memory issues
+                    # Store frame for potential PDF report with stricter memory limits
+                    if len(self.detection_frames) < 20:  # Reduced from 50 to 20 frames to prevent memory issues
                         frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                        # Resize frame before storing to save memory
+                        frame_rgb_resized = cv2.resize(frame_rgb, (640, 360), interpolation=cv2.INTER_LINEAR)
                         self.detection_frames.append({
                             "camera": camera_name,
                             "timestamp": datetime.now().isoformat(),
-                            "frame": frame_rgb.copy(),
+                            "frame": frame_rgb_resized,  # Store smaller frame
                             "defects": defect_dict.copy()
                         })
 
@@ -5068,10 +5116,18 @@ class App(tk.Tk):
             # Convert to PhotoImage
             photo = ImageTk.PhotoImage(pil_image)
 
-            # Store reference to prevent garbage collection
+            # Properly manage old PhotoImage references to prevent memory leaks
+            if not hasattr(self, '_old_photos'):
+                self._old_photos = []
+            
+            # Store reference to prevent garbage collection and manage old ones
             if canvas == self.top_canvas:
+                if self._top_photo is not None:
+                    self._old_photos.append(self._top_photo)
                 self._top_photo = photo
             elif canvas == self.bottom_canvas:
+                if self._bottom_photo is not None:
+                    self._old_photos.append(self._bottom_photo)
                 self._bottom_photo = photo
 
             # Clear canvas and display on canvas, centered
@@ -5386,8 +5442,11 @@ class App(tk.Tk):
         for bbox, defect_type, size_mm, confidence in detections:
             x1, y1, x2, y2 = bbox
             
-            # Draw bounding box
-            cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            # Get color based on defect type
+            color = self.get_color_for_defect(defect_type)
+            
+            # Draw bounding box with defect-specific color
+            cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
             
             # Get display name with grading category
             display_name = self.get_display_name_for_defect(defect_type)
@@ -5427,7 +5486,7 @@ class App(tk.Tk):
             if text_y > frame_height - 5:
                 text_y = frame_height - 10
             
-            # Draw background rectangle for text with proper bounds checking
+            # Draw background rectangle for text with proper bounds checking (same color as bounding box)
             bg_x1 = max(0, text_x)
             bg_y1 = max(0, text_y - text_height - baseline)
             bg_x2 = min(frame_width, text_x + text_width)
@@ -5436,9 +5495,9 @@ class App(tk.Tk):
             cv2.rectangle(annotated_frame, 
                          (bg_x1, bg_y1),
                          (bg_x2, bg_y2),
-                         (0, 255, 0), -1)
+                         color, -1)
             
-            # Draw text
+            # Draw text (black text for good contrast on colored backgrounds)
             cv2.putText(annotated_frame, label, (text_x, text_y), 
                        font, font_scale, (0, 0, 0), thickness)
         
@@ -5932,11 +5991,47 @@ class App(tk.Tk):
         return content
 
 
+    def cleanup_memory_resources(self):
+        """Explicit cleanup of memory resources to prevent X11 BadAlloc errors"""
+        try:
+            # Clear PhotoImage references
+            self._top_photo = None
+            self._bottom_photo = None
+            if hasattr(self, '_old_photos'):
+                self._old_photos.clear()
+            
+            # Clear detection frames
+            if hasattr(self, 'detection_frames'):
+                self.detection_frames.clear()
+            
+            # Clear session data frames
+            if hasattr(self, 'detection_session_data'):
+                if 'best_frames' in self.detection_session_data:
+                    self.detection_session_data['best_frames'] = {"top": None, "bottom": None}
+                if 'total_detections' in self.detection_session_data:
+                    self.detection_session_data['total_detections'] = {"top": [], "bottom": []}
+            
+            # Clear cached frames
+            if hasattr(self, 'captured_frames'):
+                self.captured_frames = {"top": [], "bottom": []}
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
+            print("Memory resources cleaned up successfully")
+            
+        except Exception as e:
+            print(f"Error during memory cleanup: {e}")
+
     def on_closing(self):
         print("Releasing resources...")
         
         # Set a flag to indicate shutdown is in progress
         self._shutting_down = True
+        
+        # Clean up memory resources first to prevent X11 errors
+        self.cleanup_memory_resources()
         
         # Close Arduino connection first to stop the listener thread
         if hasattr(self, 'ser') and self.ser:

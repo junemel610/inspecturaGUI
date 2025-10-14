@@ -1,0 +1,12 @@
+Wood No. (34) - 139.52702702702703mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-2
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Dead Knot - 20.7mm
+2. Missing Knot - 16.0mm
+
+Bottom Panel Defects:
+1. Dead Knot - 26.7mm
+2. Missing Knot - 10.0mm

@@ -1,0 +1,11 @@
+Wood No. (67) - 118.58108108108108mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-0
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Dead Knot - 27.0mm
+2. Dead Knot - 8.2mm
+
+Bottom Panel Defects:
+1. Dead Knot - 8.4mm

@@ -1,0 +1,10 @@
+Wood No. (51) - 97.63513513513513mm
+Top Panel Grade: G2-1
+Bottom Panel Grade: G2-1
+Final Grade: G2-1
+
+Top Panel Defects:
+1. Dead Knot - 10.6mm
+
+Bottom Panel Defects:
+1. Dead Knot - 13.8mm

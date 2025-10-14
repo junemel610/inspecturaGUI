@@ -1,0 +1,19 @@
+--- SS-EN 1611-1 Wood Sorting Report ---
+Generated at: 2025-10-15_03-50-03
+
+--- Session Summary ---
+Total Pieces Processed: 86
+Grade G2-0: 3
+Grade G2-1: 5
+Grade G2-2: 34
+Grade G2-3: 43
+Grade G2-4: 1
+
+
+--- Individual Piece Log ---
+
+Piece #86: Grade G2-3
+  - Defect: Dead Knot, Count: 1, Sizes (mm): 7.3
+  - Defect: Crack Knot, Count: 2, Sizes (mm): 31.7, 26.8
+  - Defect: Sound Knot, Count: 2, Sizes (mm): 24.0, 33.5
+  - Defect: Missing Knot, Count: 1, Sizes (mm): 25.4

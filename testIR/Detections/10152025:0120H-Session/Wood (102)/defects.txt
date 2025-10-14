@@ -1,0 +1,10 @@
+Wood No. (102) - 139.86486486486487mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-2
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Missing Knot - 31.1mm
+
+Bottom Panel Defects:
+1. Missing Knot - 21.1mm
