@@ -1,0 +1,12 @@
+Wood No. (1) - 150.0mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-2
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Missing Knot - 28.2mm
+
+Bottom Panel Defects:
+1. Missing Knot - 29.9mm
+2. Dead Knot - 4.4mm
+3. Missing Knot - 4.7mm

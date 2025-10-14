@@ -16,7 +16,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 import numpy as np
-from typing import Dict
+from typing import Dict, List, Tuple, Optional
 
 # =============================================================================
 # UI CONFIGURATION SECTION - Customize the user interface appearance and behavior
@@ -861,8 +861,9 @@ BOTTOM_CAMERA_DISTANCE_CM = 27.5
 TOP_CAMERA_PIXEL_TO_MM = 2.96  # Top camera: 2.96 pixels per mm
 BOTTOM_CAMERA_PIXEL_TO_MM = 3.18  # Bottom camera: 3.18 pixels per mm
 
-# Dynamic wood pallet height (measured perpendicular to grain) - starts at 0 until wood is detected
-WOOD_PALLET_HEIGHT_MM = 0  # Will be updated dynamically when wood is detected
+# Dynamic wood pallet width storage per wood piece
+WOOD_PALLET_WIDTH_MM = 0  # Global variable for last detected wood width
+wood_widths = {}  # Dictionary to store width per wood number
 
 # SS-EN 1611-1 Grading constants for size limits: limit = (0.10 * wood_width) + constant
 GRADING_CONSTANTS = {
@@ -965,21 +966,21 @@ class ColorWoodDetector:
     def __init__(self):
         self.wood_color_profiles = {
             'top_panel': {
-                'rgb_lower': np.array([170, 180, 175]),  # BGR
+                'rgb_lower': np.array([160, 160, 160]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Top Panel Wood'
             },
             'bottom_panel': {
-                'rgb_lower': np.array([150, 180, 125]),  # BGR
+                'rgb_lower': np.array([70, 70, 85]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Bottom Panel Wood'
             }
         }
 
         # Detection parameters
-        self.min_contour_area = 1000      # Lowered for better detection of smaller wood pieces
+        self.min_contour_area = 1000      # Increased for more reliable detection with tighter RGB ranges
         self.max_contour_area = 500000    # Slightly reduced for typical wood plank sizes
-        self.min_aspect_ratio = 0.1       # Lowered to allow horizontal wood orientation
+        self.min_aspect_ratio = 1.0       # Tightened for more rectangular wood shapes
         self.max_aspect_ratio = 10.0      # Reduced for more typical plank proportions
         self.contour_approximation = 0.025 # Slightly tighter for better shape approximation
 
@@ -1045,12 +1046,12 @@ class ColorWoodDetector:
 
         return analysis
 
-    def detect_wood_by_color(self, image: np.ndarray, profile_names: list = None) -> tuple:
-        """Detect wood using color profiles"""
+    def detect_wood_by_color(self, image: np.ndarray, profile_names: List[str] = None) -> Tuple[np.ndarray, List[Dict]]:
+        """Detect wood using color-first approach with edge enhancement"""
         if profile_names is None:
             profile_names = list(self.wood_color_profiles.keys())
 
-        # Apply histogram equalization on V channel for better lighting compensation
+        # Step 1: Apply histogram equalization on V channel for better lighting compensation
         hsv_temp = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(hsv_temp)
         v = cv2.equalizeHist(v)
@@ -1058,6 +1059,8 @@ class ColorWoodDetector:
         rgb = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
 
         combined_mask = np.zeros(rgb.shape[:2], dtype=np.uint8)
+
+        detections = []
 
         print(f"🎨 Using profiles: {profile_names}")
 
@@ -1072,19 +1075,36 @@ class ColorWoodDetector:
                 print(f"  📊 {profile_name}: RGB range {profile['rgb_lower']} - {profile['rgb_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
                 combined_mask = cv2.bitwise_or(combined_mask, mask)
 
-        pre_morph_pixels = cv2.countNonZero(combined_mask)
+        # Step 2: Apply edge detection within the color mask to find wood boundaries
+        # Convert color mask to find edges only within wood-colored regions
+        color_mask_blurred = cv2.GaussianBlur(combined_mask, (5, 5), 0)
+        color_edges = cv2.Canny(color_mask_blurred, 100, 200)
+
+        # Dilate the edges to make them more visible in the mask
+        kernel_edge = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        color_edges_dilated = cv2.dilate(color_edges, kernel_edge, iterations=1)
+
+        # Combine the original color mask with edge information
+        # This preserves the wood color regions but enhances boundaries
+        enhanced_mask = cv2.bitwise_or(combined_mask, color_edges_dilated)
+
+        edge_enhanced_pixels = cv2.countNonZero(enhanced_mask)
+        edge_enhanced_percentage = (edge_enhanced_pixels / total_pixels) * 100
+        print(f"🎨🔍 Color + Edge enhanced mask: {edge_enhanced_pixels} pixels ({edge_enhanced_percentage:.1f}%)")
+
+        pre_morph_pixels = cv2.countNonZero(enhanced_mask)
         pre_morph_percentage = (pre_morph_pixels / total_pixels) * 100
-        print(f"🔧 Pre-morph combined mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
+        print(f"🔧 Pre-morph enhanced mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
 
         # Clean up mask with morphological operations
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size))
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
-        combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
+        enhanced_mask = cv2.morphologyEx(enhanced_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
+        enhanced_mask = cv2.dilate(enhanced_mask, kernel, iterations=1)
+        enhanced_mask = cv2.morphologyEx(enhanced_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
 
-        post_morph_pixels = cv2.countNonZero(combined_mask)
+        post_morph_pixels = cv2.countNonZero(enhanced_mask)
         post_morph_percentage = (post_morph_pixels / total_pixels) * 100
-        print(f"🔧 Post-morph combined mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
+        print(f"🔧 Post-morph enhanced mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
 
         # Additional logging for dominant colors
         rgb_flat = rgb.reshape(-1, 3)
@@ -1093,9 +1113,9 @@ class ColorWoodDetector:
         b_values = rgb_flat[:, 2]
         print(f"🎨 Dominant RGB in image: R={int(np.mean(r_values)):.0f}±{int(np.std(r_values)):.0f}, G={int(np.mean(g_values)):.0f}, B={int(np.mean(b_values)):.0f}")
 
-        return combined_mask, []
+        return enhanced_mask, detections
 
-    def detect_rectangular_contours(self, mask: np.ndarray, camera: str = 'top') -> list:
+    def detect_rectangular_contours(self, mask: np.ndarray, camera: str = 'top') -> List[Dict]:
         """Detect rectangular contours that could be wood planks"""
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -1119,14 +1139,14 @@ class ColorWoodDetector:
 
             # Filter by minimum size to prevent small detections
             if camera == 'top':
-                min_height = 50   # Lowered for better detection
-                min_width = 50
+                min_height = 266
+                min_width = 100
             elif camera == 'bottom':
-                min_height = 50   # Lowered for better detection
-                min_width = 50
+                min_height = 286
+                min_width = 100
             else:
-                min_height = 50
-                min_width = 50
+                min_height = 100
+                min_width = 100
 
             if h < min_height or w < min_width:
                 rejected_area += 1
@@ -1210,129 +1230,117 @@ class ColorWoodDetector:
 
         return min(confidence, 1.0)
 
-    def _detect_wood_by_texture(self, image: np.ndarray) -> float:
-        """Detect wood using texture analysis (LBP features)"""
+    def _detect_wood_by_texture(self, frame):
+        """Detect wood using basic texture analysis"""
         try:
-            # Convert to grayscale for texture analysis
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            # Convert to grayscale
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
             # Apply Gaussian blur to reduce noise
             blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-            # Calculate texture features using Local Binary Patterns (LBP)
-            # Simple texture measure: variance of Laplacian (focus/blur measure)
-            laplacian_var = cv2.Laplacian(blurred, cv2.CV_64F).var()
+            # Calculate texture using standard deviation in local neighborhoods
+            kernel_size = 15
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+
+            # Calculate local standard deviation (texture measure)
+            mean = cv2.blur(blurred.astype(np.float32), (kernel_size, kernel_size))
+            sqr_mean = cv2.blur((blurred.astype(np.float32))**2, (kernel_size, kernel_size))
+            texture_variance = sqr_mean - mean**2
+            texture_std = np.sqrt(np.maximum(texture_variance, 0))
 
             # Wood typically has moderate texture (not too smooth, not too rough)
-            # Normalize to 0-1 confidence score
-            if laplacian_var < 50:
-                # Too smooth (might be painted surface)
-                texture_confidence = 0.2
-            elif laplacian_var < 200:
-                # Good wood texture range
-                texture_confidence = 0.8
-            elif laplacian_var < 500:
-                # Moderately textured
-                texture_confidence = 0.6
-            else:
-                # Too rough (might be heavily damaged)
-                texture_confidence = 0.3
+            # Calculate confidence based on texture distribution
+            texture_mean = np.mean(texture_std)
+            texture_confidence = 0.0
 
-            print(f"🔍 Texture analysis: Laplacian variance = {laplacian_var:.1f}, confidence = {texture_confidence:.2f}")
+            # Optimal texture range for wood (adjust based on testing)
+            if 10 < texture_mean < 40:
+                texture_confidence = 1.0 - abs(texture_mean - 25) / 15.0
 
-            return texture_confidence
+            return max(0.0, min(1.0, texture_confidence))
 
         except Exception as e:
-            print(f"❌ Error in texture analysis: {e}")
-            return 0.5  # Neutral confidence on error
+            print(f"Error in texture-based wood detection: {e}")
+            return 0.0
 
-    def _detect_wood_by_shape(self, image: np.ndarray, camera: str = 'top') -> tuple:
-        """Detect wood using shape analysis (contours and geometry)"""
+    def _detect_wood_by_shape(self, frame):
+        """Detect wood using contour and shape analysis"""
         try:
             # Convert to grayscale and apply edge detection
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            edges = cv2.Canny(blurred, 50, 150)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 100, 200)
 
             # Find contours
             contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            print(f"🔺 Found {len(contours)} contours for shape analysis")
+            if not contours:
+                return 0.0
 
-            wood_shapes = []
-            for i, contour in enumerate(contours):
+            # Analyze largest contours for rectangular/wood-like shapes
+            frame_area = frame.shape[0] * frame.shape[1]
+            shape_confidence = 0.0
+
+            for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:5]:
                 area = cv2.contourArea(contour)
 
-                # Filter by area
-                if area < 1000:  # Smaller threshold for shape analysis
+                # Skip very small contours
+                if area < frame_area * 0.05:
                     continue
 
-                # Get bounding rectangle
+                # Calculate contour properties
+                perimeter = cv2.arcLength(contour, True)
+                if perimeter == 0:
+                    continue
+
+                # Aspect ratio analysis
                 x, y, w, h = cv2.boundingRect(contour)
+                aspect_ratio = float(w) / h
 
-                # Calculate shape properties
-                aspect_ratio = max(w, h) / min(w, h) if min(w, h) > 0 else 10
-                extent = area / (w * h) if (w * h) > 0 else 0
+                # Wood planks typically have certain aspect ratios
+                # Adjust these ranges based on your conveyor setup
+                if 0.3 < aspect_ratio < 5.0:  # Not too square, not too thin
+                    # Calculate rectangularity (how close to rectangle)
+                    rect_area = w * h
+                    rectangularity = area / rect_area
 
-                # Wood planks typically have rectangular shapes with good extent
-                if 1.2 <= aspect_ratio <= 8.0 and extent > 0.6:
-                    confidence = min(extent * 0.8 + (1.0 / aspect_ratio) * 0.2, 1.0)
-                    wood_shapes.append({
-                        'bbox': (x, y, w, h),
-                        'area': area,
-                        'aspect_ratio': aspect_ratio,
-                        'extent': extent,
-                        'confidence': confidence
-                    })
-                    print(f"  ✅ Contour {i}: area={area:.0f}, aspect={aspect_ratio:.2f}, extent={extent:.2f}, conf={confidence:.2f}")
+                    if rectangularity > 0.6:  # Reasonably rectangular
+                        shape_confidence = max(shape_confidence, rectangularity)
 
-            return wood_shapes, edges
+            return min(1.0, shape_confidence)
 
         except Exception as e:
-            print(f"❌ Error in shape analysis: {e}")
-            return [], None
+            print(f"Error in shape-based wood detection: {e}")
+            return 0.0
 
     def visualize_detection(self, image: np.ndarray, detection_result: Dict, output_path: str = None) -> np.ndarray:
-        """Create a visualization of the wood detection results"""
+        """Create visualization of wood detection results"""
         vis_image = image.copy()
 
-        if not detection_result.get('wood_detected', False):
-            # No wood detected - add text overlay
-            h, w = vis_image.shape[:2]
-            cv2.putText(vis_image, "NO WOOD DETECTED", (w//2 - 150, h//2),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
-            return vis_image
-
-        # Draw wood detection results
-        wood_candidates = detection_result.get('wood_candidates', [])
-        for i, candidate in enumerate(wood_candidates):
-            x, y, w, h = candidate['bbox']
-            confidence = candidate['confidence']
-
-            # Color based on confidence
-            if confidence > 0.7:
-                color = (0, 255, 0)  # Green for high confidence
-            elif confidence > 0.5:
-                color = (0, 255, 255)  # Yellow for medium confidence
-            else:
-                color = (0, 165, 255)  # Orange for low confidence
-
+        # Draw all wood candidates
+        for i, candidate in enumerate(detection_result['wood_candidates']):
             # Draw bounding box
-            cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 3)
+            x, y, w, h = candidate['bbox']
+            color = (0, 255, 0) if i == 0 else (0, 255, 255)  # Best candidate in green, others in yellow
+            cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 2)
 
-            # Add label
-            label = f"Wood {i+1}: {confidence:.2f}"
-            cv2.putText(vis_image, label, (x, y - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            # Add confidence label
+            label = f"Wood {i+1}: {candidate['confidence']:.2f}"
+            cv2.putText(vis_image, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # Add summary information
-        h, w = vis_image.shape[:2]
-        wood_count = detection_result.get('wood_count', 0)
-        total_confidence = detection_result.get('confidence', 0.0)
+            # Add metrics
+            metrics = f"AR:{candidate['aspect_ratio']:.1f} S:{candidate['solidity']:.2f}"
+            cv2.putText(vis_image, metrics, (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
-        summary_text = f"Wood Detected: {wood_count} pieces (conf: {total_confidence:.2f})"
-        cv2.putText(vis_image, summary_text, (10, h - 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # Draw auto ROI
+        if detection_result['auto_roi']:
+            roi_x, roi_y, roi_w, roi_h = detection_result['auto_roi']
+            cv2.rectangle(vis_image, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (255, 255, 0), 3)
+            cv2.putText(vis_image, "AUTO ROI", (roi_x, roi_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+
+        # Add summary info
+        summary = f"Wood Detected: {detection_result['wood_detected']} | Count: {detection_result['wood_count']} | Confidence: {detection_result['confidence']:.2f}"
+        cv2.putText(vis_image, summary, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         # Save if output path provided
         if output_path:
@@ -1341,7 +1349,7 @@ class ColorWoodDetector:
 
         return vis_image
 
-    def generate_auto_roi(self, wood_candidates: list, image_shape: tuple) -> tuple:
+    def generate_auto_roi(self, wood_candidates: List[Dict], image_shape: Tuple) -> Optional[Tuple[int, int, int, int]]:
         """Generate automatic ROI based on detected wood"""
         if not wood_candidates:
             return None
@@ -1361,12 +1369,21 @@ class ColorWoodDetector:
 
         return (roi_x1, roi_y1, roi_x2 - roi_x1, roi_y2 - roi_y1)
 
-    def detect_wood_comprehensive(self, image: np.ndarray, profile_names: list = None, roi: tuple = None, camera: str = 'top') -> dict:
+    def detect_wood_comprehensive(self, image: np.ndarray, profile_names: List[str] = None, roi: Tuple[int, int, int, int] = None, camera: str = 'top') -> Dict:
         """Comprehensive wood detection combining color and shape analysis"""
 
         print(f"🪵 Starting comprehensive wood detection on image shape: {image.shape}")
 
         # Step 1: Color-based detection with optional ROI
+        # Use camera-specific profile if none specified
+        if profile_names is None:
+            if camera == 'top':
+                profile_names = ['top_panel']
+            elif camera == 'bottom':
+                profile_names = ['bottom_panel']
+            else:
+                profile_names = list(self.wood_color_profiles.keys())
+
         if roi is not None:
             x, y, w, h = roi
             cropped = image[y:y+h, x:x+w]
@@ -1385,15 +1402,12 @@ class ColorWoodDetector:
         wood_candidates = self.detect_rectangular_contours(color_mask, camera)
         print(f"📐 Found {len(wood_candidates)} wood candidates after contour filtering")
 
-        # Step 3: Use exact wood bounding box as ROI
-        auto_roi = None
-        if wood_candidates:
-            best_candidate = wood_candidates[0]  # highest confidence
-            x, y, w, h = best_candidate['bbox']
-            auto_roi = (x, y, w, h)
-            print(f"🎯 Using exact wood bbox as ROI: {(x, y, w, h)}")
+        # Step 3: Generate automatic ROI
+        auto_roi = self.generate_auto_roi(wood_candidates, image.shape)
+        if auto_roi:
+            print(f"🎯 Auto ROI generated: {auto_roi}")
         else:
-            print("❌ No wood detected, no ROI")
+            print("❌ No auto ROI generated (no candidates)")
 
         # Step 4: Integrate texture analysis for enhanced confidence
         texture_confidence = self._detect_wood_by_texture(image)
@@ -1649,48 +1663,37 @@ class App(tk.Tk):
         self.status_label.pack(pady=LABEL_PADDING, fill="x", expand=False)
         self.status_label.insert(1.0, "Status: Initializing...")
 
-        # Detection panel under bottom camera
-        detection_frame = ttk.LabelFrame(self, text="Detection", padding=FRAME_PADDING)
-        detection_frame.place(x=675, y=415, width=250, height=125)
+        # ROI panel under bottom camera
+        roi_frame = ttk.LabelFrame(self, text="ROI", padding=FRAME_PADDING)
+        roi_frame.place(x=675, y=415, width=250, height=125)
 
         self.roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(detection_frame, text="Top ROI", variable=self.roi_var,
+        ttk.Checkbutton(roi_frame, text="Top ROI", variable=self.roi_var,
                         command=self.toggle_roi).pack(anchor="w")
 
         self.bottom_roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(detection_frame, text="Bottom ROI", variable=self.bottom_roi_var,
+        ttk.Checkbutton(roi_frame, text="Bottom ROI", variable=self.bottom_roi_var,
                         command=self.toggle_bottom_roi).pack(anchor="w")
 
-        self.live_detection_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(detection_frame, text="Live Detect", variable=self.live_detection_var,
-                        command=self.toggle_live_detection_mode).pack(anchor="w")
-
-        self.auto_grade_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(detection_frame, text="Auto Grade", variable=self.auto_grade_var).pack(anchor="w")
-
-        # Conveyor Control (place next to detection)
+        # Conveyor Control (place next to ROI)
         control_frame = ttk.LabelFrame(self, text="Conveyor Control", padding=FRAME_PADDING)
         control_frame.place(x=935, y=415, width=655, height=125)
 
-        tk.Button(control_frame, text="Continuous",
-                  command=self.set_continuous_mode, bg=BUTTON_BACKGROUND_COLOR,
-                  fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=0, y=0, width=164, height=125)
-        tk.Button(control_frame, text="Trigger",
-                  command=self.set_trigger_mode, bg=BUTTON_BACKGROUND_COLOR,
-                  fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=164, y=0, width=164, height=125)
-        tk.Button(control_frame, text="Scan Phase",
+        tk.Button(control_frame, text="ON",
                   command=self.set_scan_mode, bg=BUTTON_BACKGROUND_COLOR,
                   fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=328, y=0, width=164, height=125)
-        tk.Button(control_frame, text="IDLE",
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=0, y=0, width=327, height=60)
+        tk.Button(control_frame, text="OFF",
                   command=self.set_idle_mode, bg=BUTTON_BACKGROUND_COLOR,
                   fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                  font=self.font_button, relief="raised", borderwidth=2).place(x=492, y=0, width=163, height=125)
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=328, y=0, width=327, height=60)
+        tk.Button(control_frame, text="CLOSE",
+                  command=self.on_closing, bg="#ff4444",
+                  fg="white", activebackground="#cc0000",
+                  font=self.font_button, relief="raised", borderwidth=2).place(x=0, y=65, width=655, height=60)
 
-        # Reports panel at fixed position (no overlap)
-        REPORT_W, REPORT_H = 300, 125
+        # Reports panel at fixed position (no overlap) - increased height for more buttons
+        REPORT_W, REPORT_H = 300, 200
         REPORT_X, REPORT_Y = 1600, 415
         reports_frame = ttk.LabelFrame(self, text="Reports", padding=FRAME_PADDING)
         reports_frame.place(x=REPORT_X, y=REPORT_Y, width=REPORT_W, height=REPORT_H)
@@ -1700,9 +1703,14 @@ class App(tk.Tk):
         self.log_status_label.pack()
 
         tk.Button(reports_frame, text="Generate Report",
-                 command=self.manual_generate_report, bg=BUTTON_BACKGROUND_COLOR,
-                 fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
-                 font=self.font_button, relief="raised", borderwidth=2).pack(pady=ELEMENT_PADDING_Y)
+                  command=self.manual_generate_report, bg=BUTTON_BACKGROUND_COLOR,
+                  fg=BUTTON_TEXT_COLOR, activebackground=BUTTON_ACTIVE_COLOR,
+                  font=self.font_button, relief="raised", borderwidth=2).pack(pady=ELEMENT_PADDING_Y)
+
+        tk.Button(reports_frame, text="View Session Folder",
+                  command=self.view_session_folder, bg="#4444ff",
+                  fg="white", activebackground="#0000cc",
+                  font=self.font_button, relief="raised", borderwidth=2).pack(pady=ELEMENT_PADDING_Y)
 
         self.show_report_notification = tk.BooleanVar(value=True)
         ttk.Checkbutton(reports_frame, text="Notifications",
@@ -1715,14 +1723,14 @@ class App(tk.Tk):
 
         # Statistics section full width at bottom
         stats_frame = ttk.LabelFrame(self, text="Statistics", padding=FRAME_PADDING)
-        stats_frame.place(x=0, y=screen_height - 500, width=screen_width, height=500)
+        stats_frame.place(x=0, rely=1.0, relwidth=1, height=500, anchor="sw")
 
         # Create notebook for tabbed statistics
         self.stats_notebook = ttk.Notebook(stats_frame, height=STATS_TAB_HEIGHT - 40)  # Account for padding and tab headers
-        self.stats_notebook.place(x=0, y=0, relwidth=1, relheight=1)
+        self.stats_notebook.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Tab 1: Grade Summary (Overview with Live Grading)
-        grade_summary_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
+        grade_summary_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(grade_summary_tab, text="Grade Summary")
 
 
@@ -1815,24 +1823,26 @@ class App(tk.Tk):
                                                           anchor="center")
             self.live_stats_labels[grade_key].grid(row=1, column=0, sticky="ew", padx=2, pady=(2, 8))
 
-        # Tab 2: Defect Details
-        defect_details_tab = ttk.Frame(self.stats_notebook)
-        self.stats_notebook.add(defect_details_tab, text="Defect Details")
-        
-        # Defect details content
-        self.defect_details_frame = ttk.Frame(defect_details_tab)
-        self.defect_details_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
+        # Tab 2: Grading Details
+        grading_details_tab = ttk.Frame(self.stats_notebook)
+        self.stats_notebook.add(grading_details_tab, text="Grading Details")
+
+        # Grading details content
+        self.grading_details_frame = ttk.Frame(grading_details_tab)
+        self.grading_details_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.update_grade_details_tab()
+
         # Tab 3: Performance Metrics
         performance_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(performance_tab, text="Performance")
-        
+
         # Performance metrics content
         self.performance_frame = ttk.Frame(performance_tab)
         self.performance_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.update_performance_tab()
         
         # Tab 4: Recent Activity
-        activity_tab = ttk.Frame(self.stats_notebook, height=STATS_TAB_HEIGHT - 60)
+        activity_tab = ttk.Frame(self.stats_notebook)
         self.stats_notebook.add(activity_tab, text="Recent Activity")
 
         # Main container with two sections
@@ -1866,7 +1876,7 @@ class App(tk.Tk):
         log_canvas.bind("<MouseWheel>", on_log_scroll)
 
         # Bind scrollbar interactions
-        log_scrollbar.bind("<ButtonPress-1>", lambda e: self._user_scrolling_log.update({True: True}))
+        log_scrollbar.bind("<ButtonPress-1>", lambda e: setattr(self, '_user_scrolling_log', True))
 
         log_canvas.create_window((0, 0), window=self.processing_log_frame, anchor="nw")
         log_canvas.configure(yscrollcommand=log_scrollbar.set)
@@ -1880,6 +1890,7 @@ class App(tk.Tk):
 
         # Initialize scroll state variables
         self._user_scrolling_log = False
+        self._last_defects_files_count = 0  # Track number of defects files for change detection
 
         # Create simplified detection tracking (retain logic without complex UI)
         self.top_dashboard_widgets = self.create_simple_detection_tracker("top")
@@ -1893,6 +1904,11 @@ class App(tk.Tk):
 
         # Initialize live statistics display
         self.update_live_stats_display()
+
+        # Initialize tab content
+        self.update_grade_details_tab()
+        self.update_performance_tab()
+        self.update_recent_activity_tab()
 
         # Removed grading_status_label as requested
 
@@ -1960,10 +1976,10 @@ class App(tk.Tk):
 
     def calibrate_with_wood_pallet(self, wood_pallet_width_px_top, wood_pallet_width_px_bottom):
         """Auto-calibrate both cameras using the known wood pallet width"""
-        print(f"Auto-calibrating cameras with {WOOD_PALLET_HEIGHT_MM}mm wood pallet...")
+        print(f"Auto-calibrating cameras with {WOOD_PALLET_WIDTH_MM}mm wood pallet...")
 
-        top_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_top, WOOD_PALLET_HEIGHT_MM, "top")
-        bottom_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_bottom, WOOD_PALLET_HEIGHT_MM, "bottom")
+        top_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_top, WOOD_PALLET_WIDTH_MM, "top")
+        bottom_factor = self.calibrate_pixel_to_mm(wood_pallet_width_px_bottom, WOOD_PALLET_WIDTH_MM, "bottom")
         
         print(f"Calibration complete:")
         print(f"  Top camera (37cm): {top_factor:.4f} mm/pixel")
@@ -2019,10 +2035,9 @@ class App(tk.Tk):
             width_px = abs(x2 - x1)   # Horizontal dimension (across wood width)
             height_px = abs(y2 - y1) # Vertical dimension (along wood length)
 
-            # For wood defects on vertically-oriented wood pieces, measure the height
-            # (vertical dimension) as this represents the defect size perpendicular to grain
-            # Based on rgb_wood_detector.py calibration approach
-            defect_size_px = height_px
+            # For wood width measurement, use the horizontal dimension (width_px)
+            # This matches rgb_wood_detector.py which uses bbox width (w) for width calculation
+            defect_size_px = width_px
 
             # Use camera-specific conversion factor
             if camera_name == "top":
@@ -2038,9 +2053,9 @@ class App(tk.Tk):
             # Convert to millimeters using division (pixels per mm factor)
             size_mm = defect_size_px / pixel_to_mm
 
-            # Calculate percentage of actual wood pallet height
-            if WOOD_PALLET_HEIGHT_MM > 0:
-                percentage = (size_mm / WOOD_PALLET_HEIGHT_MM) * 100
+            # Calculate percentage of actual wood pallet width
+            if WOOD_PALLET_WIDTH_MM > 0:
+                percentage = (size_mm / WOOD_PALLET_WIDTH_MM) * 100
             else:
                 percentage = 0.0  # Avoid division by zero
 
@@ -2097,7 +2112,7 @@ class App(tk.Tk):
             return GRADE_G2_0
 
         # Check if wood height has been measured
-        if WOOD_PALLET_HEIGHT_MM <= 0:
+        if WOOD_PALLET_WIDTH_MM <= 0:
             return GRADE_G2_4  # Cannot grade without wood dimensions
 
         # 1. Grade based on the size of the worst individual knot
@@ -2112,7 +2127,7 @@ class App(tk.Tk):
                 dead_or_unsound_count += 1
 
             # Get individual knot grade
-            knot_grade = self.get_individual_knot_grade(defect_type, defect_size_mm, WOOD_PALLET_HEIGHT_MM)
+            knot_grade = self.get_individual_knot_grade(defect_type, defect_size_mm, WOOD_PALLET_WIDTH_MM)
 
             # Check if this knot's grade is worse than the current worst
             if grade_order.index(knot_grade) > grade_order.index(worst_grade_by_size):
@@ -2308,7 +2323,7 @@ class App(tk.Tk):
         widgets['calibration_label'].pack(anchor="w")
         
         widgets['wood_height_label'] = ttk.Label(calib_frame,
-                                              text=f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm",
+                                              text=f"Wood Height: {WOOD_PALLET_WIDTH_MM}mm",
                                               font=self.font_small)
         widgets['wood_width_label'].pack(anchor="w")
         
@@ -2469,7 +2484,7 @@ class App(tk.Tk):
         calib_label = ttk.Label(calib_frame, text=calib_text, font=("Arial", 9))
         calib_label.pack(anchor="w")
         
-        wood_label = ttk.Label(calib_frame, text=f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm",
+        wood_label = ttk.Label(calib_frame, text=f"Wood Height: {WOOD_PALLET_WIDTH_MM}mm",
                              font=("Arial", 9))
         wood_label.pack(anchor="w", pady=(5, 0))
         
@@ -2535,12 +2550,12 @@ class App(tk.Tk):
         detection_entry["camera_info"] = {
             "distance_cm": TOP_CAMERA_DISTANCE_CM if camera_name == "top" else BOTTOM_CAMERA_DISTANCE_CM,
             "pixel_to_mm": TOP_CAMERA_PIXEL_TO_MM if camera_name == "top" else BOTTOM_CAMERA_PIXEL_TO_MM,
-            "wood_height_mm": WOOD_PALLET_HEIGHT_MM
+            "wood_height_mm": WOOD_PALLET_WIDTH_MM
         }
         
         # Add individual defect details
         for i, (defect_type, size_mm, percentage) in enumerate(measurements, 1):
-            individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_HEIGHT_MM)
+            individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_WIDTH_MM)
             
             defect_detail = {
                 "defect_id": i,
@@ -2553,7 +2568,7 @@ class App(tk.Tk):
             
             # Add threshold information for new grading system
             constants = GRADING_CONSTANTS.get(defect_type, {})
-            defect_detail["applied_threshold"] = f"Limit = (0.10 * {WOOD_PALLET_HEIGHT_MM}mm) + constant"
+            defect_detail["applied_threshold"] = f"Limit = (0.10 * {WOOD_PALLET_WIDTH_MM}mm) + constant"
             defect_detail["threshold_grade"] = individual_grade
             
             detection_entry["defects"].append(defect_detail)
@@ -2704,7 +2719,7 @@ class App(tk.Tk):
                 defect_frame.pack(fill="x", pady=1)
                 
                 # Defect details
-                individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_HEIGHT_MM)
+                individual_grade = self.get_individual_knot_grade(defect_type, size_mm, WOOD_PALLET_WIDTH_MM)
                 
                 size_label = ttk.Label(defect_frame, 
                                      text=f"Size: {size_mm:.1f}mm ({percentage:.1f}% of width)",
@@ -2719,8 +2734,8 @@ class App(tk.Tk):
                 
                 # Show threshold info for new grading system
                 constants = GRADING_CONSTANTS.get(defect_type, {})
-                limit = (0.10 * WOOD_PALLET_HEIGHT_MM) + constants.get(individual_grade, 0)
-                threshold_text = f"Threshold: ≤{limit:.1f}mm (0.10*{WOOD_PALLET_HEIGHT_MM} + {constants.get(individual_grade, 0)})"
+                limit = (0.10 * WOOD_PALLET_WIDTH_MM) + constants.get(individual_grade, 0)
+                threshold_text = f"Threshold: ≤{limit:.1f}mm (0.10*{WOOD_PALLET_WIDTH_MM} + {constants.get(individual_grade, 0)})"
                 
                 threshold_label = ttk.Label(defect_frame, text=threshold_text, 
                                           font=self.font_small, foreground="gray")
@@ -3314,23 +3329,18 @@ class App(tk.Tk):
                     wood_detected = wood_detection['wood_detected']
 
                     if wood_detected:
-                        # Calculate dynamic wood width based on detected wood dimensions using same algorithm as defects
-                        # Following the same measurement approach as calculate_defect_size function
-                        if wood_detection.get('auto_roi'):
-                            x, y, w, h = wood_detection['auto_roi']
-
-                            # Use the same measurement algorithm as defects
-                            # Extract bounding box coordinates (same format as defect detection)
-                            bbox_info = {'bbox': [x, y, x + w, y + h]}
-
-                            # Calculate wood size using the same function as defects
-                            detected_width_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
+                        # Calculate dynamic wood width based on detected wood dimensions using same algorithm as rgb_wood_detector.py
+                        # Use the best candidate's bbox width directly (matches rgb_wood_detector.py label calculation)
+                        if wood_detection.get('wood_candidates'):
+                            candidate = wood_detection['wood_candidates'][0]
+                            x, y, w, h = candidate['bbox']
+                            detected_width_mm = self.rgb_wood_detector.calculate_width_mm(w, camera_name)
 
                             # Update global wood height variable dynamically
-                            global WOOD_PALLET_HEIGHT_MM
-                            WOOD_PALLET_HEIGHT_MM = detected_width_mm
+                            global WOOD_PALLET_WIDTH_MM
+                            WOOD_PALLET_WIDTH_MM = detected_width_mm
                             self.detected_wood_width_mm[camera_name] = detected_width_mm
-                            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm ({percentage:.1f}% of width, from bbox {w}x{h}px, camera: {camera_name})")
+                            print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name})")
 
                         # STEP 4: List wood detection details (only once per camera per detection session in auto mode)
                         if self.auto_detection_active and (not hasattr(self, '_wood_reported') or not self._wood_reported.get(camera_name, False)):
@@ -3730,7 +3740,7 @@ class App(tk.Tk):
                 details_text += f"Distance: {BOTTOM_CAMERA_DISTANCE_CM}cm, Factor: {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
             
             total_defects = len(measurements)
-            details_text += f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm | Defects: {total_defects}\n"
+            details_text += f"Wood Height: {WOOD_PALLET_WIDTH_MM}mm | Defects: {total_defects}\n"
             details_text += "═" * 50 + "\n"
             
             # Show individual defect analysis
@@ -3743,8 +3753,8 @@ class App(tk.Tk):
                 
                 # Show which threshold was applied using new grading system
                 constants = GRADING_CONSTANTS.get(defect_type, {})
-                limit = (0.10 * WOOD_PALLET_HEIGHT_MM) + constants.get(individual_grade, 0)
-                details_text += f"Limit: ≤{limit:.1f}mm (0.10×{WOOD_PALLET_HEIGHT_MM}mm + {constants.get(individual_grade, 0)})\n"
+                limit = (0.10 * WOOD_PALLET_WIDTH_MM) + constants.get(individual_grade, 0)
+                details_text += f"Limit: ≤{limit:.1f}mm (0.10×{WOOD_PALLET_WIDTH_MM}mm + {constants.get(individual_grade, 0)})\n"
                 
                 details_text += "\n"
             
@@ -3801,7 +3811,7 @@ class App(tk.Tk):
             else:
                 details_text += f"Distance: {BOTTOM_CAMERA_DISTANCE_CM}cm, {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
             
-            details_text += f"Wood Height: {WOOD_PALLET_HEIGHT_MM}mm\n"
+            details_text += f"Wood Height: {WOOD_PALLET_WIDTH_MM}mm\n"
             details_text += "═" * 50 + "\n"
             details_text += "No wood or defects detected\n"
             details_text += "═" * 50 + "\n"
@@ -4461,13 +4471,12 @@ class App(tk.Tk):
             # Store wood detection results
             self.wood_detection_results[camera_name] = wood_detection_result
 
-            # Update wood height if wood was detected (only from top camera)
-            if camera_name == "top" and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
+            # Update wood width if wood was detected (from any camera)
+            if wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
                 x, y, w, h = wood_detection_result['auto_roi']
                 detected_width_mm = self.rgb_wood_detector.calculate_width_mm(w, camera_name)
-                global WOOD_PALLET_HEIGHT_MM
-                WOOD_PALLET_HEIGHT_MM = detected_width_mm
-                print(f"Updated WOOD_PALLET_HEIGHT_MM to {detected_width_mm:.1f}mm from {camera_name} camera")
+                wood_widths[self.current_wood_number] = detected_width_mm
+                print(f"Updated wood width for wood {self.current_wood_number} to {detected_width_mm:.1f}mm from {camera_name} camera")
 
             # Step 2: Apply defect detection ONLY within detected wood area (Green ROI based on wood detection)
             if wood_detection_result and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
@@ -4566,7 +4575,7 @@ class App(tk.Tk):
             bottom_grade = self.live_grades.get("bottom", {}).get("grade", "Unknown") if isinstance(self.live_grades.get("bottom"), dict) else "Unknown"
         if final_grade is None:
             # Use current wood width (default to 100mm if not detected)
-            wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 100
+            wood_width = wood_widths.get(wood_number, 100)
             grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
             # Convert grade strings back to measurements for proper grading
             # For now, use placeholder - this should be improved to store actual measurements
@@ -4729,17 +4738,15 @@ class App(tk.Tk):
             print(f"  Bottom defects: {len(wood_bottom_defects)} raw -> {len(deduplicated_bottom_defects)} deduplicated")
 
             # Store deduplicated defects in scan session data
+            wood_width = wood_widths.get(wood_num, 100)  # Default to 100mm if not detected
             self.scan_session_data[wood_num] = {
                 'top_defects': deduplicated_top_defects,
                 'bottom_defects': deduplicated_bottom_defects,
-                'width_mm': WOOD_PALLET_HEIGHT_MM  # Use current wood height
+                'width_mm': wood_width
             }
 
             # Grade the wood piece using PineGrader
-            # Use current wood width (default to 100mm if not detected)
-            wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 100
-
-            # Create grader instance
+            # Use wood width for this piece
             grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
 
             # Get grades from PineGrader
@@ -4835,8 +4842,6 @@ class App(tk.Tk):
         self.update_status_text(f"Status: {status_text}", STATUS_READY_COLOR)
         self.log_action(f"Graded Piece #{piece_number} as {final_grade} -> Arduino Cmd: {arduino_command}")
 
-        # Update grading status
-        self.grading_status_label.config(text="✅ Grading completed", foreground="darkgreen")
 
     def _execute_manual_grade(self):
         """Execute manual grading based on current detections."""
@@ -4848,7 +4853,7 @@ class App(tk.Tk):
 
         if wood_detected:
             # Use current wood width (default to 100mm if not detected)
-            wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 100
+            wood_width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 100
 
             # Create grader instance
             grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
@@ -4972,47 +4977,21 @@ class App(tk.Tk):
         except Exception as e:
             print(f"Error updating label {grade_key}: {e}")
 
-    def update_defect_details_tab(self):
-        """Update the Defect Details tab with current defect information"""
-        if not hasattr(self, 'defect_details_frame'):
+    def update_grade_details_tab(self):
+        """Update the Grade Details tab with current grade information"""
+        if not hasattr(self, 'grading_details_frame'):
             return
             
         # Clear existing content
-        for widget in self.defect_details_frame.winfo_children():
+        for widget in self.grading_details_frame.winfo_children():
             widget.destroy()
         
-        # Current detection status
-        current_frame = ttk.LabelFrame(self.defect_details_frame, text="Current Detection", padding="5")
-        current_frame.pack(fill="x", pady=2)
-        
-        if hasattr(self, 'live_measurements') and any(self.live_measurements.values()):
-            for camera_name in ["top", "bottom"]:
-                measurements = self.live_measurements.get(camera_name, [])
-                if measurements:
-                    camera_text = f"{camera_name.title()} Camera: {len(measurements)} defects detected\n"
-                    
-                    # Group by defect type
-                    defect_summary = {}
-                    for defect_type, size_mm, percentage in measurements:
-                        if defect_type not in defect_summary:
-                            defect_summary[defect_type] = []
-                        defect_summary[defect_type].append((size_mm, percentage))
-                    
-                    for defect_type, sizes in defect_summary.items():
-                        avg_size = sum(s[0] for s in sizes) / len(sizes)
-                        avg_percentage = sum(s[1] for s in sizes) / len(sizes)
-                        camera_text += f"  • {defect_type.replace('_', ' ')}: {len(sizes)} defects, avg {avg_size:.1f}mm ({avg_percentage:.1f}%)\n"
-                    
-                    ttk.Label(current_frame, text=camera_text, font=self.font_small, justify="left").pack(anchor="w")
-        else:
-            ttk.Label(current_frame, text="No defects currently detected", font=self.font_small).pack(anchor="w")
-        
         # Grading thresholds reference - Dynamic based on current wood width
-        thresholds_frame = ttk.LabelFrame(self.defect_details_frame, text="SS-EN 1611-1 Grading Thresholds", padding="5")
+        thresholds_frame = ttk.LabelFrame(self.grading_details_frame, text="SS-EN 1611-1 Grading Thresholds", padding="5")
         thresholds_frame.pack(fill="x", pady=2)
 
         # Calculate dynamic thresholds based on current wood width
-        wood_width = WOOD_PALLET_HEIGHT_MM if WOOD_PALLET_HEIGHT_MM > 0 else 115  # Default to 115mm if not detected
+        wood_width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 115  # Default to 115mm if not detected
 
         threshold_text = f"SS-EN 1611-1 Grading Thresholds (Wood Width: {wood_width}mm):\n"
         threshold_text += "Limit = (0.10 × width) + constant\n\n"
@@ -5048,7 +5027,7 @@ class App(tk.Tk):
         threshold_text += "  G2-0: 0  |  G2-1: 1  |  G2-2: 2  |  G2-3: 5\n\n"
         threshold_text += "Note: 'Knot with Crack' is classified as Unsound Knot"
 
-        ttk.Label(thresholds_frame, text=threshold_text, font=self.font_small, justify="left").pack(anchor="w")
+        ttk.Label(thresholds_frame, text=threshold_text, font=self.font_small, justify="left", wraplength=600).pack(anchor="w")
 
     def update_performance_tab(self):
         """Update the Performance Metrics tab"""
@@ -5063,7 +5042,7 @@ class App(tk.Tk):
         calibration_frame = ttk.LabelFrame(self.performance_frame, text="System Calibration", padding="5")
         calibration_frame.pack(fill="x", pady=2)
         
-        calibration_text = f"Wood Pallet Height: {WOOD_PALLET_HEIGHT_MM}mm\n"
+        calibration_text = f"Wood Pallet Width: {WOOD_PALLET_WIDTH_MM}mm\n"
         calibration_text += f"Top Camera: {TOP_CAMERA_DISTANCE_CM}cm distance, {TOP_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
         calibration_text += f"Bottom Camera: {BOTTOM_CAMERA_DISTANCE_CM}cm distance, {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
         calibration_text += "Standard: SS-EN 1611-1 European Wood Grading"
@@ -5108,94 +5087,105 @@ class App(tk.Tk):
         ttk.Label(distribution_frame, text=distribution_text, font=self.font_small, justify="left").pack(anchor="w")
 
     def update_recent_activity_tab(self):
-        """Update the Recent Activity tab with widened summary and scrollable processing log"""
+        """Update the Recent Activity tab with widened summary and scrollable processing log from defects.txt files"""
+        # Update Session Summary (wider display) - always update this, regardless of scrolling
+        for widget in self.session_summary_frame.winfo_children():
+            widget.destroy()
+
+        total_processed = getattr(self, 'total_pieces_processed', 0)
+        session_start = getattr(self, 'session_start_time', time.time())
+        session_duration = time.time() - session_start
+        hours = int(session_duration // 3600)
+        minutes = int((session_duration % 3600) // 60)
+
+        # Create a wider summary display with better formatting
+        summary_main_frame = ttk.Frame(self.session_summary_frame)
+        summary_main_frame.pack(fill="x", expand=True)
+
+        # Left column - Basic stats
+        left_frame = ttk.Frame(summary_main_frame)
+        left_frame.pack(side="left", fill="both", expand=True)
+
+        basic_stats = f"Total Pieces Processed: {total_processed}\n"
+        basic_stats += f"Session Duration: {hours}h {minutes}m\n"
+        if total_processed > 0:
+            avg_per_hour = (total_processed / session_duration) * 3600 if session_duration > 0 else 0
+            basic_stats += f"Average Rate: {avg_per_hour:.1f} pieces/hour"
+
+        ttk.Label(left_frame, text=basic_stats, font=self.font_small, justify="left").pack(anchor="w")
+
+        # Right column - Grade distribution
+        if total_processed > 0:
+            right_frame = ttk.Frame(summary_main_frame)
+            right_frame.pack(side="right", fill="both", expand=True)
+
+            grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
+            grade_stats = "Grade Distribution:\n"
+            grade_names = {1: "G2-0", 2: "G2-1", 3: "G2-2", 4: "G2-3", 5: "G2-4"}
+
+            for grade, count in grade_counts.items():
+                percentage = (count / total_processed) * 100 if total_processed > 0 else 0
+                grade_stats += f"{grade_names.get(grade, 'Unknown')}: {count} ({percentage:.1f}%)\n"
+
+            ttk.Label(right_frame, text=grade_stats, font=self.font_small, justify="left").pack(anchor="w")
+
         # Don't update log if user is scrolling through it
         if getattr(self, '_user_scrolling_log', False):
             return
-            
-        # Generate content first to check if it changed
-        new_stats_content = self._generate_stats_content()
-        
-        # Only update if content actually changed OR if this is the first update
-        if (new_stats_content != self._last_stats_content or not self._last_stats_content):
-            
-            # Update Session Summary (wider display)
-            for widget in self.session_summary_frame.winfo_children():
-                widget.destroy()
-            
-            total_processed = getattr(self, 'total_pieces_processed', 0)
-            session_start = getattr(self, 'session_start_time', time.time())
-            session_duration = time.time() - session_start
-            hours = int(session_duration // 3600)
-            minutes = int((session_duration % 3600) // 60)
-            
-            # Create a wider summary display with better formatting
-            summary_main_frame = ttk.Frame(self.session_summary_frame)
-            summary_main_frame.pack(fill="x", expand=True)
-            
-            # Left column - Basic stats
-            left_frame = ttk.Frame(summary_main_frame)
-            left_frame.pack(side="left", fill="both", expand=True)
-            
-            basic_stats = f"Total Pieces Processed: {total_processed}\n"
-            basic_stats += f"Session Duration: {hours}h {minutes}m\n"
-            if total_processed > 0:
-                avg_per_hour = (total_processed / session_duration) * 3600 if session_duration > 0 else 0
-                basic_stats += f"Average Rate: {avg_per_hour:.1f} pieces/hour"
-            
-            ttk.Label(left_frame, text=basic_stats, font=self.font_small, justify="left").pack(anchor="w")
-            
-            # Right column - Grade distribution
-            if total_processed > 0:
-                right_frame = ttk.Frame(summary_main_frame)
-                right_frame.pack(side="right", fill="both", expand=True)
-                
-                grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
-                grade_stats = "Grade Distribution:\n"
-                grade_names = {1: "G2-0", 2: "G2-1", 3: "G2-2", 4: "G2-3", 5: "G2-4"}
 
-                for grade, count in grade_counts.items():
-                    percentage = (count / total_processed) * 100 if total_processed > 0 else 0
-                    grade_stats += f"{grade_names.get(grade, 'Unknown')}: {count} ({percentage:.1f}%)\n"
-                
-                ttk.Label(right_frame, text=grade_stats, font=self.font_small, justify="left").pack(anchor="w")
-            
-            # Update Processing Log (scrollable with many entries and detailed defect info)
+        # Check if number of defects files has changed (only update processing log when grading cycle completes)
+        defects_entries = self._read_defects_files()
+        current_file_count = len(defects_entries)
+
+        # Only update processing log if the number of defects files has changed (new wood processed) OR if this is the first update
+        if (current_file_count != self._last_defects_files_count or not hasattr(self, '_last_stats_content')):
+            self._last_defects_files_count = current_file_count
+
+            # Update Processing Log from defects.txt files
             for widget in self.processing_log_frame.winfo_children():
                 widget.destroy()
-            
-            if hasattr(self, 'session_log') and self.session_log:
-                # Show all entries, not just last 10 (since it's now scrollable)
-                recent_entries_copy = self.session_log.copy()
-                recent_entries_copy.reverse()  # Show newest first
-                
-                for i, entry in enumerate(recent_entries_copy):
+
+            if defects_entries:
+                # Sort by timestamp (newest first)
+                defects_entries.sort(key=lambda x: x['timestamp'], reverse=True)
+
+                for i, entry in enumerate(defects_entries):
+                    wood_number = entry.get('wood_number', 'Unknown')
+                    final_grade = entry.get('final_grade', 'Unknown')
+                    top_grade = entry.get('top_grade', 'Unknown')
+                    bottom_grade = entry.get('bottom_grade', 'Unknown')
+                    wood_width = entry.get('wood_width', 'Unknown')
+                    top_defects = entry.get('top_defects', [])
+                    bottom_defects = entry.get('bottom_defects', [])
                     timestamp = entry.get('timestamp', 'Unknown')
-                    piece_number = entry.get('piece_number', 'Unknown')
-                    grade = entry.get('final_grade', 'Unknown')
-                    defects = entry.get('defects', [])
-                    
+                    session_name = entry.get('session_name', 'Unknown')
+
                     # Create a frame for each log entry for better formatting
                     entry_frame = ttk.Frame(self.processing_log_frame)
                     entry_frame.pack(fill="x", pady=2, padx=5)
-                    
-                    # Format defects info with specific details including sizes (single line)
-                    if defects:
-                        defects_details = []
-                        for d in defects:
-                            defect_type = d.get('type', 'Unknown')
-                            count = d.get('count', 0)
-                            sizes = d.get('sizes', '')
-                            if sizes:
-                                defects_details.append(f"{defect_type} (x{count}): {sizes}mm")
-                            else:
-                                defects_details.append(f"{defect_type} (x{count})")
-                        
-                        defects_info = " | ".join(defects_details)
-                        log_text = f"[{timestamp}] Piece #{piece_number}: Grade {grade} - Defects: {defects_info}"
+
+                    # Display the clean defects.txt format
+                    log_text = f"[{timestamp}] Wood No. ({wood_number}) - {wood_width}mm\n"
+                    log_text += f"Top Panel Grade: {top_grade}\n"
+                    log_text += f"Bottom Panel Grade: {bottom_grade}\n"
+                    log_text += f"Final Grade: {final_grade}\n\n"
+
+                    if top_defects:
+                        log_text += "Top Panel Defects:\n"
+                        for j, defect in enumerate(top_defects, 1):
+                            log_text += f"{j}. {defect.get('type', 'Unknown')} - {defect.get('size', 'Unknown')}mm\n"
                     else:
-                        log_text = f"[{timestamp}] Piece #{piece_number}: Grade {grade} - No defects detected"
-                    
+                        log_text += "Top Panel Defects:\nNo defects detected\n"
+
+                    log_text += "\n"
+
+                    if bottom_defects:
+                        log_text += "Bottom Panel Defects:\n"
+                        for j, defect in enumerate(bottom_defects, 1):
+                            log_text += f"{j}. {defect.get('type', 'Unknown')} - {defect.get('size', 'Unknown')}mm\n"
+                    else:
+                        log_text += "Bottom Panel Defects:\nNo defects detected\n"
+
                     # Color code by grade
                     grade_colors = {
                         "G2-0": "dark green",
@@ -5204,26 +5194,26 @@ class App(tk.Tk):
                         "G2-3": "red",
                         "G2-4": "dark red"
                     }
-                    text_color = grade_colors.get(grade, "black")
-                    
-                    log_label = ttk.Label(entry_frame, text=log_text, font=("Arial", 9), 
+                    text_color = grade_colors.get(final_grade, "black")
+
+                    log_label = ttk.Label(entry_frame, text=log_text, font=("Arial", 9),
                                         justify="left", foreground=text_color)
                     log_label.pack(anchor="w", fill="x")
-                    
+
                     # Add separator line (except for last entry)
-                    if i < len(recent_entries_copy) - 1:
+                    if i < len(defects_entries) - 1:
                         separator = ttk.Separator(self.processing_log_frame, orient="horizontal")
                         separator.pack(fill="x", pady=2)
             else:
-                # Show message when no log entries exist
-                no_data_label = ttk.Label(self.processing_log_frame, 
-                                        text="No processing data yet...", 
+                # Show message when no defects files exist
+                no_data_label = ttk.Label(self.processing_log_frame,
+                                        text="No processed wood data yet...\nDefects files will appear here after processing.",
                                         font=self.font_small, foreground="gray")
                 no_data_label.pack(pady=20)
-            
+
             # Cache the content
-            self._last_stats_content = new_stats_content
-            
+            self._last_stats_content = self._generate_stats_content()
+
             # Update scroll region for log
             if hasattr(self, 'log_canvas'):
                 self.log_canvas.configure(scrollregion=self.log_canvas.bbox("all"))
@@ -5232,18 +5222,144 @@ class App(tk.Tk):
         """Legacy method - now redirects to update_recent_activity_tab for compatibility"""
         self.update_recent_activity_tab()
 
+    def _read_defects_files(self):
+        """Read defects.txt files from Detections directory and parse wood processing data"""
+        import os
+        import glob
+        from datetime import datetime
+
+        defects_entries = []
+
+        # Look for defects.txt files in Detections directory
+        detections_dir = os.path.join("testIR", "Detections")
+        if not os.path.exists(detections_dir):
+            return defects_entries
+
+        # Find all defects.txt files
+        defects_files = glob.glob(os.path.join(detections_dir, "**", "defects.txt"), recursive=True)
+
+        for defects_file in defects_files:
+            try:
+                with open(defects_file, 'r') as f:
+                    content = f.read()
+
+                # Parse the defects.txt content
+                lines = content.strip().split('\n')
+                if not lines:
+                    continue
+
+                # Extract session and wood info from file path
+                # Path format: testIR/Detections/MMDDYY:TT-Session/Wood (No.)/defects.txt
+                path_parts = defects_file.split(os.sep)
+                session_name = ""
+                wood_number = 0
+
+                for part in path_parts:
+                    if "H-Session" in part:
+                        session_name = part
+                    elif part.startswith("Wood (") and part.endswith(")"):
+                        wood_number = int(part.replace("Wood (", "").replace(")", ""))
+
+                # Parse content
+                entry = {
+                    'session_name': session_name,
+                    'wood_number': wood_number,
+                    'timestamp': 'Unknown',
+                    'final_grade': 'Unknown',
+                    'top_grade': 'Unknown',
+                    'bottom_grade': 'Unknown',
+                    'wood_width': 'Unknown',
+                    'top_defects': [],
+                    'bottom_defects': []
+                }
+
+                # Extract timestamp from session name (MMDDYY:TT format)
+                if session_name:
+                    try:
+                        # Parse MMDDYY:TT format
+                        date_part, time_part = session_name.split(':')
+                        month = int(date_part[:2])
+                        day = int(date_part[2:4])
+                        year = 2000 + int(date_part[4:6])
+                        hour = int(time_part[:2])
+
+                        # Create datetime object (assume current minute/second for display)
+                        dt = datetime(year, month, day, hour, 0, 0)
+                        entry['timestamp'] = dt.strftime("%m/%d/%Y %H:00")
+                    except:
+                        entry['timestamp'] = session_name
+
+                current_section = None
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    # Parse header line (Wood No. (X) - Ymm)
+                    if line.startswith("Wood No."):
+                        # Extract wood width if available
+                        if " - " in line:
+                            width_part = line.split(" - ")[1]
+                            entry['wood_width'] = width_part.replace("mm", "").strip()
+                        continue
+
+                    # Parse grade lines
+                    elif "Top Panel Grade:" in line:
+                        entry['top_grade'] = line.split(": ")[1].strip()
+                    elif "Bottom Panel Grade:" in line:
+                        entry['bottom_grade'] = line.split(": ")[1].strip()
+                    elif "Final Grade:" in line:
+                        entry['final_grade'] = line.split(": ")[1].strip()
+
+                    # Parse defect sections
+                    elif line == "Top Panel Defects:":
+                        current_section = 'top'
+                    elif line == "Bottom Panel Defects:":
+                        current_section = 'bottom'
+                    elif current_section and line.startswith("No defects detected"):
+                        current_section = None
+                    elif current_section and line[0].isdigit():
+                        # Parse defect line: "1. Defect Type - Size mm"
+                        try:
+                            parts = line.split('. ', 1)[1]  # Remove number prefix
+                            if ' - ' in parts:
+                                defect_type, size_part = parts.split(' - ', 1)
+                                size_mm = float(size_part.replace('mm', '').strip())
+
+                                defect_info = {
+                                    'type': defect_type.strip(),
+                                    'size': size_mm
+                                }
+
+                                if current_section == 'top':
+                                    entry['top_defects'].append(defect_info)
+                                elif current_section == 'bottom':
+                                    entry['bottom_defects'].append(defect_info)
+                        except:
+                            continue
+
+                # Only add entries that have valid data
+                if entry['final_grade'] != 'Unknown':
+                    defects_entries.append(entry)
+
+            except Exception as e:
+                print(f"Error reading defects file {defects_file}: {e}")
+                continue
+
+        return defects_entries
+
     def _generate_stats_content(self):
         """Generate a string representation of current stats for change detection"""
         content = f"processed:{getattr(self, 'total_pieces_processed', 0)}"
-        
+
         grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0})
         for grade, count in grade_counts.items():
             content += f",g{grade}:{count}"
-        
+
         # Include session log count for change detection
         if hasattr(self, 'session_log'):
             content += f",log_entries:{len(self.session_log)}"
-                
+
         return content
 
 
@@ -5454,6 +5570,37 @@ class App(tk.Tk):
         """Manually generate a report"""
         self.generate_report()
         self.log_status_label.config(text="Log: Manual report generated", foreground="green")
+
+    def view_session_folder(self):
+        """Open the current session folder in file explorer"""
+        import os
+        import subprocess
+        import platform
+
+        try:
+            # Check if we have a current session folder
+            if hasattr(self, 'scan_session_folder') and self.scan_session_folder and os.path.exists(self.scan_session_folder):
+                folder_path = self.scan_session_folder
+            else:
+                # Fallback to the Detections directory
+                folder_path = os.path.join("testIR", "Detections")
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path, exist_ok=True)
+
+            # Open folder based on platform
+            if platform.system() == "Windows":
+                os.startfile(folder_path)
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", folder_path])
+            else:  # Linux
+                subprocess.run(["xdg-open", folder_path])
+
+            print(f"Opened session folder: {folder_path}")
+            self.log_status_label.config(text="Log: Session folder opened", foreground="blue")
+
+        except Exception as e:
+            print(f"Error opening session folder: {e}")
+            self.log_status_label.config(text="Log: Error opening folder", foreground="red")
 
     def _reassign_cameras_ui(self):
         """UI wrapper for camera reassignment"""

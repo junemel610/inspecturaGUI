@@ -11,25 +11,28 @@ This module provides robust wood detection using:
 import cv2
 import numpy as np
 import json
+import subprocess
+import time
+import tkinter as tk
 from typing import List, Tuple, Dict, Optional
 
 class ColorWoodDetector:
     def __init__(self):
         self.wood_color_profiles = {
             'top_panel': {
-                'rgb_lower': np.array([135, 155, 135]),  # BGR
+                'rgb_lower': np.array([160, 160, 160]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Top Panel Wood'
             },
             'bottom_panel': {
-                'rgb_lower': np.array([60, 80, 50]),  # BGR
+                'rgb_lower': np.array([70, 70, 85]),  # BGR
                 'rgb_upper': np.array([225, 220, 210]),
                 'name': 'Bottom Panel Wood'
             }
         }
         
         # Detection parameters
-        self.min_contour_area = 2000      # Increased for more reliable detection with tighter RGB ranges
+        self.min_contour_area = 1000      # Increased for more reliable detection with tighter RGB ranges
         self.max_contour_area = 500000    # Slightly reduced for typical wood plank sizes
         self.min_aspect_ratio = 1.0       # Tightened for more rectangular wood shapes
         self.max_aspect_ratio = 10.0      # Reduced for more typical plank proportions
@@ -116,20 +119,52 @@ class ColorWoodDetector:
         
         return analysis
     
+    def detect_document_style_edges(self, image: np.ndarray) -> np.ndarray:
+        """Detect edges like a document scanner - find rectangular boundaries"""
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # Apply Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        # Apply Canny edge detection with wider thresholds for better edge detection
+        edges = cv2.Canny(blurred, 75, 200)
+
+        # Dilate edges to make them more visible and connect broken segments
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        dilated_edges = cv2.dilate(edges, kernel, iterations=2)
+
+        # Find contours in the edge image
+        contours, _ = cv2.findContours(dilated_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Create a mask from significant contours (like document scanning)
+        edge_mask = np.zeros_like(edges)
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            # Only keep contours that are large enough to be potential wood boundaries
+            if area > 1000:  # Minimum area threshold
+                # Draw filled contour to create mask
+                cv2.drawContours(edge_mask, [contour], -1, 255, thickness=cv2.FILLED)
+
+        # Apply morphological operations to clean up the edge mask
+        kernel_clean = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, kernel_clean, iterations=2)
+        edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_OPEN, kernel_clean, iterations=1)
+
+        return edge_mask
+
     def detect_wood_by_color(self, image: np.ndarray, profile_names: List[str] = None) -> Tuple[np.ndarray, List[Dict]]:
-        """Detect wood using color profiles"""
+        """Detect wood using color-first approach with edge enhancement"""
         if profile_names is None:
             profile_names = list(self.wood_color_profiles.keys())
 
-        # Apply histogram equalization on V channel for better lighting compensation
+        # Step 1: Apply histogram equalization on V channel for better lighting compensation
         hsv_temp = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(hsv_temp)
         v = cv2.equalizeHist(v)
         hsv_temp = cv2.merge([h, s, v])
         rgb = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
-
-        # # Dynamically update RGB ranges based on dominant colors
-        # self.update_rgb_ranges_based_on_dominant_colors(rgb)
 
         combined_mask = np.zeros(rgb.shape[:2], dtype=np.uint8)
 
@@ -148,19 +183,36 @@ class ColorWoodDetector:
                 print(f"  📊 {profile_name}: RGB range {profile['rgb_lower']} - {profile['rgb_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
                 combined_mask = cv2.bitwise_or(combined_mask, mask)
 
-        pre_morph_pixels = cv2.countNonZero(combined_mask)
+        # Step 2: Apply edge detection within the color mask to find wood boundaries
+        # Convert color mask to find edges only within wood-colored regions
+        color_mask_blurred = cv2.GaussianBlur(combined_mask, (5, 5), 0)
+        color_edges = cv2.Canny(color_mask_blurred, 100, 200)
+
+        # Dilate the edges to make them more visible in the mask
+        kernel_edge = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        color_edges_dilated = cv2.dilate(color_edges, kernel_edge, iterations=1)
+
+        # Combine the original color mask with edge information
+        # This preserves the wood color regions but enhances boundaries
+        enhanced_mask = cv2.bitwise_or(combined_mask, color_edges_dilated)
+
+        edge_enhanced_pixels = cv2.countNonZero(enhanced_mask)
+        edge_enhanced_percentage = (edge_enhanced_pixels / total_pixels) * 100
+        print(f"🎨🔍 Color + Edge enhanced mask: {edge_enhanced_pixels} pixels ({edge_enhanced_percentage:.1f}%)")
+
+        pre_morph_pixels = cv2.countNonZero(enhanced_mask)
         pre_morph_percentage = (pre_morph_pixels / total_pixels) * 100
-        print(f"🔧 Pre-morph combined mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
+        print(f"🔧 Pre-morph enhanced mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
 
         # Clean up mask with morphological operations
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size))
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
-        combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
+        enhanced_mask = cv2.morphologyEx(enhanced_mask, cv2.MORPH_CLOSE, kernel, iterations=self.closing_iterations)
+        enhanced_mask = cv2.dilate(enhanced_mask, kernel, iterations=1)
+        enhanced_mask = cv2.morphologyEx(enhanced_mask, cv2.MORPH_OPEN, kernel, iterations=self.opening_iterations)
 
-        post_morph_pixels = cv2.countNonZero(combined_mask)
+        post_morph_pixels = cv2.countNonZero(enhanced_mask)
         post_morph_percentage = (post_morph_pixels / total_pixels) * 100
-        print(f"🔧 Post-morph combined mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
+        print(f"🔧 Post-morph enhanced mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
 
         # Additional logging for dominant colors
         rgb_flat = rgb.reshape(-1, 3)
@@ -169,7 +221,7 @@ class ColorWoodDetector:
         b_values = rgb_flat[:, 2]
         print(f"🎨 Dominant RGB in image: R={int(np.mean(r_values)):.0f}±{int(np.std(r_values)):.0f}, G={int(np.mean(g_values)):.0f}, B={int(np.mean(b_values)):.0f}")
 
-        return combined_mask, detections
+        return enhanced_mask, detections
 
     def update_rgb_ranges_based_on_dominant_colors(self, rgb):
         """Dynamically adjust RGB ranges based on dominant colors in the image"""
@@ -326,6 +378,15 @@ class ColorWoodDetector:
         print(f"🪵 Starting comprehensive wood detection on image shape: {image.shape}")
 
         # Step 1: Color-based detection with optional ROI
+        # Use camera-specific profile if none specified
+        if profile_names is None:
+            if camera == 'top':
+                profile_names = ['top_panel']
+            elif camera == 'bottom':
+                profile_names = ['bottom_panel']
+            else:
+                profile_names = list(self.wood_color_profiles.keys())
+
         if roi is not None:
             x, y, w, h = roi
             cropped = image[y:y+h, x:x+w]
@@ -544,8 +605,13 @@ class CameraHandler:
     def __init__(self):
         self.top_camera = None
         self.bottom_camera = None
+        # Device paths for cameras (Rapoo for top, C922 for bottom)
+        self.top_camera_devices = ['/dev/video0','/dev/video1', '/dev/video3']  # Rapoo Camera
+        self.bottom_camera_devices = ['/dev/video2', '/dev/video4', '/dev/video5']  # C922 Pro Stream Webcam
         self.top_camera_index = 0 # Cam0
         self.bottom_camera_index = 2  # Cam2
+        self.top_camera_device = None  # Will be set to successful device path
+        self.bottom_camera_device = None  # Will be set to successful device path
         self.top_camera_settings = {
             'brightness': 0,
             'contrast': 32,
@@ -553,10 +619,12 @@ class CameraHandler:
             'hue': 0,
             'exposure': -6,
             'white_balance': 4520,
-            'gain': 0
+            'gain': 0,
+            'sharpness': 200,
+            'backlight_compensation': 1
         }
         self.bottom_camera_settings = {
-            'brightness':110,
+            'brightness': 110,
             'contrast': 125,
             'saturation': 125,
             'hue': 0,
@@ -566,6 +634,83 @@ class CameraHandler:
             'sharpness': 200,
             'backlight_compensation': 1
         }
+
+    def _get_camera_device_info(self):
+        """Get camera device information using v4l2-ctl to identify cameras by name"""
+        try:
+            print("🔍 Running v4l2-ctl --list-devices to detect cameras...")
+            result = subprocess.run(['v4l2-ctl', '--list-devices'], capture_output=True, text=True, timeout=5)
+
+            # Print the raw output for visibility
+            print("📋 v4l2-ctl output:")
+            print(result.stdout)
+            print("📋 End of v4l2-ctl output")
+
+            # Parse output even if returncode != 0, as v4l2-ctl may return 1 but still provide device list
+            devices = {}
+            lines = result.stdout.strip().split('\n')
+            current_device = None
+
+            for line in lines:
+                # Check for device paths before stripping (preserve tabs)
+                if line.startswith('\t/dev/video'):
+                    # This is a device path
+                    if current_device:
+                        device_path = line.strip()
+                        devices[device_path] = current_device
+                elif line.strip() and not line.startswith('\t'):
+                    # This is a device name (not indented)
+                    current_device = line.strip()
+
+            print(f"📊 Parsed {len(devices)} video devices: {list(devices.keys())}")
+            return devices
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
+            print(f"❌ Error getting camera device info: {e}")
+            return {}
+
+    def _identify_camera_by_name(self, device_path):
+        """Identify camera type by device name"""
+        device_info = self._get_camera_device_info()
+        device_name = device_info.get(device_path, "").lower()
+
+        if "c922" in device_name or "stream webcam" in device_name:
+            return "C922"
+        elif "rapoo" in device_name:
+            return "Rapoo"
+        else:
+            return "Unknown"
+
+    def _initialize_camera_with_devices(self, device_list, camera_name):
+        """Try to initialize camera using specific device paths"""
+        for device_path in device_list:
+            try:
+                print(f"Trying to open {camera_name} camera at {device_path}...")
+                cap = cv2.VideoCapture(device_path, cv2.CAP_V4L2)
+                if cap.isOpened():
+                    # Try to read a frame to ensure camera is working
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        # Disable autofocus for consistent focus
+                        try:
+                            subprocess.run(['v4l2-ctl', '-d', device_path, '-c', 'focus_automatic_continuous=0'],
+                                          capture_output=True, timeout=2)
+                            print(f"Disabled autofocus for {device_path}")
+                        except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                            print(f"Warning: Could not disable autofocus for {device_path}")
+
+                        camera_type = self._identify_camera_by_name(device_path)
+                        print(f"Successfully opened {camera_name} camera at {device_path} (Type: {camera_type})")
+                        return cap, device_path
+                    else:
+                        print(f"Camera at {device_path} opened but cannot read frames")
+                        cap.release()
+                else:
+                    print(f"Failed to open camera at {device_path}")
+            except Exception as e:
+                print(f"Error opening camera at {device_path}: {e}")
+                continue
+        return None, None
+
     def initialize_cameras(self):
         try:
             self.top_camera = cv2.VideoCapture(self.top_camera_index)
@@ -585,6 +730,7 @@ class CameraHandler:
         except Exception as e:
             self.release_cameras()
             raise RuntimeError(f"Failed to initialize cameras: {str(e)}")
+
     def _apply_camera_settings(self, camera, settings):
         try:
             camera.set(cv2.CAP_PROP_BRIGHTNESS, settings['brightness'])
@@ -596,10 +742,283 @@ class CameraHandler:
             camera.set(cv2.CAP_PROP_AUTO_WB, 0)
             camera.set(cv2.CAP_PROP_WB_TEMPERATURE, settings['white_balance'])
             camera.set(cv2.CAP_PROP_GAIN, settings['gain'])
-            camera.set(cv2.CAP_PROP_SHARPNESS, settings['sharpness'])
-            camera.set(cv2.CAP_PROP_BACKLIGHT, settings['backlight_compensation'])
+            if 'sharpness' in settings:
+                camera.set(cv2.CAP_PROP_SHARPNESS, settings['sharpness'])
+            if 'backlight_compensation' in settings:
+                camera.set(cv2.CAP_PROP_BACKLIGHT, settings['backlight_compensation'])
         except Exception as e:
             print(f"Warning: Some camera settings may not be supported: {e}")
+
+    def reconnect_cameras(self):
+        """Attempt to reconnect cameras if they become disconnected"""
+        print("🔌 Attempting to reconnect cameras...")
+        print("   This is called automatically when camera disconnections are detected")
+
+        # Release current cameras
+        self.release_cameras()
+
+        try:
+            # Try dynamic reassignment first
+            success = self._dynamic_reassign_cameras()
+            if success:
+                return True
+
+            # Fallback to original device paths
+            print("🔄 Dynamic reassignment failed, trying original device paths...")
+            if self.top_camera_device:
+                print(f"Trying to reconnect top camera at {self.top_camera_device}")
+                self.top_camera = cv2.VideoCapture(self.top_camera_device, cv2.CAP_V4L2)
+                if self.top_camera.isOpened():
+                    ret, _ = self.top_camera.read()
+                    if ret:
+                        print(f"Reconnected top camera at {self.top_camera_device}")
+                    else:
+                        self.top_camera.release()
+                        self.top_camera = None
+
+            if self.bottom_camera_device:
+                print(f"Trying to reconnect bottom camera at {self.bottom_camera_device}")
+                self.bottom_camera = cv2.VideoCapture(self.bottom_camera_device, cv2.CAP_V4L2)
+                if self.bottom_camera.isOpened():
+                    ret, _ = self.bottom_camera.read()
+                    if ret:
+                        print(f"Reconnected bottom camera at {self.bottom_camera_device}")
+                    else:
+                        self.bottom_camera.release()
+                        self.bottom_camera = None
+
+            # Apply settings if cameras are connected
+            if self.top_camera:
+                self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self._apply_camera_settings(self.top_camera, self.top_camera_settings)
+
+            if self.bottom_camera:
+                self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
+
+            if self.top_camera and self.bottom_camera:
+                print("Camera reconnection successful")
+                print(f"Top camera: {self.top_camera_device}")
+                print(f"Bottom camera: {self.bottom_camera_device}")
+                return True
+            else:
+                print("Camera reconnection failed - not all cameras reconnected")
+                return False
+
+        except Exception as e:
+            print(f"Camera reconnection failed: {e}")
+            return False
+
+    def _dynamic_reassign_cameras(self):
+        """Dynamically scan and reassign cameras based on device identification"""
+        print("🔄 Performing dynamic camera reassignment...")
+        print("   This happens at startup and whenever camera disconnections are detected")
+
+        # Release any existing cameras first
+        self.release_cameras()
+
+        # Get all available video devices
+        device_info = self._get_camera_device_info()
+        available_devices = list(device_info.keys())
+
+        if len(available_devices) < 2:
+            print(f"❌ Only {len(available_devices)} devices available, need at least 2")
+            return False
+
+        # Identify camera types
+        c922_devices = []
+        rapoo_devices = []
+
+        for device_path in available_devices:
+            camera_type = self._identify_camera_by_name(device_path)
+            if camera_type == "C922":
+                c922_devices.append(device_path)
+            elif camera_type == "Rapoo":
+                rapoo_devices.append(device_path)
+
+        print(f"📷 Found C922 devices: {c922_devices}")
+        print(f"📷 Found Rapoo devices: {rapoo_devices}")
+
+        # Assign cameras based on identification
+        top_device = None
+        bottom_device = None
+
+        # Rapoo for top
+        if rapoo_devices:
+            for device in rapoo_devices:
+                try:
+                    cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        ret, _ = cap.read()
+                        if ret:
+                            top_device = device
+                            cap.release()
+                            break
+                        cap.release()
+                except:
+                    continue
+
+        # C922 for bottom
+        if c922_devices:
+            for device in c922_devices:
+                try:
+                    cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        ret, _ = cap.read()
+                        if ret:
+                            bottom_device = device
+                            cap.release()
+                            break
+                        cap.release()
+                except:
+                    continue
+
+        if top_device and bottom_device:
+            # Successfully identified and assigned
+            self.top_camera = cv2.VideoCapture(top_device, cv2.CAP_V4L2)
+            self.bottom_camera = cv2.VideoCapture(bottom_device, cv2.CAP_V4L2)
+            self.top_camera_device = top_device
+            self.bottom_camera_device = bottom_device
+
+            # Disable autofocus for reconnected cameras
+            for device in [top_device, bottom_device]:
+                try:
+                    subprocess.run(['v4l2-ctl', '-d', device, '-c', 'focus_automatic_continuous=0'],
+                                  capture_output=True, timeout=2)
+                    print(f"Disabled autofocus for reconnected {device}")
+                except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                    print(f"Warning: Could not disable autofocus for reconnected {device}")
+
+            # Apply settings
+            self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            self._apply_camera_settings(self.top_camera, self.top_camera_settings)
+
+            self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
+
+            print("Dynamic camera reassignment successful!")
+            print(f"Top camera (Rapoo): {top_device}")
+            print(f"Bottom camera (C922): {bottom_device}")
+            return True
+        else:
+            print("Dynamic reassignment failed - could not identify both camera types")
+            return False
+
+    def check_camera_status(self):
+        """Check if cameras are still connected and working"""
+        try:
+            top_ok = False
+            bottom_ok = False
+
+            if self.top_camera and self.top_camera.isOpened():
+                # Try to read a frame multiple times to account for temporary failures
+                for attempt in range(3):
+                    ret, _ = self.top_camera.read()
+                    if ret:
+                        top_ok = True
+                        break
+                    else:
+                        time.sleep(0.1)  # Short delay between retries
+                if not top_ok:
+                    print("⚠️ Top camera is not responding after retries")
+            else:
+                print("⚠️ Top camera is not opened")
+
+            if not top_ok:
+                print("🔌 Top camera disconnection detected")
+
+            if self.bottom_camera and self.bottom_camera.isOpened():
+                # Try to read a frame multiple times to account for temporary failures
+                for attempt in range(3):
+                    ret, _ = self.bottom_camera.read()
+                    if ret:
+                        bottom_ok = True
+                        break
+                    else:
+                        time.sleep(0.1)  # Short delay between retries
+                if not bottom_ok:
+                    print("⚠️ Bottom camera is not responding after retries")
+            else:
+                print("⚠️ Bottom camera is not opened")
+
+            if not bottom_ok:
+                print("🔌 Bottom camera disconnection detected")
+
+            # Log status periodically (not every check to avoid spam)
+            if not (top_ok and bottom_ok):
+                print(f"📊 Camera status check: Top={'✅ OK' if top_ok else '❌ FAIL'}, Bottom={'✅ OK' if bottom_ok else '❌ FAIL'}")
+
+            return top_ok and bottom_ok
+        except Exception as e:
+            print(f"❌ Error checking camera status: {e}")
+            return False
+
+    def reassign_cameras_runtime(self):
+        """Runtime method to dynamically reassign cameras - can be called from UI or automatically"""
+        print("Runtime camera reassignment requested...")
+        success = self._dynamic_reassign_cameras()
+        if success:
+            print("Runtime camera reassignment successful")
+            # Update any UI elements if needed
+            if hasattr(self, 'status_label'):
+                # status_label is a Text widget, not a Label widget
+                self.status_label.config(state=tk.NORMAL)
+                self.status_label.delete(1.0, tk.END)
+                self.status_label.insert(1.0, "Status: Cameras reassigned successfully")
+                self.status_label.config(foreground="green", state=tk.DISABLED)
+        else:
+            print("Runtime camera reassignment failed")
+            if hasattr(self, 'status_label'):
+                # status_label is a Text widget, not a Label widget
+                self.status_label.config(state=tk.NORMAL)
+                self.status_label.delete(1.0, tk.END)
+                self.status_label.insert(1.0, "Status: Camera reassignment failed")
+                self.status_label.config(foreground="red", state=tk.DISABLED)
+        return success
+
+    def reassign_arduino_runtime(self):
+        """Runtime method to dynamically reassign Arduino port - can be called from UI or automatically"""
+        print("Runtime Arduino reassignment requested...")
+        try:
+            # Close current connection
+            if hasattr(self, 'ser') and self.ser:
+                self.ser.close()
+                self.ser = None
+
+            # Try to setup again
+            self.setup_arduino()
+            if self.ser and self.ser.is_open:
+                print("Runtime Arduino reassignment successful")
+                if hasattr(self, 'status_label'):
+                    # status_label is a Text widget, not a Label widget
+                    self.status_label.config(state=tk.NORMAL)
+                    self.status_label.delete(1.0, tk.END)
+                    self.status_label.insert(1.0, "Status: Arduino reassigned successfully")
+                    self.status_label.config(foreground="green", state=tk.DISABLED)
+                return True
+            else:
+                print("Runtime Arduino reassignment failed")
+                if hasattr(self, 'status_label'):
+                    # status_label is a Text widget, not a Label widget
+                    self.status_label.config(state=tk.NORMAL)
+                    self.status_label.delete(1.0, tk.END)
+                    self.status_label.insert(1.0, "Status: Arduino reassignment failed")
+                    self.status_label.config(foreground="red", state=tk.DISABLED)
+                return False
+        except Exception as e:
+            print(f"Error during runtime Arduino reassignment: {e}")
+            if hasattr(self, 'status_label'):
+                # status_label is a Text widget, not a Label widget
+                self.status_label.config(state=tk.NORMAL)
+                self.status_label.delete(1.0, tk.END)
+                self.status_label.insert(1.0, "Status: Arduino reassignment error")
+                self.status_label.config(foreground="red", state=tk.DISABLED)
+            return False
+
     def release_cameras(self):
         if self.top_camera:
             self.top_camera.release()
@@ -692,8 +1111,11 @@ def main():
                 color = (0, 255, 0)
                 cv2.rectangle(frame0, (x, y), (x + w, y + h), color, 2)
 
+                # Calculate width using bbox width (w) instead of height (h)
+                top_width_mm = detector.calculate_width_mm(w, 'top') if w > 0 else None
+
                 # Add confidence and width label
-                label = f"Wood: {candidate['confidence']:.2f} | Width (vert): {top_width_mm:.1f}mm" if top_width_mm is not None else f"Wood: {candidate['confidence']:.2f}"
+                label = f"Wood: {candidate['confidence']:.2f} | Width: {top_width_mm:.1f}mm" if top_width_mm is not None else f"Wood: {candidate['confidence']:.2f}"
                 cv2.putText(frame0, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
             # Draw bounding box on frame 2 for the best candidate only (conditional on top camera confidence)
