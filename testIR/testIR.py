@@ -861,9 +861,8 @@ BOTTOM_CAMERA_DISTANCE_CM = 27.5
 TOP_CAMERA_PIXEL_TO_MM = 2.96  # Top camera: 2.96 pixels per mm
 BOTTOM_CAMERA_PIXEL_TO_MM = 3.18  # Bottom camera: 3.18 pixels per mm
 
-# Dynamic wood pallet width storage per wood piece
-WOOD_PALLET_WIDTH_MM = 0  # Global variable for last detected wood width
-wood_widths = {}  # Dictionary to store width per wood number
+# Dynamic wood pallet width storage - single variable for current wood piece
+WOOD_PALLET_WIDTH_MM = 0  # Global variable for current detected wood width
 
 # SS-EN 1611-1 Grading constants for size limits: limit = (0.10 * wood_width) + constant
 GRADING_CONSTANTS = {
@@ -3330,11 +3329,11 @@ class App(tk.Tk):
 
                     if wood_detected:
                         # Calculate dynamic wood width based on detected wood dimensions using same algorithm as rgb_wood_detector.py
-                        # Use the best candidate's bbox width directly (matches rgb_wood_detector.py label calculation)
+                        # Use the best candidate's bbox height directly (matches rgb_wood_detector.py original calculation)
                         if wood_detection.get('wood_candidates'):
                             candidate = wood_detection['wood_candidates'][0]
                             x, y, w, h = candidate['bbox']
-                            detected_width_mm = self.rgb_wood_detector.calculate_width_mm(w, camera_name)
+                            detected_width_mm = self.rgb_wood_detector.calculate_width_mm(h, camera_name)
 
                             # Update global wood height variable dynamically
                             global WOOD_PALLET_WIDTH_MM
@@ -4474,9 +4473,10 @@ class App(tk.Tk):
             # Update wood width if wood was detected (from any camera)
             if wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
                 x, y, w, h = wood_detection_result['auto_roi']
-                detected_width_mm = self.rgb_wood_detector.calculate_width_mm(w, camera_name)
-                wood_widths[self.current_wood_number] = detected_width_mm
-                print(f"Updated wood width for wood {self.current_wood_number} to {detected_width_mm:.1f}mm from {camera_name} camera")
+                detected_width_mm = self.rgb_wood_detector.calculate_width_mm(h, camera_name)
+                global WOOD_PALLET_WIDTH_MM
+                WOOD_PALLET_WIDTH_MM = detected_width_mm
+                print(f"Updated WOOD_PALLET_WIDTH_MM to {detected_width_mm:.1f}mm from {camera_name} camera")
 
             # Step 2: Apply defect detection ONLY within detected wood area (Green ROI based on wood detection)
             if wood_detection_result and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
@@ -4568,14 +4568,15 @@ class App(tk.Tk):
         wood_folder = os.path.join(self.scan_session_folder, f"Wood ({wood_number})")
         data = self.scan_session_data[wood_number]
 
+        # Use per-wood width if available, else fallback
+        wood_width = data.get('width_mm', WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 100)
+
         # Use provided grades or get from live_grades
         if top_grade is None:
             top_grade = self.live_grades.get("top", {}).get("grade", "Unknown") if isinstance(self.live_grades.get("top"), dict) else "Unknown"
         if bottom_grade is None:
             bottom_grade = self.live_grades.get("bottom", {}).get("grade", "Unknown") if isinstance(self.live_grades.get("bottom"), dict) else "Unknown"
         if final_grade is None:
-            # Use current wood width (default to 100mm if not detected)
-            wood_width = wood_widths.get(wood_number, 100)
             grader = SSEN1611_1_PineGrader_Final(width_mm=wood_width)
             # Convert grade strings back to measurements for proper grading
             # For now, use placeholder - this should be improved to store actual measurements
@@ -4592,7 +4593,7 @@ class App(tk.Tk):
 
         # Save accumulated defect details
         with open(os.path.join(wood_folder, "defects.txt"), "w") as f:
-            f.write(f"Wood No. ({wood_number}) - {data['width_mm']}mm\n")
+            f.write(f"Wood No. ({wood_number}) - {wood_width}mm\n")
             f.write(f"Top Panel Grade: {top_grade}\n")
             f.write(f"Bottom Panel Grade: {bottom_grade}\n")
             f.write(f"Final Grade: {final_grade}\n\n")
@@ -4738,7 +4739,7 @@ class App(tk.Tk):
             print(f"  Bottom defects: {len(wood_bottom_defects)} raw -> {len(deduplicated_bottom_defects)} deduplicated")
 
             # Store deduplicated defects in scan session data
-            wood_width = wood_widths.get(wood_num, 100)  # Default to 100mm if not detected
+            wood_width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 100  # Use current detected width
             self.scan_session_data[wood_num] = {
                 'top_defects': deduplicated_top_defects,
                 'bottom_defects': deduplicated_bottom_defects,
@@ -4962,7 +4963,7 @@ class App(tk.Tk):
         
         # Update other tabs with thread safety
         try:
-            self.update_defect_details_tab()
+            self.update_grade_details_tab()
             self.update_performance_tab()
             self.update_recent_activity_tab()
         except Exception as e:
