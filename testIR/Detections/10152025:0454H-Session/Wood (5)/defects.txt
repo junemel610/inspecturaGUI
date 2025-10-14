@@ -1,0 +1,11 @@
+Wood No. (5) - 129.05405405405406mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-3
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Missing Knot - 37.0mm
+2. Missing Knot - 6.4mm
+
+Bottom Panel Defects:
+1. Missing Knot - 37.9mm
