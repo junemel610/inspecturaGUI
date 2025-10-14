@@ -2419,9 +2419,9 @@ class App(tk.Tk):
         label_mapping = {
             # Your actual model outputs (case-insensitive)
             "dead knots": "Dead_Knot",
-            "knots with crack": "Unsound_Knot",
+            "knots with crack": "Crack_Knot",  # Keep as Crack_Knot for display
             "live knots": "Sound_Knot",
-            "missing knots": "Missing_Knot",
+            "missing knots": "Missing_Knot",   # Keep as Missing_Knot for display
             # Variations and alternatives
             "dead_knots": "Dead_Knot",
             "knots_with_crack": "Crack_Knot",
@@ -2434,13 +2434,12 @@ class App(tk.Tk):
             "sound knots": "Sound_Knot",
             "dead knots": "Dead_Knot",
             "unsound knots": "Unsound_Knot",
-            "knot with crack": "Unsound_Knot",
+            "knot with crack": "Crack_Knot",
             "live_knot": "Sound_Knot",
             "dead_knot": "Dead_Knot",
             "missing_knot": "Missing_Knot",
-            "crack_knot": "Unsound_Knot",
+            "crack_knot": "Crack_Knot",
             "live knot": "Sound_Knot",
-            "knot with crack": "Unsound_Knot",
             # Generic fallback
             "knot": "Unsound_Knot"
         }
@@ -2450,6 +2449,29 @@ class App(tk.Tk):
 
         # Return mapped label or default to unsound knot
         return label_mapping.get(normalized_label, "Unsound_Knot")
+
+    def get_display_name_for_defect(self, defect_type):
+        """Get human-readable display name for defect types with grading category in parentheses"""
+        display_mapping = {
+            "Sound_Knot": "Live Knot (Sound Knot)",
+            "Live_Knot": "Live Knot", 
+            "Dead_Knot": "Dead Knot",
+            "Unsound_Knot": "Unsound Knot",
+            "Missing_Knot": "Missing Knot (Unsound Knot)",
+            "Crack_Knot": "Knot with Crack (Unsound Knot)",
+            "Knots_With_Crack": "Knot with Crack (Unsound Knot)",
+            "knots_with_crack": "Knot with Crack (Unsound Knot)",
+            "missing_knots": "Missing Knot (Unsound Knot)",
+            # Additional variants
+            "live_knot": "Live Knot",
+            "dead_knot": "Dead Knot",
+            "sound_knot": "Sound Knot",
+            "unsound_knot": "Unsound Knot",
+            "missing_knot": "Missing Knot (Unsound Knot)",
+            "crack_knot": "Knot with Crack (Unsound Knot)"
+        }
+        
+        return display_mapping.get(defect_type, defect_type)
 
     def calculate_defect_size(self, detection_box, camera_name="top"):
         """Calculate defect size in mm and percentage from detection bounding box"""
@@ -5311,9 +5333,6 @@ class App(tk.Tk):
             # Run inference using DeGirum
             inference_result = self.model(frame)
 
-            # Get annotated frame
-            annotated_frame = inference_result.image_overlay
-
             # Process detections for object tracking
             current_detections = []
             for det in inference_result.results:
@@ -5333,11 +5352,14 @@ class App(tk.Tk):
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
                 current_detections.append((bbox, standard_defect_type, size_mm, confidence))
 
-            # Process detections (no ROI filtering since frame is already cropped to relevant area)
+            # Filter overlapping detections to prevent multiple detections in same area
+            filtered_detections = self.filter_overlapping_detections(current_detections, overlap_threshold=0.3)
+
+            # Process filtered detections for grading
             detections_for_grading = []
             final_defect_dict = {}
 
-            for bbox, defect_type, size_mm, confidence in current_detections:
+            for bbox, defect_type, size_mm, confidence in filtered_detections:
                 # Use detection information directly for grading (already within cropped area)
                 detections_for_grading.append((defect_type, size_mm, 0.0))  # percentage not needed for grading
 
@@ -5347,14 +5369,132 @@ class App(tk.Tk):
                 else:
                     final_defect_dict[defect_type] = 1
 
-            # Use the model's default overlay annotations
-            # The image_overlay from DeGirum already includes appropriate defect labels
+            # Create custom annotated frame with defect names and size measurements
+            annotated_frame = self.draw_custom_annotations(frame, filtered_detections, camera_name)
 
             return annotated_frame, final_defect_dict, detections_for_grading
 
         except Exception as e:
             print(f"Error during DeGirum inference on {camera_name} camera: {e}")
             return frame, {}, []
+
+    def draw_custom_annotations(self, frame, detections, camera_name="top"):
+        """Draw custom annotations with defect names and size measurements"""
+        annotated_frame = frame.copy()
+        frame_height, frame_width = frame.shape[:2]
+        
+        for bbox, defect_type, size_mm, confidence in detections:
+            x1, y1, x2, y2 = bbox
+            
+            # Draw bounding box
+            cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            
+            # Get display name with grading category
+            display_name = self.get_display_name_for_defect(defect_type)
+            
+            # Create label with display name and size measurement
+            label = f"{display_name} - {size_mm:.0f}mm"
+            
+            # Add confidence if it's reasonably high
+            if confidence > 0.5:
+                label += f" ({confidence:.2f})"
+            
+            # Calculate text size for background
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            thickness = 2
+            (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+            
+            # Smart text positioning to ensure it stays within frame bounds
+            text_x = int(x1)
+            text_y = int(y1) - 10
+            
+            # Adjust horizontal position if text would go outside frame
+            if text_x + text_width > frame_width:
+                text_x = frame_width - text_width - 5
+            if text_x < 0:
+                text_x = 5
+            
+            # Adjust vertical position if text would go outside frame
+            if text_y < text_height + baseline:
+                # Place text below the bounding box if it would go above frame
+                text_y = int(y2) + text_height + baseline + 10
+                # If that would also go outside frame, place it inside the box
+                if text_y > frame_height - 5:
+                    text_y = int(y1) + text_height + baseline + 5
+            
+            # Ensure text doesn't go below frame
+            if text_y > frame_height - 5:
+                text_y = frame_height - 10
+            
+            # Draw background rectangle for text with proper bounds checking
+            bg_x1 = max(0, text_x)
+            bg_y1 = max(0, text_y - text_height - baseline)
+            bg_x2 = min(frame_width, text_x + text_width)
+            bg_y2 = min(frame_height, text_y + baseline)
+            
+            cv2.rectangle(annotated_frame, 
+                         (bg_x1, bg_y1),
+                         (bg_x2, bg_y2),
+                         (0, 255, 0), -1)
+            
+            # Draw text
+            cv2.putText(annotated_frame, label, (text_x, text_y), 
+                       font, font_scale, (0, 0, 0), thickness)
+        
+        return annotated_frame
+
+    def filter_overlapping_detections(self, detections, overlap_threshold=0.3):
+        """Filter overlapping detections, keeping only the most confident one per area"""
+        if len(detections) <= 1:
+            return detections
+        
+        def calculate_iou(box1, box2):
+            """Calculate Intersection over Union (IoU) of two bounding boxes"""
+            x1_1, y1_1, x2_1, y2_1 = box1
+            x1_2, y1_2, x2_2, y2_2 = box2
+            
+            # Calculate intersection
+            x1_i = max(x1_1, x1_2)
+            y1_i = max(y1_1, y1_2)
+            x2_i = min(x2_1, x2_2)
+            y2_i = min(y2_1, y2_2)
+            
+            if x2_i <= x1_i or y2_i <= y1_i:
+                return 0.0
+            
+            intersection = (x2_i - x1_i) * (y2_i - y1_i)
+            
+            # Calculate areas
+            area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+            area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+            union = area1 + area2 - intersection
+            
+            return intersection / union if union > 0 else 0.0
+        
+        # Sort detections by confidence (highest first)
+        sorted_detections = sorted(detections, key=lambda x: x[3], reverse=True)
+        
+        filtered_detections = []
+        
+        for detection in sorted_detections:
+            bbox, defect_type, size_mm, confidence = detection
+            
+            # Check if this detection overlaps significantly with any already selected detection
+            is_overlapping = False
+            for selected_detection in filtered_detections:
+                selected_bbox = selected_detection[0]
+                iou = calculate_iou(bbox, selected_bbox)
+                
+                if iou > overlap_threshold:
+                    is_overlapping = True
+                    break
+            
+            # Only add if it doesn't overlap significantly with existing detections
+            if not is_overlapping:
+                filtered_detections.append(detection)
+        
+        return filtered_detections
 
     def log_action(self, message):
         """Log actions to file with timestamp"""
