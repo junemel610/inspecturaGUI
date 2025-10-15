@@ -4,8 +4,6 @@
 */
 
 #include <Servo.h>
-#include <Wire.h>
-#include <Adafruit_PWMServoDriver.h>
 
 // --- Pin Definitions ---
 const int IR_SENSOR_PIN = 11;
@@ -23,6 +21,15 @@ Servo servo1, servo2, servo3, servo4;
 // --- Modes ---
 enum Mode { IDLE, CONTINUOUS, TRIGGER, SCAN_PHASE };
 Mode currentMode = IDLE;
+Mode previousMode = IDLE;  // Store previous mode for recovery
+
+// --- Error Handling States ---
+bool systemPaused = false;           // System paused due to critical errors
+bool manualInspectionRequired = false; // Manual inspection required flag
+bool errorRecoveryActive = false;    // Error recovery in progress
+bool reconnectionRecovery = false;   // Flag indicating recovery from disconnection
+unsigned long errorPauseStartTime = 0; // When error pause started
+char lastErrorType[20] = "";         // Last error type received (increased from 12 to 20)
 
 // --- Stepper Control ---
 unsigned long stepInterval = 500;   // µs per step (fixed speed)
@@ -30,10 +37,10 @@ unsigned long lastStepTime = 0;
 bool stepState = false;
 
 // --- IR Sensor ---
-int lastStableIrState = HIGH;
-int lastFlickerIrState = HIGH;
+byte lastStableIrState = HIGH;       // byte instead of int (saves 1 byte)
+byte lastFlickerIrState = HIGH;      // byte instead of int (saves 1 byte)
 unsigned long lastStateChangeTime = 0;
-const long debounceDelay = 50;
+const byte debounceDelay = 50;       // byte instead of long (saves 3 bytes)
 unsigned long beamBrokenStartTime = 0;
 bool beamIsBroken = false;
 
@@ -47,9 +54,10 @@ const int NUM_SEGMENTS = 4;
 float SCAN_SEGMENTS[NUM_SEGMENTS];
 
 // --- Scan State ---
-int currentSegment = 0;
-int pauseCount = 0;
+byte currentSegment = 0;        // byte instead of int (saves 1 byte)
+byte pauseCount = 0;            // byte instead of int (saves 1 byte)
 bool scanInProgress = false;
+bool scanActive = false;
 bool waitingForPause = false;
 bool waitingForBeam = false;
 unsigned long moveStartTime = 0;
@@ -84,13 +92,21 @@ void setup() {
   SCAN_SEGMENTS[3] = WOOD_TOTAL_LENGTH_INCH - (SCAN_SEGMENTS[0] + SCAN_SEGMENTS[1] + SCAN_SEGMENTS[2]);
   if (SCAN_SEGMENTS[3] < 0) SCAN_SEGMENTS[3] = 0;
 
-  Serial.println("Master Controller Initialized. Mode: IDLE");
-  Serial.print("Calculated last segment: ");
-  Serial.print(SCAN_SEGMENTS[3], 2);
-  Serial.println(" inches");
+  Serial.println(F("Mode: IDLE"));
+  
+  // Send connection status to Python for recovery
+  Serial.println(F("ARDUINO_READY"));
+  delay(100);
+  Serial.println(F("STATUS_REQUEST")); // Ask Python for current mode
 }
 
 void loop() {
+  // Check for system errors first
+  if (systemPaused) {
+    handleSystemPause();
+    return; // Don't continue normal operations while paused
+  }
+  
   if (currentMode == SCAN_PHASE)
     handleScanPhase();
   else
@@ -117,6 +133,12 @@ void handleStepper() {
 
 // ---------------- Scan Phase ----------------
 void handleScanPhase() {
+  // Check for error conditions during scan phase
+  if (systemPaused || manualInspectionRequired) {
+    pauseScanPhaseForError();
+    return;
+  }
+  
   digitalWrite(STEPPER_ENA_PIN, LOW);
 
   // Conveyor runs while waiting for beam
@@ -138,11 +160,7 @@ void handleScanPhase() {
       if (moveStartTime == 0) {
         segmentDurationMs = (SCAN_SEGMENTS[currentSegment] / CONVEYOR_SPEED_IN_PER_SEC) * 1000;
         moveStartTime = millis();
-        Serial.print("Segment ");
-        Serial.print(currentSegment + 1);
-        Serial.print(" moving for ");
-        Serial.print(segmentDurationMs / 1000.0);
-        Serial.println(" s...");
+        // Segment debug info removed to save memory
       }
 
       unsigned long t = micros();
@@ -269,37 +287,332 @@ void checkIrSensor() {
 
 // ---------------- Serial Commands ----------------
 void checkSerialCommands() {
+  // Process commands with rate limiting to prevent overflow
+  static unsigned long lastCommandTime = 0;
+  const unsigned long COMMAND_INTERVAL = 10; // Minimum 10ms between commands
+  
+  if (millis() - lastCommandTime < COMMAND_INTERVAL) {
+    return; // Too soon, skip processing
+  }
+  
+  // Process only one command per call to prevent blocking
   if (Serial.available() > 0) {
-    char cmd = Serial.read();
-    // Don't echo single character commands back to avoid confusion
-    switch (cmd) {
-      case '1': activateAllServoGates(90); break;
-      case '2': activateAllServoGates(45); break;
-      case '3': activateAllServoGates(135); break;
-      case '0': activateAllServoGates(0); break;
-      case 'C':
-        currentMode = CONTINUOUS;
-        digitalWrite(STEPPER_ENA_PIN, LOW);
-        Serial.println("Mode: CONTINUOUS (Conveyor running, measuring wood until beam clears)");
-        break;
-      case 'T': currentMode = TRIGGER; break;
-      case 'S':
-        currentMode = SCAN_PHASE;
-        scanInProgress = false;
-        waitingForBeam = true;
-        currentSegment = 0;
-        Serial.println("Mode: SCAN_PHASE (Segmented scanning active, waiting for beam)");
-        break;
-      case 'X':
-        currentMode = IDLE;
-        activateAllServoGates(90);
-        scanInProgress = false;
-        waitingForBeam = false;
-        digitalWrite(STEPPER_ENA_PIN, HIGH);
-        Serial.println("Mode: IDLE");
-        break;
+    char command[48]; // Reduced from 64 to 48 bytes to save memory
+    int len = Serial.readBytesUntil('\n', command, sizeof(command) - 1);
+    command[len] = '\0'; // Null terminate
+    
+    // Skip empty commands
+    if (len == 0) return;
+    
+    // Trim whitespace manually
+    while (len > 0 && (command[len-1] == ' ' || command[len-1] == '\r')) {
+      command[--len] = '\0';
+    }
+    
+    // Skip if command is now empty after trimming
+    if (len == 0) return;
+    
+    // Process the command
+    processCommand(command, len);
+    lastCommandTime = millis();
+    
+    // Clear any remaining buffer to prevent overflow
+    if (Serial.available() > 100) { // If buffer is getting too full
+      while (Serial.available() > 0) {
+        Serial.read(); // Clear excess data
+      }
+      Serial.println(F("BUFFER_CLEARED"));
     }
   }
+}
+
+void processCommand(char* command, int len) {
+    // Handle single character commands (existing functionality)
+    if (len == 1) {
+      char cmd = command[0];
+      switch (cmd) {
+        case '1': activateAllServoGates(90); break;
+        case '2': activateAllServoGates(45); break;
+        case '3': activateAllServoGates(135); break;
+        case '0': activateAllServoGates(0); break;
+        case 'C':
+          if (!systemPaused) {
+            currentMode = CONTINUOUS;
+            digitalWrite(STEPPER_ENA_PIN, LOW);
+            Serial.println(F("Mode: CONTINUOUS"));
+          } else {
+            Serial.println(F("ERROR: System paused"));
+          }
+          break;
+        case 'T': 
+          if (!systemPaused) {
+            currentMode = TRIGGER; 
+          } else {
+            Serial.println(F("ERROR: System paused"));
+          }
+          break;
+        case 'S':
+          previousMode = currentMode; // Store previous mode
+          if (!systemPaused) {
+            currentMode = SCAN_PHASE;
+            scanInProgress = false;
+            waitingForBeam = true;
+            currentSegment = 0;
+            Serial.println(F("Mode: SCAN_PHASE"));
+          } else {
+            Serial.println(F("ERROR: System paused"));
+          }
+          break;
+        case 'X':
+          previousMode = currentMode; // Store previous mode
+          currentMode = IDLE;
+          systemPaused = false; // Allow IDLE to clear pause state
+          manualInspectionRequired = false;
+          errorRecoveryActive = false;
+          activateAllServoGates(90);
+          scanInProgress = false;
+          waitingForBeam = false;
+          digitalWrite(STEPPER_ENA_PIN, HIGH);
+          Serial.println(F("Mode: IDLE"));
+          break;
+        case 'R': // Reject command for manual inspection
+          if (manualInspectionRequired) {
+            handleRejectAction();
+          }
+          break;
+        case '?': // Status query command
+          reportSystemStatus();
+          break;
+      }
+    }
+    // Handle multi-character error commands from Python
+    else if (strncmp(command, "ERROR:", 6) == 0) {
+      handleErrorCommand(command);
+    }
+    else if (strncmp(command, "CLEAR_ERROR:", 12) == 0) {
+      handleClearErrorCommand(command);
+    }
+    else if (strcmp(command, "PAUSE_SYSTEM") == 0) {
+      pauseSystemForError("Manual pause");
+    }
+    else if (strcmp(command, "RESUME_SYSTEM") == 0) {
+      resumeSystemFromError();
+    }
+    else if (strcmp(command, "MANUAL_INSPECTION_COMPLETE") == 0) {
+      handleManualInspectionComplete();
+    }
+    else if (strncmp(command, "RECOVER_MODE:", 13) == 0) {
+      handleModeRecovery(command);
+    }
+    else if (strcmp(command, "STATUS_REQUEST") == 0) {
+      reportSystemStatus();
+    }
+}
+
+// ---------------- Error Handling Functions ----------------
+void handleSystemPause() {
+  // Stop all motion during system pause
+  digitalWrite(STEPPER_ENA_PIN, HIGH); // Disable stepper
+  
+  // Check if pause timeout exceeded (safety measure)
+  if (millis() - errorPauseStartTime > 300000) { // 5 minutes
+    Serial.println("ERROR_TIMEOUT: Automatic safety shutdown after 5 minutes");
+    currentMode = IDLE;
+    systemPaused = false;
+    manualInspectionRequired = false;
+  }
+  
+  // Send periodic status updates
+  static unsigned long lastStatusUpdate = 0;
+  if (millis() - lastStatusUpdate > 10000) { // Every 10 seconds
+    lastStatusUpdate = millis();
+    Serial.print("STATUS_PAUSED: ");
+    Serial.print(lastErrorType);
+    if (manualInspectionRequired) {
+      Serial.println(" - Manual inspection required");
+    } else {
+      Serial.println(" - Waiting for error resolution");
+    }
+  }
+}
+
+void pauseScanPhaseForError() {
+  // Immediately stop conveyor motion
+  digitalWrite(STEPPER_ENA_PIN, HIGH);
+  
+  // Send pause notification
+  Serial.println("SCAN_PAUSED: Error detected during scan phase");
+  
+  // Save current scan state for potential resume
+  if (scanInProgress) {
+    Serial.print("SCAN_STATE: Segment ");
+    Serial.print(currentSegment + 1);
+    Serial.print(" of ");
+    Serial.println(NUM_SEGMENTS);
+  }
+}
+
+void pauseSystemForError(const char* errorType) {
+  systemPaused = true;
+  errorPauseStartTime = millis();
+  strncpy(lastErrorType, errorType, sizeof(lastErrorType) - 1);
+  lastErrorType[sizeof(lastErrorType) - 1] = '\0'; // Ensure null termination
+  
+  // Stop all motion immediately
+  digitalWrite(STEPPER_ENA_PIN, HIGH);
+  
+  Serial.print("SYSTEM_PAUSED: ");
+  Serial.println(errorType);
+}
+
+void resumeSystemFromError() {
+  if (systemPaused && !manualInspectionRequired) {
+    systemPaused = false;
+    errorRecoveryActive = false;
+    Serial.println("SYSTEM_RESUMED: Error cleared, resuming operations");
+    
+    // Resume scan phase if it was in progress
+    if (currentMode == SCAN_PHASE && scanInProgress) {
+      Serial.println("SCAN_RESUMED: Continuing scan phase");
+      digitalWrite(STEPPER_ENA_PIN, LOW);
+    }
+  } else if (manualInspectionRequired) {
+    Serial.println("ERROR: Cannot resume - manual inspection still required");
+  }
+}
+
+void handleErrorCommand(const char* command) {
+  // Parse error command: "ERROR:ERROR_TYPE:Description"
+  const char* firstColon = strchr(command + 6, ':'); // After "ERROR:"
+  if (firstColon != NULL) {
+    int errorTypeLen = firstColon - (command + 6);
+    char errorType[20];  // Increased from 16 to 20
+    strncpy(errorType, command + 6, min(errorTypeLen, 19));
+    errorType[min(errorTypeLen, 19)] = '\0';
+    
+    // Extract description but limit its length to prevent truncation
+    const char* description = firstColon + 1;
+    
+    Serial.print(F("ERROR_RECEIVED: "));
+    Serial.print(errorType);
+    Serial.print(F(" - "));
+    
+    // Limit description to prevent serial buffer overflow
+    char shortDesc[30];
+    strncpy(shortDesc, description, 29);
+    shortDesc[29] = '\0';
+    Serial.println(shortDesc);
+    
+    // Handle different error types
+    if (strcmp(errorType, "CAMERA_DISCONNECTED") == 0 || 
+        strcmp(errorType, "ARDUINO_DISCONNECTED") == 0 ||
+        strcmp(errorType, "RESOURCE_EXHAUSTION") == 0 ||
+        strcmp(errorType, "MODEL_LOADING_FAILED") == 0) {
+      pauseSystemForError(errorType);
+    }
+    else if (strcmp(errorType, "NO_WOOD_DETECTED") == 0 ||
+             strcmp(errorType, "LOW_CONFIDENCE_DETECTION") == 0 ||
+             strcmp(errorType, "PLANK_MISALIGNMENT") == 0) {
+      // These might not require immediate pause, but log them
+      Serial.print(F("WARNING: "));
+      Serial.println(errorType);
+    }
+    else if (strcmp(errorType, "MANUAL_INSPECTION_REQUIRED") == 0) {
+      manualInspectionRequired = true;
+      pauseSystemForError(errorType);
+      Serial.println(F("MANUAL_INSPECTION: Operator intervention required"));
+    }
+  }
+}
+
+void handleClearErrorCommand(const char* command) {
+  // Parse clear error command: "CLEAR_ERROR:ERROR_TYPE"
+  const char* errorType = command + 12; // After "CLEAR_ERROR:"
+  
+  Serial.print(F("ERROR_CLEARED: "));
+  Serial.println(errorType);
+  
+  // If this was a critical error causing pause, try to resume
+  if (strcmp(errorType, "CAMERA_DISCONNECTED") == 0 || 
+      strcmp(errorType, "ARDUINO_DISCONNECTED") == 0 ||
+      strcmp(errorType, "RESOURCE_EXHAUSTION") == 0 ||
+      strcmp(errorType, "MODEL_LOADING_FAILED") == 0) {
+    resumeSystemFromError();
+  }
+}
+
+void handleManualInspectionComplete() {
+  manualInspectionRequired = false;
+  
+  if (!systemPaused) {
+    Serial.println("MANUAL_INSPECTION_COMPLETE: Resuming operations");
+    
+    // Resume scan if it was in progress
+    if (currentMode == SCAN_PHASE && scanInProgress) {
+      digitalWrite(STEPPER_ENA_PIN, LOW);
+      Serial.println("SCAN_RESUMED: Manual inspection complete");
+    }
+  } else {
+    Serial.println("MANUAL_INSPECTION_COMPLETE: System still paused for other errors");
+  }
+}
+
+void handleModeRecovery(const char* command) {
+  // This function is now simplified - no auto-recovery to SCAN mode
+  // Extract mode from RECOVER_MODE:mode format
+  const char* colonPtr = strchr(command, ':');
+  if (colonPtr != NULL) {
+    const char* mode = colonPtr + 1;
+    
+    // Only allow setting to IDLE mode for cleanup purposes
+    if (strcmp(mode, "IDLE") == 0) {
+      currentMode = IDLE;
+      scanActive = false;
+      reconnectionRecovery = false;
+      Serial.println(F("RECOVERY:MODE_SET_TO_IDLE"));
+      Serial.println(F("STATUS:IDLE_MODE"));
+    }
+    else {
+      // Don't automatically recover to SCAN - let user restart manually
+      Serial.println(F("RECOVERY:MANUAL_RESTART_RECOMMENDED"));
+      Serial.println(F("STATUS:RECONNECTED_AWAITING_USER_INPUT"));
+    }
+  }
+}
+
+void reportSystemStatus() {
+  // Report current system state to Python
+  Serial.print("SYSTEM_STATUS:");
+  Serial.print("mode=");
+  Serial.print(currentMode);
+  Serial.print(",scan=");
+  Serial.print(scanActive ? "true" : "false");
+  Serial.print(",paused=");
+  Serial.print(systemPaused ? "true" : "false");
+  Serial.print(",previous=");
+  Serial.print(previousMode);
+  Serial.print(",recovery=");
+  Serial.println(reconnectionRecovery ? "true" : "false");
+}
+
+void handleRejectAction() {
+  // Handle reject action during manual inspection
+  Serial.println("REJECT_ACTION: Wood piece rejected by operator");
+  
+  // Route to reject bin (adjust servo angles as needed for your setup)
+  activateAllServoGates(135); // Redirect to reject
+  delay(2000); // Give time for wood to be routed
+  activateAllServoGates(90);  // Return to normal position
+  
+  // Complete manual inspection
+  manualInspectionRequired = false;
+  
+  // Clear scan state and prepare for next piece
+  scanInProgress = false;
+  waitingForBeam = true;
+  currentSegment = 0;
+  
+  Serial.println("REJECT_COMPLETE: Ready for next wood piece");
 }
 
 // ---------------- Servo Control ----------------

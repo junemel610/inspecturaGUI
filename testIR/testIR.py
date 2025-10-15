@@ -334,17 +334,32 @@ class CameraHandler:
             # Try dynamic reassignment first
             success = self._dynamic_reassign_cameras()
             if success:
-                return True
-
-            # Fallback to original device paths
-            print("🔄 Dynamic reassignment failed, trying original device paths...")
+                print("✅ Dynamic camera reassignment successful")
+                
+                # Add a small stabilization delay before status check
+                time.sleep(0.2)
+                
+                # Double-check that both cameras are actually working
+                camera_status = self.check_camera_status()
+                if camera_status['both_ok']:
+                    print("✅ Verified: Both cameras are working properly")
+                    return True
+                else:
+                    print("❌ Dynamic reassignment reported success but camera status check failed")
+                    print(f"   Camera status: Top={camera_status['top_ok']}, Bottom={camera_status['bottom_ok']}")
+                    print(f"   Errors: {camera_status['camera_errors']}")
+                    # Don't return success if cameras aren't actually working
+                    success = False
+            
+            if not success:
+                print("🔄 Dynamic reassignment failed, trying original device paths...")
             if self.top_camera_device:
                 print(f"Trying to reconnect top camera at {self.top_camera_device}")
                 self.top_camera = cv2.VideoCapture(self.top_camera_device, cv2.CAP_V4L2)
                 if self.top_camera.isOpened():
                     ret, _ = self.top_camera.read()
                     if ret:
-                        print(f"Reconnected top camera at {self.top_camera_device}")
+                        print(f"✅ Reconnected top camera at {self.top_camera_device}")
                     else:
                         self.top_camera.release()
                         self.top_camera = None
@@ -355,7 +370,7 @@ class CameraHandler:
                 if self.bottom_camera.isOpened():
                     ret, _ = self.bottom_camera.read()
                     if ret:
-                        print(f"Reconnected bottom camera at {self.bottom_camera_device}")
+                        print(f"✅ Reconnected bottom camera at {self.bottom_camera_device}")
                     else:
                         self.bottom_camera.release()
                         self.bottom_camera = None
@@ -371,13 +386,20 @@ class CameraHandler:
                 self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
                 self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
 
+            # Check final success
             if self.top_camera and self.bottom_camera:
-                print("Camera reconnection successful")
-                print(f"Top camera: {self.top_camera_device}")
-                print(f"Bottom camera: {self.bottom_camera_device}")
+                print("✅ Camera reconnection successful")
+                print(f"   Top camera: {self.top_camera_device}")
+                print(f"   Bottom camera: {self.bottom_camera_device}")
                 return True
             else:
-                print("Camera reconnection failed - not all cameras reconnected")
+                print("❌ Camera reconnection failed - not all cameras reconnected")
+                missing_cameras = []
+                if not self.top_camera:
+                    missing_cameras.append("top")
+                if not self.bottom_camera:
+                    missing_cameras.append("bottom")
+                print(f"   Missing cameras: {', '.join(missing_cameras)}")
                 return False
 
         except Exception as e:
@@ -449,34 +471,64 @@ class CameraHandler:
                     continue
 
         if top_device and bottom_device:
-            # Successfully identified and assigned
+            # Successfully identified both devices, now test if they actually work
             self.top_camera = cv2.VideoCapture(top_device, cv2.CAP_V4L2)
             self.bottom_camera = cv2.VideoCapture(bottom_device, cv2.CAP_V4L2)
-            self.top_camera_device = top_device
-            self.bottom_camera_device = bottom_device
+            
+            # Verify both cameras can actually read frames
+            top_working = False
+            bottom_working = False
+            
+            if self.top_camera and self.top_camera.isOpened():
+                ret, _ = self.top_camera.read()
+                top_working = ret
+                
+            if self.bottom_camera and self.bottom_camera.isOpened():
+                ret, _ = self.bottom_camera.read()
+                bottom_working = ret
+            
+            # Only proceed if BOTH cameras are actually working
+            if top_working and bottom_working:
+                self.top_camera_device = top_device
+                self.bottom_camera_device = bottom_device
 
-            # Disable autofocus for reconnected cameras
-            for device in [top_device, bottom_device]:
-                try:
-                    subprocess.run(['v4l2-ctl', '-d', device, '-c', 'focus_automatic_continuous=0'],
-                                  capture_output=True, timeout=2)
-                    print(f"Disabled autofocus for reconnected {device}")
-                except (subprocess.SubprocessError, subprocess.TimeoutExpired):
-                    print(f"Warning: Could not disable autofocus for reconnected {device}")
+                # Disable autofocus for reconnected cameras
+                for device in [top_device, bottom_device]:
+                    try:
+                        subprocess.run(['v4l2-ctl', '-d', device, '-c', 'focus_automatic_continuous=0'],
+                                      capture_output=True, timeout=2)
+                        print(f"Disabled autofocus for reconnected {device}")
+                    except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+                        print(f"Warning: Could not disable autofocus for reconnected {device}")
 
-            # Apply settings
-            self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            self._apply_camera_settings(self.top_camera, self.top_camera_settings)
+                # Apply settings
+                self.top_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.top_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self._apply_camera_settings(self.top_camera, self.top_camera_settings)
 
-            self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-            self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
+                self.bottom_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                self.bottom_camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                self._apply_camera_settings(self.bottom_camera, self.bottom_camera_settings)
 
-            print("Dynamic camera reassignment successful!")
-            print(f"Top camera (Rapoo): {top_device}")
-            print(f"Bottom camera (C922): {bottom_device}")
-            return True
+                print("Dynamic camera reassignment successful!")
+                print(f"Top camera (Rapoo): {top_device}")
+                print(f"Bottom camera (C922): {bottom_device}")
+                return True
+            else:
+                # Release cameras that aren't working properly
+                if not top_working:
+                    print(f"❌ Top camera at {top_device} not working properly")
+                    if self.top_camera:
+                        self.top_camera.release()
+                        self.top_camera = None
+                if not bottom_working:
+                    print(f"❌ Bottom camera at {bottom_device} not working properly")
+                    if self.bottom_camera:
+                        self.bottom_camera.release()
+                        self.bottom_camera = None
+                
+                print("Dynamic reassignment failed - cameras found but not working properly")
+                return False
         else:
             print("Dynamic reassignment failed - could not identify both camera types")
             return False
@@ -486,49 +538,70 @@ class CameraHandler:
         try:
             top_ok = False
             bottom_ok = False
+            camera_errors = []
 
+            # Enhanced validation for top camera
             if self.top_camera and self.top_camera.isOpened():
                 # Try to read a frame multiple times to account for temporary failures
                 for attempt in range(3):
-                    ret, _ = self.top_camera.read()
-                    if ret:
+                    ret, frame = self.top_camera.read()
+                    if ret and frame is not None and frame.size > 0:
                         top_ok = True
                         break
                     else:
                         time.sleep(0.1)  # Short delay between retries
                 if not top_ok:
                     print("⚠️ Top camera is not responding after retries")
+                    camera_errors.append("top camera not responding")
             else:
                 print("⚠️ Top camera is not opened")
+                camera_errors.append("top camera not opened")
 
             if not top_ok:
                 print("🔌 Top camera disconnection detected")
 
+            # Enhanced validation for bottom camera
             if self.bottom_camera and self.bottom_camera.isOpened():
                 # Try to read a frame multiple times to account for temporary failures
                 for attempt in range(3):
-                    ret, _ = self.bottom_camera.read()
-                    if ret:
+                    ret, frame = self.bottom_camera.read()
+                    if ret and frame is not None and frame.size > 0:
                         bottom_ok = True
                         break
                     else:
                         time.sleep(0.1)  # Short delay between retries
                 if not bottom_ok:
                     print("⚠️ Bottom camera is not responding after retries")
+                    camera_errors.append("bottom camera not responding")
             else:
                 print("⚠️ Bottom camera is not opened")
+                camera_errors.append("bottom camera not opened")
+
+            if not bottom_ok:
+                print("🔌 Bottom camera disconnection detected")
+            else:
+                print("⚠️ Bottom camera is not opened")
+                camera_errors.append("bottom camera not opened")
 
             if not bottom_ok:
                 print("🔌 Bottom camera disconnection detected")
 
-            # Log status periodically (not every check to avoid spam)
-            if not (top_ok and bottom_ok):
-                print(f"📊 Camera status check: Top={'✅ OK' if top_ok else '❌ FAIL'}, Bottom={'✅ OK' if bottom_ok else '❌ FAIL'}")
+            # Return status and error details for the App class to handle
+            return {
+                'top_ok': top_ok,
+                'bottom_ok': bottom_ok,
+                'camera_errors': camera_errors,
+                'both_ok': top_ok and bottom_ok
+            }
 
-            return top_ok and bottom_ok
         except Exception as e:
             print(f"❌ Error checking camera status: {e}")
-            return False
+            return {
+                'top_ok': False,
+                'bottom_ok': False,
+                'camera_errors': [f"Camera status check failed: {str(e)}"],
+                'both_ok': False
+            }
 
     def reassign_cameras_runtime(self):
         """Runtime method to dynamically reassign cameras - can be called from UI or automatically"""
@@ -1958,6 +2031,7 @@ class App(tk.Tk):
         # Disconnection popup flags
         self.camera_disconnected_popup_shown = False
         self.arduino_disconnected_popup_shown = False
+        self.arduino_recovery_attempted = False  # Track recovery attempts to prevent duplicates
         
         # Detection tracking variables
         self.detection_session_id = None
@@ -1966,6 +2040,73 @@ class App(tk.Tk):
         
         # System mode tracking
         self.current_mode = "IDLE"  # Can be "IDLE", "TRIGGER", "CONTINUOUS", or "SCAN_PHASE"
+
+        # Error Management System
+        self.error_state = {
+            "active_errors": set(),
+            "error_count": {},
+            "last_error_time": {},
+            "system_paused": False,
+            "manual_inspection_required": False,
+            "error_recovery_attempts": {}
+        }
+        
+        # Error type definitions
+        self.ERROR_TYPES = {
+            "NO_WOOD_DETECTED": {
+                "name": "No Wood Detected",
+                "severity": "WARNING",
+                "max_retries": 3,
+                "timeout": 5.0,
+                "description": "Wood piece not detected in expected timeframe"
+            },
+
+            "CAMERA_DISCONNECTED": {
+                "name": "Camera Disconnected",
+                "severity": "CRITICAL",
+                "max_retries": 3,
+                "timeout": 10.0,
+                "description": "Camera communication lost"
+            },
+            "ARDUINO_DISCONNECTED": {
+                "name": "Arduino Disconnected", 
+                "severity": "CRITICAL",
+                "max_retries": 3,
+                "timeout": 5.0,
+                "description": "Arduino communication lost"
+            },
+            "RESOURCE_EXHAUSTION": {
+                "name": "Resource Exhaustion",
+                "severity": "CRITICAL",
+                "max_retries": 1,
+                "timeout": 15.0,
+                "description": "System memory or CPU resources depleted"
+            },
+            "MODEL_LOADING_FAILED": {
+                "name": "AI Model Loading Failed",
+                "severity": "CRITICAL",
+                "max_retries": 2,
+                "timeout": 30.0,
+                "description": "DeGirum AI model failed to load or initialize"
+            }
+        }
+        
+        # Detection threshold constants
+        self.DETECTION_THRESHOLDS = {
+            "MIN_CONFIDENCE": 0.5,  # Minimum confidence for defect detection
+            "MIN_WOOD_CONFIDENCE": 0.4,  # Minimum confidence for wood presence
+            "WOOD_DETECTION_TIMEOUT": 10.0,  # Seconds to wait for wood detection
+            "ALIGNMENT_TOLERANCE": 50,  # Pixels tolerance for wood alignment
+            "MIN_WOOD_AREA": 1000,  # Minimum area for valid wood detection
+        }
+        
+        # Detection monitoring variables
+        self.detection_monitoring = {
+            "wood_detection_start_time": None,
+            "last_wood_detected": None,
+            "alignment_failures": 0,
+            "detection_retries": 0
+        }
 
         # SCAN_PHASE mode variables
         self.scan_phase_active = False
@@ -2000,6 +2141,13 @@ class App(tk.Tk):
         # Flag to control processed frame display in SCAN_PHASE
         self.displaying_processed_frame = False
         self.processed_frame_timer = None  # Timer for processed frame display duration
+
+        # Camera monitoring for automatic reconnection
+        self.camera_monitor_active = True
+        self.last_camera_check_time = 0
+        self.camera_check_interval = 10.0  # Check every 10 seconds
+        self.camera_reconnection_attempts = 0
+        self.max_camera_reconnection_attempts = 5
 
         # --- DeGirum Model and Camera Initialization ---
         # DeGirum Configuration
@@ -2346,6 +2494,9 @@ class App(tk.Tk):
 
         # Start processing messages from background threads
         self.process_message_queue()
+
+        # --- System Health Monitoring ---
+        self.start_health_monitoring()
 
         # --- Inactivity and Reporting ---
         self.check_inactivity()
@@ -3292,7 +3443,8 @@ class App(tk.Tk):
         if self._frame_counter % 15 == 0:
             # Check camera status and reconnect if needed (skip during cooldown after mode changes)
             if time.time() > self._camera_check_cooldown:
-                if not self.camera_handler.check_camera_status():
+                camera_status = self.camera_handler.check_camera_status()
+                if not camera_status['both_ok']:
                     print("Camera status check failed - attempting reconnection...")
                     if not self.camera_disconnected_popup_shown:
                         messagebox.showwarning("Camera Disconnection", "Camera disconnection detected. Attempting reconnection...")
@@ -3322,12 +3474,18 @@ class App(tk.Tk):
             # Update detection status
             self.update_detection_status_display()
 
+            # Monitor camera connectivity for automatic reconnection
+            self.monitor_camera_connectivity()
+
             # Only update details if not in active inference to prevent interference
             if not getattr(self, '_in_active_inference', False):
                 self.ensure_detection_details_updated()
 
         # Optimize for constant detection - update every 10ms for ~100 FPS
         self.after(10, self.update_feeds)
+        
+        # Start system health monitoring
+        self.start_health_monitoring()
 
     def ensure_detection_details_updated(self):
         """Ensure detection details are showing current state, even when not actively detecting"""
@@ -3789,6 +3947,15 @@ class App(tk.Tk):
             
             # Process detection based on automatic IR beam OR live detection toggle
             should_detect = self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER")
+            
+            # Check for error states that should prevent detection
+            if self.error_state["system_paused"]:
+                should_detect = False
+                print("Detection disabled due to system pause")
+            
+            if self.error_state["manual_inspection_required"] and should_detect:
+                print("Detection limited due to manual inspection requirement")
+                # Allow detection but flag for manual review
 
             # For bottom camera, only detect if top camera detected wood (synchronized detection)
             # But wood detection is done per camera, so bottom camera can detect wood independently
@@ -4462,7 +4629,11 @@ class App(tk.Tk):
                 rtscts=False,
                 dsrdtr=False
             )
-            time.sleep(3)  # Allow Arduino to stabilize
+            
+            # Extended stabilization time for voltage drop recovery
+            stabilization_delay = 5.0  # Extended from 3.0 to 5.0 seconds
+            print(f"🔋 Arduino voltage stabilization delay: {stabilization_delay}s")
+            time.sleep(stabilization_delay)
 
             self.ser.reset_input_buffer()
             self.ser.reset_output_buffer()
@@ -4615,15 +4786,57 @@ class App(tk.Tk):
                         self.grade_all_woods()
                         continue
 
+                    # --- ARDUINO RECOVERY/STATUS MESSAGES ---
+                    if message == "ARDUINO_READY":
+                        print("🚀 Arduino startup detected - system ready")
+                        continue
+                    
+                    if message.startswith("SYSTEM_STATUS:"):
+                        print(f"📊 Arduino system status: {message}")
+                        # Could parse status details here for monitoring
+                        continue
+                        
+                    if message.startswith("RECOVERY:"):
+                        recovery_type = message.split(":", 1)[1] if ":" in message else ""
+                        if recovery_type == "MANUAL_RESTART_RECOMMENDED":
+                            print("ℹ️ Arduino recommends manual restart - user should click ON button")
+                        elif recovery_type == "MODE_SET_TO_IDLE":
+                            print("ℹ️ Arduino mode set to IDLE")
+                        continue
+
+                    if message.startswith("STATUS:"):
+                        status_type = message.split(":", 1)[1] if ":" in message else ""
+                        if status_type == "RECONNECTED_AWAITING_USER_INPUT":
+                            print("⏳ Arduino reconnected and awaiting user input")
+                        continue
+
                     # --- OTHER ARDUINO MESSAGES ---
                     else:
-                        print(f"Arduino message received: '{message}'")
-                        if hasattr(self, 'status_label'):
-                            # status_label is a Text widget, not a Label widget
-                            self.status_label.config(state=tk.NORMAL)
-                            self.status_label.delete(1.0, tk.END)
-                            self.status_label.insert(1.0, f"Status: Arduino: {message}")
-                            self.status_label.config(state=tk.DISABLED)
+                        # Filter out repetitive STATUS_PAUSED messages to reduce spam
+                        if message.startswith("STATUS_PAUSED:"):
+                            # Only log STATUS_PAUSED messages if it's been a while since the last one
+                            current_time = time.time()
+                            if not hasattr(self, '_last_status_paused_log'):
+                                self._last_status_paused_log = 0
+                            
+                            if current_time - self._last_status_paused_log > 10.0:  # Log at most every 10 seconds
+                                print(f"Arduino message received: '{message}' (suppressing further duplicates for 10s)")
+                                self._last_status_paused_log = current_time
+                            # Update status but don't spam console
+                            if hasattr(self, 'status_label'):
+                                self.status_label.config(state=tk.NORMAL)
+                                self.status_label.delete(1.0, tk.END)
+                                self.status_label.insert(1.0, f"Status: Arduino: {message}")
+                                self.status_label.config(state=tk.DISABLED)
+                        else:
+                            # Normal message processing for non-STATUS_PAUSED messages
+                            print(f"Arduino message received: '{message}'")
+                            if hasattr(self, 'status_label'):
+                                # status_label is a Text widget, not a Label widget
+                                self.status_label.config(state=tk.NORMAL)
+                                self.status_label.delete(1.0, tk.END)
+                                self.status_label.insert(1.0, f"Status: Arduino: {message}")
+                                self.status_label.config(state=tk.DISABLED)
 
                 elif msg_type == "status_update":
                     if hasattr(self, 'status_label'):
@@ -4683,7 +4896,12 @@ class App(tk.Tk):
                         reconnect_attempts += 1
                         print(f"🔄 Arduino disconnected, attempting reconnection {reconnect_attempts}/{max_reconnect_attempts}...")
                         if not self.arduino_disconnected_popup_shown:
-                            messagebox.showwarning("Arduino Disconnection", "Arduino has been disconnected. Attempting reconnection...")
+                            # Enhanced disconnection message with restart recommendation
+                            disconnect_message = "Arduino has been disconnected. Attempting reconnection...\n\n"
+                            if self.current_mode == "SCAN_PHASE":
+                                disconnect_message += ("IMPORTANT: If you were scanning, please restart the scan manually "
+                                                      "after reconnection to ensure proper wood detection and avoid numbering conflicts.")
+                            messagebox.showwarning("Arduino Disconnection", disconnect_message)
                             self.arduino_disconnected_popup_shown = True
                         time.sleep(3)  # Increased wait time for Arduino to stabilize
 
@@ -4694,10 +4912,21 @@ class App(tk.Tk):
                                 self.setup_arduino()
                                 if self.ser and self.ser.is_open:
                                     print(f"✅ Arduino reconnected successfully on {self.ser.port}")
-                                    messagebox.showinfo("Arduino Reconnection", f"Arduino has been reconnected on {self.ser.port}")
+                                    
+                                    # Enhanced reconnection message
+                                    reconnect_message = f"Arduino has been reconnected on {self.ser.port}"
+                                    if self.current_mode == "SCAN_PHASE":
+                                        reconnect_message += ("\n\nREMINDER: Please restart your scan manually "
+                                                             "by clicking the ON button to ensure proper detection.")
+                                    
+                                    messagebox.showinfo("Arduino Reconnection", reconnect_message)
                                     self.arduino_disconnected_popup_shown = False
                                     reconnect_attempts = 0
                                     reconnected = True
+                                    
+                                    # Check for Arduino mode recovery
+                                    self.handle_arduino_reconnection_recovery()
+                                    
                                     break
                                 else:
                                     print(f"❌ Reconnection sub-attempt {attempt + 1} failed, retrying...")
@@ -4737,6 +4966,10 @@ class App(tk.Tk):
                                 print(f"✅ Arduino reconnected after error on {self.ser.port}")
                                 reconnect_attempts = 0
                                 reconnected = True
+                                
+                                # Check for Arduino mode recovery
+                                self.handle_arduino_reconnection_recovery()
+                                
                                 break
                             time.sleep(1)
                         except Exception as reconnect_error:
@@ -4762,12 +4995,34 @@ class App(tk.Tk):
             
         self.reset_inactivity_timer()
         
-        # Add rate limiting to prevent overwhelming Arduino
+        # Check if this is a grading command (high-power operation)
+        is_grading_command = command.isdigit() and len(command) == 1 and command in ['1', '2', '3', '4', '5']
+        is_critical_command = command in ['C', 'T', 'S', 'X'] or is_grading_command
+        is_error_command = command.startswith('ERROR:') or command.startswith('CLEAR_ERROR:')
+        
+        # Add power stabilization delays for critical commands
+        if is_critical_command:
+            print(f"🔋 Power stabilization: Preparing to send critical command '{command}'")
+            time.sleep(0.2)  # Pre-command stabilization delay
+        
+        # Add rate limiting to prevent overwhelming Arduino (but allow error commands through)
         current_time = time.time()
-        if hasattr(self, '_last_command_time'):
+        if hasattr(self, '_last_command_time') and not is_error_command:
             time_since_last = current_time - self._last_command_time
-            if time_since_last < 0.1:  # Minimum 100ms between commands
-                time.sleep(0.1 - time_since_last)
+            min_delay = 0.3 if is_critical_command else 0.1  # Longer delay for critical commands
+            if time_since_last < min_delay:
+                delay_needed = min_delay - time_since_last
+                print(f"⏱️ Rate limiting: Waiting {delay_needed:.2f}s before sending command")
+                time.sleep(delay_needed)
+                
+        # Prevent duplicate commands from being sent too frequently (but allow error commands through)
+        if hasattr(self, '_last_command_sent') and not is_error_command:
+            cooldown_time = 3.0 if is_grading_command else 2.0  # Longer cooldown for grading commands
+            if self._last_command_sent == command and current_time - self._last_command_time < cooldown_time:
+                print(f"⚠️ Skipping duplicate command: {command} (cooldown: {cooldown_time}s)")
+                return
+        
+        self._last_command_sent = command
         
         try:
             if self.ser:
@@ -4785,17 +5040,47 @@ class App(tk.Tk):
                 except:
                     pass
                 
-                # Send command with error handling
-                command_bytes = command.encode('utf-8')
-                self.ser.write(command_bytes)
-                self.ser.flush()  # Ensure data is sent immediately
+                # Additional voltage stabilization for grading commands
+                if is_grading_command:
+                    print(f"🔋 Voltage drop mitigation: Preparing power system for grading command '{command}'")
+                    time.sleep(0.5)  # Extended pre-transmission delay for grading commands
                 
-                # Record timestamp for rate limiting
-                self._last_command_time = time.time()
+                # Send command with error handling and retry logic for critical commands
+                max_retries = 3 if is_critical_command else 1
+                retry_count = 0
                 
-                print(f"✅ Sent command to Arduino: '{command}' (Port: {self.ser.port})")
+                while retry_count < max_retries:
+                    try:
+                        command_bytes = command.encode('utf-8')
+                        self.ser.write(command_bytes)
+                        self.ser.flush()  # Ensure data is sent immediately
+                        
+                        # Post-transmission power stabilization for grading commands
+                        if is_grading_command:
+                            print(f"🔋 Post-transmission stabilization: Allowing power system to recover after grading command '{command}'")
+                            time.sleep(1.0)  # Extended post-transmission delay for power recovery
+                        
+                        # Record timestamp for rate limiting
+                        self._last_command_time = time.time()
+                        
+                        print(f"✅ Sent command to Arduino: '{command}' (Port: {self.ser.port})")
+                        # Clear Arduino disconnection error on successful communication
+                        self.clear_error("ARDUINO_DISCONNECTED")
+                        return  # Success, exit retry loop
+                        
+                    except (serial.SerialException, OSError, TypeError) as retry_error:
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            print(f"⚠️ Command transmission failed (attempt {retry_count}/{max_retries}): {retry_error}")
+                            print(f"🔄 Retrying command '{command}' in 0.5s...")
+                            time.sleep(0.5)  # Wait before retry
+                        else:
+                            raise retry_error  # Re-raise the last error if all retries failed
+                            
             else:
                 print("❌ Cannot send command: Arduino not connected.")
+                # Register Arduino disconnection error
+                self.register_error("ARDUINO_DISCONNECTED", "Arduino not connected for command transmission")
                 if hasattr(self, 'status_label'):
                     # status_label is a Text widget, not a Label widget
                     self.status_label.config(state=tk.NORMAL)
@@ -4804,7 +5089,16 @@ class App(tk.Tk):
                     self.status_label.config(state=tk.DISABLED)
                     
         except (serial.SerialException, OSError, TypeError) as e:
-            print(f"🔥 Error sending Arduino command '{command}': {e}")
+            print(f"🔥 Arduino communication error: {e}")
+            
+            # Special handling for voltage drop scenarios
+            if "Input/output error" in str(e) or "device reports readiness" in str(e):
+                print(f"🔋 Voltage drop detected during command '{command}' transmission")
+                if is_grading_command:
+                    print(f"⚡ Critical: Voltage drop during grading command - implementing recovery protocol")
+                
+            # Register Arduino disconnection error with specific details
+            self.register_error("ARDUINO_DISCONNECTED", f"Command '{command}' failed: {str(e)}")
             if hasattr(self, 'status_label'):
                 # status_label is a Text widget, not a Label widget
                 self.status_label.config(state=tk.NORMAL)
@@ -4816,11 +5110,27 @@ class App(tk.Tk):
             if not (hasattr(self, '_shutting_down') and self._shutting_down):
                 print("🔄 Attempting Arduino reconnection...")
                 self.ser = None
-                time.sleep(1)  # Brief pause before reconnection attempt
+                
+                # Extended recovery time for voltage drop scenarios
+                recovery_delay = 3.0 if is_grading_command else 1.0
+                print(f"🔋 Power recovery delay: {recovery_delay}s to allow voltage stabilization")
+                time.sleep(recovery_delay)
+                
                 self.setup_arduino()
 
     def set_continuous_mode(self):
         """Sets the system to fully automatic continuous mode."""
+        # Check for system errors before switching modes
+        if self.error_state["system_paused"]:
+            print("Cannot switch to CONTINUOUS mode: System is paused due to errors")
+            self.show_error_alert("SYSTEM_PAUSED", "Cannot start continuous mode while system has critical errors", "ERROR")
+            return False
+            
+        if self.error_state["manual_inspection_required"]:
+            print("Cannot switch to CONTINUOUS mode: Manual inspection required")
+            self.show_error_alert("MANUAL_INSPECTION_REQUIRED", "Please resolve manual inspection before starting continuous mode", "ERROR")
+            return False
+            
         print("Setting Continuous (Live + Auto Grade) Mode")
         self.current_mode = "CONTINUOUS"
         self.send_arduino_command('C')  # Send command to Arduino
@@ -4828,9 +5138,21 @@ class App(tk.Tk):
         self.auto_grade_var.set(True)
         self.update_status_text("Status: CONTINUOUS", STATUS_READY_COLOR)
         self.update_detection_status_display() # Update the status label
+        return True
 
     def set_trigger_mode(self):
         """Sets the system to wait for an IR beam trigger."""
+        # Check for system errors before switching modes
+        if self.error_state["system_paused"]:
+            print("Cannot switch to TRIGGER mode: System is paused due to errors")
+            self.show_error_alert("SYSTEM_PAUSED", "Cannot start trigger mode while system has critical errors", "ERROR")
+            return False
+            
+        if self.error_state["manual_inspection_required"]:
+            print("Cannot switch to TRIGGER mode: Manual inspection required")
+            self.show_error_alert("MANUAL_INSPECTION_REQUIRED", "Please resolve manual inspection before starting trigger mode", "ERROR")
+            return False
+            
         print("Setting Trigger Mode")
         self.current_mode = "TRIGGER"
         print(f"Sending 'T' command to Arduino...")
@@ -4840,6 +5162,7 @@ class App(tk.Tk):
         self.update_status_text("Status: TRIGGER", STATUS_READY_COLOR)
         self.update_detection_status_display() # Update the status label
         print(f"Trigger mode set - Python mode: {self.current_mode}")
+        return True
 
     def set_idle_mode(self):
         """Disables all operations and stops the conveyor."""
@@ -4855,14 +5178,31 @@ class App(tk.Tk):
         # Reset grades to empty when entering idle mode
         self.live_grades = {"top": "", "bottom": ""}
         self.update_live_grading_display()
+        
+        # Clear system pause state when manually switching to idle
+        if self.error_state["system_paused"]:
+            print("Clearing system pause state due to manual IDLE mode selection")
+            
         # status_label is a Text widget, not a Label widget
         self.status_label.config(state=tk.NORMAL)
         self.status_label.delete(1.0, tk.END)
         self.status_label.insert(1.0, "Status: IDLE")
         self.status_label.config(foreground="gray", state=tk.DISABLED)
+        return True
 
     def set_scan_mode(self):
         """Sets the system to SCAN_PHASE mode for segmented scanning."""
+        # Check for system errors before switching modes
+        if self.error_state["system_paused"]:
+            print("Cannot switch to SCAN_PHASE mode: System is paused due to errors")
+            self.show_error_alert("SYSTEM_PAUSED", "Cannot start scan mode while system has critical errors", "ERROR")
+            return False
+            
+        if self.error_state["manual_inspection_required"]:
+            print("Cannot switch to SCAN_PHASE mode: Manual inspection required")
+            self.show_error_alert("MANUAL_INSPECTION_REQUIRED", "Please resolve manual inspection before starting scan mode", "ERROR")
+            return False
+            
         print("Setting SCAN_PHASE Mode")
         self.current_mode = "SCAN_PHASE"
         self.send_arduino_command('S')  # Send scan phase command to Arduino
@@ -4871,6 +5211,7 @@ class App(tk.Tk):
         self.update_status_text("Status: SCAN_PHASE", STATUS_READY_COLOR)
         self.update_detection_status_display()
         print(f"Scan mode set - Python mode: {self.current_mode}")
+        return True
 
     def start_scan_phase(self):
         """Initialize scan phase when Arduino detects beam break in SCAN_PHASE mode."""
@@ -5334,8 +5675,15 @@ class App(tk.Tk):
         self.live_stats[f"grade{stat_index}"] += 1
         self.update_live_stats_display()
 
-        # 4. Send command to Arduino if it's connected
+        # 4. Send command to Arduino if it's connected with voltage drop protection
         if self.ser and self.ser.is_open:
+            print(f"🔋 Preparing to send grading command '{arduino_command}' with voltage drop protection")
+            print(f"Final grading: Top={self.live_grades.get('top', {}).get('grade', 'Unknown')}, Bottom={self.live_grades.get('bottom', {}).get('grade', 'Unknown')}, Final={final_grade}")
+            
+            # Pre-grading system stabilization
+            print("🔋 Pre-grading stabilization: Ensuring power system is ready for sorting mechanism")
+            time.sleep(0.3)  # Brief stabilization before sending grading command
+            
             self.send_arduino_command(str(arduino_command))
         else:
             print("Arduino not connected. Command not sent.")
@@ -5381,8 +5729,9 @@ class App(tk.Tk):
             self.status_label.config(state=tk.DISABLED)
 
     def analyze_frame(self, frame, camera_name="top", run_defect_model=True):
-        """Analyze frame using DeGirum model with object tracking"""
+        """Analyze frame using DeGirum model with object tracking and error detection"""
         if self.model is None:
+            self.register_error("MODEL_LOADING_FAILED", "DeGirum model not loaded")
             return frame, {}, [], []
 
         try:
@@ -5391,10 +5740,18 @@ class App(tk.Tk):
 
             # Process detections for object tracking
             current_detections = []
+            low_confidence_count = 0
+            
             for det in inference_result.results:
                 model_label = det['label']
                 bbox = det['bbox']
                 confidence = det.get('confidence', 0.7)
+
+                # Check for low confidence detections
+                if confidence < self.DETECTION_THRESHOLDS["MIN_CONFIDENCE"]:
+                    low_confidence_count += 1
+                    print(f"Low confidence detection: {model_label} with confidence {confidence:.2f}")
+                    continue  # Skip low confidence detections
 
                 # Extract bounding box for size calculation
                 bbox_info = {'bbox': bbox}
@@ -5408,8 +5765,16 @@ class App(tk.Tk):
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
                 current_detections.append((bbox, standard_defect_type, size_mm, confidence))
 
+            # Check for wood detection issues (if this is a wood detection analysis)
+            if run_defect_model and hasattr(self, 'wood_detection_results'):
+                self.check_wood_detection_status(frame, camera_name)
+
             # Filter overlapping detections to prevent multiple detections in same area
             filtered_detections = self.filter_overlapping_detections(current_detections, overlap_threshold=0.3)
+
+            # Check for plank alignment issues
+            if filtered_detections:
+                self.check_plank_alignment(filtered_detections, frame, camera_name)
 
             # Process filtered detections for grading
             detections_for_grading = []
@@ -6024,11 +6389,1491 @@ class App(tk.Tk):
         except Exception as e:
             print(f"Error during memory cleanup: {e}")
 
+    # ==================== ERROR MANAGEMENT SYSTEM ====================
+    
+    def register_error(self, error_type, details=""):
+        """Register a new error and manage error state"""
+        try:
+            current_time = time.time()
+            
+            # Add to active errors
+            self.error_state["active_errors"].add(error_type)
+            
+            # Update error count
+            if error_type not in self.error_state["error_count"]:
+                self.error_state["error_count"][error_type] = 0
+            self.error_state["error_count"][error_type] += 1
+            
+            # Record error time
+            self.error_state["last_error_time"][error_type] = current_time
+            
+            # Get error configuration
+            error_config = self.ERROR_TYPES.get(error_type, {})
+            error_name = error_config.get("name", error_type)
+            severity = error_config.get("severity", "WARNING")
+            
+            print(f"ERROR REGISTERED: {error_name} - {details}")
+            
+            # Handle based on severity
+            if severity in ["CRITICAL", "ERROR"]:
+                self.handle_critical_error(error_type, details)
+                # Show critical alert to operator
+                self.show_error_alert(error_type, details, severity)
+            elif severity == "WARNING":
+                self.handle_warning_error(error_type, details)
+                # Show warning alert (less intrusive)
+                if self.error_state["error_count"][error_type] <= 2:  # Only show first few warnings
+                    self.show_error_alert(error_type, details, severity)
+                
+            # Update UI status
+            self.update_error_status_display()
+            
+            # Update error status panel if available
+            if hasattr(self, 'update_error_status_panel'):
+                self.update_error_status_panel()
+            
+        except Exception as e:
+            print(f"Error in register_error: {e}")
+    
+    def clear_error(self, error_type):
+        """Clear a specific error from active errors"""
+        try:
+            # Check if error is actually active before clearing
+            if error_type not in self.error_state["active_errors"]:
+                # Silently return without logging if error isn't active - avoids spam
+                return  # Error not active, no need to clear
+                
+            print(f"🔄 Clearing active error: {error_type}")
+                
+            # Rate limiting for Arduino commands - prevent spam
+            import time
+            current_time = time.time()
+            if hasattr(self, '_last_clear_commands'):
+                if error_type in self._last_clear_commands:
+                    if current_time - self._last_clear_commands[error_type] < 5.0:  # 5 second cooldown
+                        print(f"⏱️ Too soon to clear {error_type} again, waiting...")
+                        return  # Too soon to send another clear command
+            else:
+                self._last_clear_commands = {}
+            
+            self.error_state["active_errors"].discard(error_type)
+            print(f"📝 Removed {error_type} from active errors")
+            
+            # Reset recovery attempts for this error
+            if error_type in self.error_state["error_recovery_attempts"]:
+                self.error_state["error_recovery_attempts"][error_type] = 0
+                
+            # Send clear command to Arduino with rate limiting
+            print(f"📤 Sending clear command to Arduino for {error_type}")
+            self.send_error_clear_to_arduino(error_type)
+            self._last_clear_commands[error_type] = current_time
+                
+            print(f"ERROR CLEARED: {error_type}")
+            self.update_error_status_display()
+            
+        except Exception as e:
+            print(f"Error in clear_error: {e}")
+    
+    def send_error_to_arduino(self, error_type, details):
+        """Send error information to Arduino for immediate response"""
+        try:
+            # Truncate details to prevent Arduino buffer overflow
+            short_details = details[:25] if len(details) > 25 else details
+            
+            # Format error command for Arduino: "ERROR:ERROR_TYPE:Description"
+            error_command = f"ERROR:{error_type}:{short_details}"
+            self.send_arduino_command(error_command)
+            print(f"Sent error to Arduino: {error_type}")
+            
+        except Exception as e:
+            print(f"Error sending error to Arduino: {e}")
+    
+    def send_error_clear_to_arduino(self, error_type):
+        """Send error clear command to Arduino"""
+        try:
+            clear_command = f"CLEAR_ERROR:{error_type}"
+            print(f"📤 Sending clear command: {clear_command}")
+            
+            # Flush any pending messages before sending clear command
+            if hasattr(self, 'ser') and self.ser and self.ser.is_open:
+                try:
+                    self.ser.reset_input_buffer()
+                    print("🧹 Flushed Arduino input buffer before sending clear command")
+                except:
+                    pass
+            
+            self.send_arduino_command(clear_command)
+            print(f"✅ Sent error clear to Arduino: {error_type}")
+            
+            # Brief delay to ensure command is processed
+            time.sleep(0.2)
+            
+        except Exception as e:
+            print(f"❌ Error sending error clear to Arduino: {e}")
+    
+    def handle_arduino_reconnection_recovery(self):
+        """Handle Arduino reconnection - notify user instead of auto-recovery"""
+        try:
+            # Prevent duplicate recovery attempts
+            if self.arduino_recovery_attempted:
+                print("ℹ️ Arduino recovery notification already shown, skipping")
+                return
+                
+            print("🔄 Arduino reconnected - notifying user...")
+            self.arduino_recovery_attempted = True
+            
+            # Wait for Arduino to initialize (it sends ARDUINO_READY on startup)
+            time.sleep(2)
+            
+            # Request status from Arduino to understand its current state
+            self.send_arduino_command("STATUS_REQUEST")
+            time.sleep(1)
+            
+            # Check if we were in SCAN_PHASE before disconnection
+            if (self.current_mode == "SCAN_PHASE" and 
+                "ARDUINO_DISCONNECTED" in self.error_state["errors"]):
+                
+                print("ℹ️ SCAN_PHASE was active before disconnection - recommending manual restart")
+                
+                # Show notification recommending manual restart
+                self.show_error_alert(
+                    "Arduino Reconnected", 
+                    "Arduino has been reconnected successfully!\n\n"
+                    "RECOMMENDATION: Please restart the scanning process manually "
+                    "to ensure proper wood detection and avoid numbering conflicts.\n\n"
+                    "Click the ON button when ready to resume scanning.",
+                    "warning"
+                )
+                
+                print("⚠️ User notified about Arduino reconnection - manual restart recommended")
+                
+            else:
+                # Simple reconnection notification for non-SCAN modes
+                self.show_error_alert(
+                    "Arduino Reconnected", 
+                    "Arduino has been reconnected successfully and is ready for operation.",
+                    "info"
+                )
+                print("ℹ️ Arduino reconnected - system ready for operation")
+                
+        except Exception as e:
+            print(f"Error in Arduino reconnection recovery: {e}")
+        finally:
+            # Reset recovery flag after a delay to allow future notifications if needed
+            self.after(10000, lambda: setattr(self, 'arduino_recovery_attempted', False))
+    
+    def handle_critical_error(self, error_type, details):
+        """Handle critical errors that require system pause"""
+        try:
+            print(f"CRITICAL ERROR HANDLING: {error_type}")
+            
+            # Pause system operations
+            self.error_state["system_paused"] = True
+            
+            # Handle disconnection errors specially during SCAN_PHASE
+            if error_type in ["CAMERA_DISCONNECTED", "ARDUINO_DISCONNECTED"]:
+                if self.current_mode == "SCAN_PHASE":
+                    print(f"🚨 CRITICAL: {error_type} during SCAN_PHASE - Switching to IDLE mode immediately")
+                    # Show critical alert for scan interruption
+                    self.show_error_alert(
+                        error_type, 
+                        f"SCAN INTERRUPTED: {details}\n\nScan phase has been stopped for safety. Please resolve the issue and restart scanning.",
+                        "CRITICAL"
+                    )
+                    # Force switch to IDLE mode for safety
+                    self.set_idle_mode()
+                    # Clear scan state since it's interrupted
+                    self._clear_scan_state()
+                else:
+                    # Try to send error to Arduino if it's not Arduino disconnection
+                    if error_type != "ARDUINO_DISCONNECTED":
+                        self.send_error_to_arduino(error_type, details)
+                    self.set_idle_mode()
+            else:
+                # For other critical errors, try to send to Arduino first
+                self.send_error_to_arduino(error_type, details)
+                
+                # Handle based on current mode
+                if self.current_mode == "SCAN_PHASE":
+                    # Don't switch to IDLE immediately for non-disconnection errors - let Arduino handle the pause
+                    print(f"SCAN_PHASE paused due to critical error: {error_type}")
+                elif self.current_mode != "IDLE":
+                    print("Switching to IDLE mode due to critical error")
+                    self.set_idle_mode()
+            
+            # Check if manual inspection is required
+            error_config = self.ERROR_TYPES.get(error_type, {})
+            max_retries = error_config.get("max_retries", 1)
+            
+            if error_type not in self.error_state["error_recovery_attempts"]:
+                self.error_state["error_recovery_attempts"][error_type] = 0
+            
+            if self.error_state["error_recovery_attempts"][error_type] >= max_retries:
+                self.error_state["manual_inspection_required"] = True
+                print(f"Manual inspection required for {error_type} after {max_retries} attempts")
+                
+                # Send manual inspection command to Arduino
+                self.send_arduino_command("ERROR:MANUAL_INSPECTION_REQUIRED:Max retries exceeded")
+                
+                # Show manual inspection dialog if in interactive mode
+                if hasattr(self, 'show_manual_inspection_dialog'):
+                    error_config = self.ERROR_TYPES.get(error_type, {})
+                    error_name = error_config.get("name", error_type)
+                    self.show_manual_inspection_dialog(f"{error_name}: {details}")
+            else:
+                # Attempt automatic recovery
+                self.attempt_error_recovery(error_type)
+                
+        except Exception as e:
+            print(f"Error in handle_critical_error: {e}")
+    
+    def _clear_scan_state(self):
+        """Clear scan phase state when scan is interrupted"""
+        try:
+            self.scan_phase_active = False
+            self.current_wood_number = 0
+            self.captured_frames = {"top": [], "bottom": []}
+            self.segment_defects = {"top": [], "bottom": []}
+            if hasattr(self, 'scan_session_data'):
+                self.scan_session_data = {}
+            print("Scan state cleared due to interruption")
+            
+            # Log scan interruption for tracking
+            self.log_action(f"SCAN INTERRUPTED: Scan state cleared due to system error")
+            
+        except Exception as e:
+            print(f"Error clearing scan state: {e}")
+    
+    def notify_scan_interruption(self, error_type, details):
+        """Send comprehensive notifications for scan interruption"""
+        try:
+            # Console notification
+            print("="*60)
+            print("🚨 SCAN PHASE INTERRUPTION DETECTED")
+            print(f"Error Type: {error_type}")
+            print(f"Details: {details}")
+            print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print("Action: Switching to IDLE mode for safety")
+            print("="*60)
+            
+            # Update status with urgent message
+            self.update_status_text(f"🚨 SCAN INTERRUPTED - {error_type}", "red")
+            
+            # Show visual alert (handled in show_error_alert)
+            # Desktop notification (handled in show_error_alert)
+            # Audio alert (handled in show_error_alert)
+            
+        except Exception as e:
+            print(f"Error in notify_scan_interruption: {e}")
+    
+    def handle_warning_error(self, error_type, details):
+        """Handle warning errors that may allow continued operation"""
+        try:
+            print(f"WARNING ERROR HANDLING: {error_type}")
+            
+            # Check retry count
+            error_config = self.ERROR_TYPES.get(error_type, {})
+            max_retries = error_config.get("max_retries", 2)
+            
+            if error_type not in self.error_state["error_recovery_attempts"]:
+                self.error_state["error_recovery_attempts"][error_type] = 0
+            
+            if self.error_state["error_recovery_attempts"][error_type] >= max_retries:
+                # Escalate to critical if retries exceeded
+                print(f"Escalating {error_type} to critical after {max_retries} attempts")
+                self.handle_critical_error(error_type, details)
+            else:
+                # Attempt recovery while continuing operation
+                self.attempt_error_recovery(error_type)
+                
+        except Exception as e:
+            print(f"Error in handle_warning_error: {e}")
+    
+    def attempt_error_recovery(self, error_type):
+        """Attempt automatic recovery for specific error types"""
+        try:
+            # Rate limiting for recovery attempts
+            import time
+            current_time = time.time()
+            
+            # Initialize recovery tracking if needed
+            if not hasattr(self, '_last_recovery_attempts'):
+                self._last_recovery_attempts = {}
+            
+            # Check if we should skip this recovery attempt (rate limiting)
+            if error_type in self._last_recovery_attempts:
+                time_since_last = current_time - self._last_recovery_attempts[error_type]
+                if time_since_last < 30.0:  # 30 second cooldown between recovery attempts
+                    return  # Skip recovery, too soon
+            
+            self.error_state["error_recovery_attempts"][error_type] = \
+                self.error_state["error_recovery_attempts"].get(error_type, 0) + 1
+            
+            recovery_attempt = self.error_state["error_recovery_attempts"][error_type]
+            
+            # Limit total recovery attempts per error type
+            if recovery_attempt > 3:  # Max 3 attempts
+                print(f"❌ Max recovery attempts reached for {error_type} (attempted {recovery_attempt} times)")
+                return
+                
+            print(f"Attempting recovery for {error_type} (attempt {recovery_attempt})")
+            self._last_recovery_attempts[error_type] = current_time
+            
+            # Specific recovery actions based on error type
+            if error_type == "CAMERA_DISCONNECTED":
+                self.recover_camera_connection()
+            elif error_type == "ARDUINO_DISCONNECTED":
+                self.recover_arduino_connection()
+            elif error_type == "RESOURCE_EXHAUSTION":
+                self.recover_system_resources()
+            elif error_type == "MODEL_LOADING_FAILED":
+                self.recover_ai_model()
+            elif error_type == "NO_WOOD_DETECTED":
+                self.recover_detection_issues(error_type)
+            else:
+                print(f"No specific recovery action for {error_type}")
+                
+        except Exception as e:
+            print(f"Error in attempt_error_recovery: {e}")
+    
+    def recover_camera_connection(self):
+        """Attempt to recover camera connection"""
+        try:
+            print("Attempting camera reconnection...")
+            # Set recovery flag to prevent health monitoring interference
+            self._recovering_cameras = True
+            
+            # Use camera handler's reconnect_cameras method
+            success = self.camera_handler.reconnect_cameras()
+            if success:
+                # Update the cap references after successful reconnection
+                self.cap_top = self.camera_handler.top_camera
+                self.cap_bottom = self.camera_handler.bottom_camera
+                print(f"🔄 Updated camera references: cap_top={self.cap_top is not None}, cap_bottom={self.cap_bottom is not None}")
+                
+                # Clear the error (this sends CLEAR_ERROR to Arduino)
+                self.clear_error("CAMERA_DISCONNECTED")
+                
+                # Give Arduino more time to process the clear command
+                print("🕐 Waiting for Arduino to process CLEAR_ERROR command...")
+                time.sleep(1.0)  # Increased from 0.5s to 1.0s
+                
+                print("✅ Camera connection recovered successfully")
+                
+                # Final verification before showing success notification with additional delay
+                time.sleep(0.3)  # Additional stabilization delay
+                final_status = self.camera_handler.check_camera_status()
+                if final_status['both_ok']:
+                    # Show success notification to user
+                    self.show_reconnection_success_notification()
+                    
+                    # Update status
+                    self.update_status_text("Status: Cameras reconnected successfully", STATUS_READY_COLOR)
+                    
+                    # Clear recovery flag
+                    self._recovering_cameras = False
+                    return True
+                else:
+                    print("⚠️ Warning: Final camera status check failed after apparent success")
+                    print(f"   Final status: Top={'✅ OK' if final_status['top_ok'] else '❌ FAIL'}, Bottom={'✅ OK' if final_status['bottom_ok'] else '❌ FAIL'}")
+                    # Don't show success notification if final check fails
+                    self._recovering_cameras = False
+                    return False
+                
+                self.camera_reconnection_attempts = 0  # Reset counter on success
+            else:
+                print("Camera reconnection failed - not all cameras reconnected")
+                
+                # Check which cameras failed and register specific error
+                missing_cameras = []
+                if not self.camera_handler.top_camera:
+                    missing_cameras.append("top")
+                if not self.camera_handler.bottom_camera:
+                    missing_cameras.append("bottom")
+                    
+                error_details = f"Failed to reconnect {', '.join(missing_cameras)} camera(s)"
+                self.register_error("CAMERA_DISCONNECTED", error_details)
+                self._recovering_cameras = False
+                return False
+        except Exception as e:
+            print(f"Error in recover_camera_connection: {e}")
+            self.register_error("CAMERA_DISCONNECTED", f"Recovery exception: {str(e)}")
+            self._recovering_cameras = False
+            return False
+
+    def monitor_camera_connectivity(self):
+        """Periodically monitor camera connectivity and attempt automatic reconnection"""
+        if not self.camera_monitor_active:
+            return
+            
+        current_time = time.time()
+        
+        # Only check cameras at specified intervals
+        if current_time - self.last_camera_check_time < self.camera_check_interval:
+            return
+            
+        self.last_camera_check_time = current_time
+        
+        try:
+            # Check if we have a CAMERA_DISCONNECTED error
+            if "CAMERA_DISCONNECTED" in self.error_state["active_errors"]:
+                print("🔍 Camera monitor: Detected active camera disconnection error - attempting automatic reconnection")
+                
+                # Only attempt reconnection if we haven't exceeded max attempts
+                if self.camera_reconnection_attempts < self.max_camera_reconnection_attempts:
+                    self.camera_reconnection_attempts += 1
+                    print(f"🔄 Automatic camera reconnection attempt {self.camera_reconnection_attempts}/{self.max_camera_reconnection_attempts}")
+                    
+                    success = self.recover_camera_connection()
+                    if success:
+                        print("🎉 Automatic camera reconnection successful!")
+                        # Status and notification are now handled in recover_camera_connection()
+                    else:
+                        print(f"❌ Automatic camera reconnection attempt {self.camera_reconnection_attempts} failed")
+                        
+                        # If we've reached max attempts, show a message
+                        if self.camera_reconnection_attempts >= self.max_camera_reconnection_attempts:
+                            print("⚠️ Maximum camera reconnection attempts reached - manual intervention may be required")
+                            self.show_error_alert(
+                                "Camera Reconnection Failed", 
+                                "Automatic camera reconnection has failed after multiple attempts. Please check camera connections manually.",
+                                "warning"
+                            )
+                            # Reset counter to allow future attempts after some time
+                            self.camera_reconnection_attempts = 0
+                            # Increase interval for next attempts
+                            self.camera_check_interval = 30.0  # Check less frequently
+                else:
+                    # Wait a bit longer before trying again
+                    if current_time - self.last_camera_check_time > 60.0:  # Wait 1 minute before resetting
+                        print("🔄 Resetting camera reconnection attempts after waiting period")
+                        self.camera_reconnection_attempts = 0
+                        self.camera_check_interval = 10.0  # Reset to normal interval
+            else:
+                # No camera errors - reset reconnection attempts and interval
+                if self.camera_reconnection_attempts > 0:
+                    self.camera_reconnection_attempts = 0
+                    self.camera_check_interval = 10.0
+                    
+        except Exception as e:
+            print(f"Error in monitor_camera_connectivity: {e}")
+            
+        # Schedule next check (will be called from the main update loop)
+        # Don't use self.after here to avoid recursion
+
+    def show_reconnection_success_notification(self):
+        """Show success notification when cameras are reconnected"""
+        try:
+            from tkinter import messagebox
+            
+            success_message = (
+                "🎉 CAMERAS RECONNECTED SUCCESSFULLY! 🎉\n\n"
+                "Both cameras have been automatically reconnected and are ready for operation.\n\n"
+                "✅ Top camera: Connected and ready\n"
+                "✅ Bottom camera: Connected and ready\n"
+                "✅ System status: Fully operational\n\n"
+                "The system is now ready to resume normal operations.\n"
+                "You can continue with wood inspection and grading."
+            )
+            
+            messagebox.showinfo("🎉 Camera Reconnection Successful", success_message)
+            
+            # Update status display 
+            self.update_status_text("Status: Cameras ready - reconnection successful", STATUS_READY_COLOR)
+            
+            # Show desktop notification if possible
+            self.show_desktop_notification("🎉 Cameras Reconnected", "Both cameras successfully reconnected and ready", "INFO")
+            
+            print("🎉 Success notification shown to user")
+            
+        except Exception as e:
+            print(f"Error showing reconnection success notification: {e}")
+
+    def manual_camera_reconnection(self):
+        """Manually trigger camera reconnection attempt"""
+        print("🔄 Manual camera reconnection triggered by user")
+        
+        # Reset reconnection attempts to allow immediate attempt
+        self.camera_reconnection_attempts = 0
+        self.camera_check_interval = 10.0  # Reset to normal interval
+        
+        # Force immediate reconnection attempt
+        success = self.recover_camera_connection()
+        
+        if success:
+            print("✅ Manual camera reconnection successful!")
+            self.update_status_text("Status: Cameras manually reconnected", STATUS_READY_COLOR)
+            self.show_error_alert(
+                "Camera Reconnected", 
+                "Cameras have been manually reconnected successfully and are ready for operation.",
+                "info"
+            )
+            return True
+        else:
+            print("❌ Manual camera reconnection failed")
+            self.show_error_alert(
+                "Camera Reconnection Failed", 
+                "Manual camera reconnection failed. Please check camera connections and try again.",
+                "warning"
+            )
+            return False
+    
+    def recover_arduino_connection(self):
+        """Attempt to recover Arduino connection with enhanced voltage drop handling"""
+        try:
+            print("Attempting Arduino reconnection...")
+            # Close existing connection
+            if hasattr(self, 'ser') and self.ser and self.ser.is_open:
+                self.ser.close()
+            
+            # Extended delay for voltage drop recovery
+            print("🔋 Extended power recovery delay for voltage drop scenarios")
+            time.sleep(2.0)  # Extended delay for voltage stabilization
+            
+            # Attempt reconnection using existing setup
+            self.setup_arduino()
+            
+            # Test connection with a safe command
+            if hasattr(self, 'ser') and self.ser and self.ser.is_open:
+                # Send a test command to verify connection stability
+                try:
+                    test_command = "STATUS_REQUEST"
+                    self.ser.write(test_command.encode('utf-8'))
+                    self.ser.flush()
+                    time.sleep(0.5)  # Wait for response
+                    
+                    self.clear_error("ARDUINO_DISCONNECTED")
+                    print("✅ Arduino connection recovered and tested successfully")
+                    return True
+                except Exception as test_error:
+                    print(f"⚠️ Arduino reconnected but test command failed: {test_error}")
+                    return False
+            else:
+                print("❌ Arduino reconnection failed")
+                return False
+        except Exception as e:
+            print(f"Error in recover_arduino_connection: {e}")
+            return False
+    
+    def recover_system_resources(self):
+        """Attempt to recover system resources"""
+        try:
+            print("Attempting system resource recovery...")
+            # Use existing cleanup method
+            self.cleanup_memory_resources()
+            
+            # Additional resource cleanup
+            import gc
+            gc.collect()
+            
+            # Check if recovery was successful (simplified check)
+            self.clear_error("RESOURCE_EXHAUSTION")
+            print("System resource recovery completed")
+            return True
+        except Exception as e:
+            print(f"Error in recover_system_resources: {e}")
+            return False
+    
+    def recover_ai_model(self):
+        """Attempt to recover AI model"""
+        try:
+            print("Attempting AI model recovery...")
+            # Reload DeGirum model
+            if hasattr(self, 'load_models_on_startup'):
+                self.load_models_on_startup()
+                self.clear_error("MODEL_LOADING_FAILED")
+                print("AI model recovery completed")
+                return True
+            else:
+                print("AI model recovery failed - no model loading method")
+                return False
+        except Exception as e:
+            print(f"Error in recover_ai_model: {e}")
+            return False
+    
+    def recover_detection_issues(self, error_type):
+        """Attempt to recover from detection-related issues"""
+        try:
+            print(f"Attempting recovery for detection issue: {error_type}")
+            
+            # Wait a short time for conditions to improve
+            error_config = self.ERROR_TYPES.get(error_type, {})
+            timeout = error_config.get("timeout", 3.0)
+            time.sleep(min(timeout, 2.0))  # Cap wait time
+            
+            # Clear the error to allow retry
+            self.clear_error(error_type)
+            print(f"Detection issue recovery completed for {error_type}")
+            return True
+            
+        except Exception as e:
+            print(f"Error in recover_detection_issues: {e}")
+            return False
+    
+    def check_error_recovery_timeout(self):
+        """Check if error recovery has timed out and escalate if needed"""
+        try:
+            current_time = time.time()
+            
+            for error_type in list(self.error_state["active_errors"]):
+                error_config = self.ERROR_TYPES.get(error_type, {})
+                timeout = error_config.get("timeout", 10.0)
+                
+                if error_type in self.error_state["last_error_time"]:
+                    time_since_error = current_time - self.error_state["last_error_time"][error_type]
+                    
+                    if time_since_error > timeout:
+                        print(f"Error recovery timeout for {error_type} ({time_since_error:.1f}s > {timeout}s)")
+                        self.handle_critical_error(error_type, "Recovery timeout exceeded")
+                        
+        except Exception as e:
+            print(f"Error in check_error_recovery_timeout: {e}")
+    
+    def update_error_status_display(self):
+        """Update UI to show current error status"""
+        try:
+            if self.error_state["active_errors"]:
+                error_count = len(self.error_state["active_errors"])
+                error_list = ", ".join(list(self.error_state["active_errors"])[:3])  # Show first 3
+                if len(self.error_state["active_errors"]) > 3:
+                    error_list += "..."
+                
+                if self.error_state["system_paused"]:
+                    status_text = f"SYSTEM PAUSED - {error_count} Error(s): {error_list}"
+                    color = "red"
+                elif self.error_state["manual_inspection_required"]:
+                    status_text = f"MANUAL INSPECTION REQUIRED - {error_count} Error(s): {error_list}"
+                    color = "orange"
+                else:
+                    status_text = f"WARNING - {error_count} Error(s): {error_list}"
+                    color = "yellow"
+                    
+                self.update_status_text(status_text, color)
+            else:
+                # No errors - show normal status
+                if hasattr(self, 'update_detection_status_display'):
+                    self.update_detection_status_display()
+                    
+        except Exception as e:
+            print(f"Error in update_error_status_display: {e}")
+
+    def clear_all_errors(self):
+        """Clear all active errors and reset error state"""
+        try:
+            # Store if system was paused before clearing
+            was_paused = self.error_state["system_paused"]
+            
+            self.error_state["active_errors"].clear()
+            self.error_state["system_paused"] = False
+            self.error_state["manual_inspection_required"] = False
+            self.error_state["error_recovery_attempts"].clear()
+            
+            # If system was paused and we're in SCAN_PHASE, resume operations
+            if was_paused and self.current_mode == "SCAN_PHASE":
+                self.send_arduino_command("RESUME_SYSTEM")
+                print("All errors cleared - resuming SCAN_PHASE operations")
+            else:
+                print("All errors cleared - system ready")
+                
+            self.update_error_status_display()
+        except Exception as e:
+            print(f"Error in clear_all_errors: {e}")
+
+    def get_system_health_status(self):
+        """Get current system health status"""
+        try:
+            health_status = {
+                "overall_status": "HEALTHY",
+                "active_errors": len(self.error_state["active_errors"]),
+                "system_paused": self.error_state["system_paused"],
+                "manual_inspection_required": self.error_state["manual_inspection_required"],
+                "error_details": {}
+            }
+            
+            # Check for any critical conditions
+            if self.error_state["system_paused"]:
+                health_status["overall_status"] = "PAUSED"
+            elif self.error_state["manual_inspection_required"]:
+                health_status["overall_status"] = "MANUAL_INSPECTION"
+            elif self.error_state["active_errors"]:
+                health_status["overall_status"] = "WARNING"
+            
+            # Add error details
+            for error_type in self.error_state["active_errors"]:
+                error_config = self.ERROR_TYPES.get(error_type, {})
+                health_status["error_details"][error_type] = {
+                    "name": error_config.get("name", error_type),
+                    "severity": error_config.get("severity", "UNKNOWN"),
+                    "count": self.error_state["error_count"].get(error_type, 0),
+                    "recovery_attempts": self.error_state["error_recovery_attempts"].get(error_type, 0)
+                }
+            
+            return health_status
+            
+        except Exception as e:
+            print(f"Error in get_system_health_status: {e}")
+            return {"overall_status": "ERROR", "error": str(e)}
+
+    # ==================== END ERROR MANAGEMENT SYSTEM ====================
+
+    # ==================== DETECTION FAILURE HANDLING ====================
+    
+    def check_wood_detection_status(self, frame, camera_name):
+        """Check for wood detection issues and register errors if needed"""
+        try:
+            # Check if we should be detecting wood (conveyor is running)
+            if self.current_mode in ["CONTINUOUS", "TRIGGER", "SCAN_PHASE"]:
+                
+                # Check wood detection results
+                wood_result = self.wood_detection_results.get(camera_name)
+                
+                if wood_result is None or not wood_result.get('wood_detected', False):
+                    # Check if we're waiting too long for wood detection
+                    current_time = time.time()
+                    
+                    if self.detection_monitoring["wood_detection_start_time"] is None:
+                        self.detection_monitoring["wood_detection_start_time"] = current_time
+                    
+                    wait_time = current_time - self.detection_monitoring["wood_detection_start_time"]
+                    
+                    if wait_time > self.DETECTION_THRESHOLDS["WOOD_DETECTION_TIMEOUT"]:
+                        self.register_error("NO_WOOD_DETECTED", 
+                                          f"No wood detected for {wait_time:.1f} seconds")
+                        # Reset timer after registering error
+                        self.detection_monitoring["wood_detection_start_time"] = current_time
+                else:
+                    # Wood detected successfully
+                    self.detection_monitoring["wood_detection_start_time"] = None
+                    self.clear_error("NO_WOOD_DETECTED")
+            else:
+                # Not in detection mode, clear wood detection errors
+                self.detection_monitoring["wood_detection_start_time"] = None
+                self.clear_error("NO_WOOD_DETECTED")
+                
+        except Exception as e:
+            print(f"Error in check_wood_detection_status: {e}")
+    
+    def check_plank_alignment(self, detections, frame, camera_name):
+        """Check if wood plank is properly aligned based on detection positions"""
+        try:
+            if not detections:
+                return
+                
+            frame_height, frame_width = frame.shape[:2]
+            frame_center_x = frame_width // 2
+            frame_center_y = frame_height // 2
+            
+            # Calculate detection positions relative to frame center
+            detection_centers = []
+            for bbox, defect_type, size_mm, confidence in detections:
+                x1, y1, x2, y2 = bbox
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
+                detection_centers.append((center_x, center_y))
+            
+            # Check for significant misalignment
+            misalignment_detected = False
+            
+            for center_x, center_y in detection_centers:
+                # Check horizontal alignment (wood should be centered)
+                horizontal_offset = abs(center_x - frame_center_x)
+                vertical_offset = abs(center_y - frame_center_y)
+                
+                if (horizontal_offset > self.DETECTION_THRESHOLDS["ALIGNMENT_TOLERANCE"] or
+                    vertical_offset > self.DETECTION_THRESHOLDS["ALIGNMENT_TOLERANCE"]):
+                    misalignment_detected = True
+                    break
+            
+            if misalignment_detected:
+                self.detection_monitoring["alignment_failures"] += 1
+            else:
+                self.detection_monitoring["alignment_failures"] = 0
+                
+        except Exception as e:
+            print(f"Error in check_plank_alignment: {e}")
+    
+    def check_detection_quality(self, detections, frame_area):
+        """Check overall detection quality and flag issues"""
+        try:
+            if not detections:
+                return True  # No detections is valid
+            
+            # Check for reasonable detection density
+            total_detection_area = 0
+            for bbox, defect_type, size_mm, confidence in detections:
+                x1, y1, x2, y2 = bbox
+                detection_area = (x2 - x1) * (y2 - y1)
+                total_detection_area += detection_area
+            
+            # If detections cover more than 50% of frame, might be an issue
+            detection_ratio = total_detection_area / frame_area
+            if detection_ratio > 0.5:
+                print(f"Warning: High detection density ({detection_ratio:.1%} of frame)")
+                return False
+            
+            # Check for minimum size detections
+            small_detections = 0
+            for bbox, defect_type, size_mm, confidence in detections:
+                x1, y1, x2, y2 = bbox
+                detection_area = (x2 - x1) * (y2 - y1)
+                if detection_area < 100:  # Very small detection
+                    small_detections += 1
+            
+            if small_detections > len(detections) * 0.7:  # More than 70% small detections
+                print(f"Warning: High number of small detections ({small_detections}/{len(detections)})")
+                return False
+                
+            return True
+            
+        except Exception as e:
+            print(f"Error in check_detection_quality: {e}")
+            return True
+
+    def monitor_detection_performance(self):
+        """Monitor overall detection performance and register issues"""
+        try:
+            # This method can be called periodically to check detection performance
+            current_time = time.time()
+            
+            # Check error recovery timeouts
+            self.check_error_recovery_timeout()
+            
+            # Reset detection monitoring counters periodically
+            if hasattr(self, '_last_monitoring_reset'):
+                if current_time - self._last_monitoring_reset > 60:  # Reset every minute
+                    self.detection_monitoring["alignment_failures"] = 0
+                    self._last_monitoring_reset = current_time
+            else:
+                self._last_monitoring_reset = current_time
+                
+        except Exception as e:
+            print(f"Error in monitor_detection_performance: {e}")
+
+    # ==================== END DETECTION FAILURE HANDLING ====================
+
+    # ==================== SYSTEM HEALTH MONITORING ====================
+    
+    def start_health_monitoring(self):
+        """Start continuous system health monitoring"""
+        try:
+            print("Starting system health monitoring...")
+            # Initialize monitoring timer
+            self.schedule_health_check()
+            
+        except Exception as e:
+            print(f"Error starting health monitoring: {e}")
+    
+    def schedule_health_check(self):
+        """Schedule the next health check"""
+        try:
+            # Perform health check
+            self.perform_health_check()
+            
+            # Schedule next check in 5 seconds
+            self.after(5000, self.schedule_health_check)
+            
+        except Exception as e:
+            print(f"Error in schedule_health_check: {e}")
+            # Try to reschedule even if there was an error
+            self.after(10000, self.schedule_health_check)
+    
+    def perform_health_check(self):
+        """Perform comprehensive system health check"""
+        try:
+            # Monitor camera health
+            self.monitor_camera_health()
+            
+            # Monitor Arduino health
+            self.monitor_arduino_health()
+            
+            # Monitor resource usage
+            self.monitor_resource_usage()
+            
+            # Monitor AI model health
+            self.monitor_ai_model_health()
+            
+            # Monitor detection performance
+            self.monitor_detection_performance()
+            
+            # Check for any error recovery timeouts
+            self.check_error_recovery_timeout()
+            
+        except Exception as e:
+            print(f"Error in perform_health_check: {e}")
+    
+    def monitor_camera_health(self):
+        """Monitor camera connection and performance"""
+        try:
+            # Skip health check if currently recovering cameras to prevent race conditions
+            if hasattr(self, '_recovering_cameras') and self._recovering_cameras:
+                return
+                
+            # Use existing check_camera_status method
+            camera_status = self.camera_handler.check_camera_status()
+            
+            if not camera_status['both_ok']:
+                # Handle camera disconnection errors with better logging
+                error_details = "; ".join(camera_status['camera_errors'])
+                print(f"🚨 Camera health check detected issues: {error_details}")
+                print(f"   Status: Top={'✅ OK' if camera_status['top_ok'] else '❌ FAIL'}, Bottom={'✅ OK' if camera_status['bottom_ok'] else '❌ FAIL'}")
+                
+                # Special handling for SCAN_PHASE disconnection
+                if self.current_mode == "SCAN_PHASE":
+                    print("🚨 CRITICAL: Camera disconnection during SCAN_PHASE")
+                    enhanced_details = f"{error_details}. System will attempt automatic reconnection in the background."
+                    self.register_error("CAMERA_DISCONNECTED", enhanced_details)
+                    # The error handler will show the alert and switch to IDLE
+                else:
+                    enhanced_details = f"{error_details}. System will attempt automatic reconnection in the background."
+                    self.register_error("CAMERA_DISCONNECTED", enhanced_details)
+                
+                # If we're in an active mode, switch to IDLE to prevent unsafe operations
+                if self.current_mode in ["CONTINUOUS", "TRIGGER", "SCAN_PHASE"]:
+                    print("Switching to IDLE mode due to camera disconnection")
+                    self.set_idle_mode()
+            else:
+                # Clear camera disconnection error if both cameras are working AND error is active
+                if "CAMERA_DISCONNECTED" in self.error_state["active_errors"]:
+                    print("✅ Camera health check: Both cameras working, clearing disconnection error")
+                    self.clear_error("CAMERA_DISCONNECTED")
+                
+            # Log status periodically (not every check to avoid spam) - only when there are issues
+            if not camera_status['both_ok']:
+                top_status = '✅ OK' if camera_status['top_ok'] else '❌ FAIL'
+                bottom_status = '✅ OK' if camera_status['bottom_ok'] else '❌ FAIL'
+                print(f"📊 Camera status check: Top={top_status}, Bottom={bottom_status}")
+            
+            # Additional camera health checks
+            if hasattr(self, 'cap_top') and self.cap_top:
+                # Check frame rate and quality periodically
+                if hasattr(self, '_camera_frame_count'):
+                    self._camera_frame_count += 1
+                else:
+                    self._camera_frame_count = 1
+                    
+                # Every 100 frames, check frame rate
+                if self._camera_frame_count % 100 == 0:
+                    current_time = time.time()
+                    if hasattr(self, '_camera_health_last_check'):
+                        time_diff = current_time - self._camera_health_last_check
+                        frame_rate = 100 / time_diff
+                        if frame_rate < 5:  # Less than 5 FPS
+                            print(f"Warning: Low camera frame rate: {frame_rate:.1f} FPS")
+                    self._camera_health_last_check = current_time
+                    
+        except Exception as e:
+            print(f"Error in monitor_camera_health: {e}")
+    
+    def monitor_arduino_health(self):
+        """Monitor Arduino connection and communication"""
+        try:
+            if hasattr(self, 'ser') and self.ser:
+                # Check if serial connection is still open
+                if not self.ser.is_open:
+                    self.register_error("ARDUINO_DISCONNECTED", "Arduino serial connection closed")
+                else:
+                    # Clear Arduino disconnection error if connection is good AND error is active
+                    if "ARDUINO_DISCONNECTED" in self.error_state["active_errors"]:
+                        self.clear_error("ARDUINO_DISCONNECTED")
+                    
+                    # Additional health checks could be added here
+                    # For example, sending a ping command and waiting for response
+                    
+            else:
+                self.register_error("ARDUINO_DISCONNECTED", "Arduino serial object not available")
+                
+        except Exception as e:
+            print(f"Error in monitor_arduino_health: {e}")
+            self.register_error("ARDUINO_DISCONNECTED", f"Arduino health check failed: {str(e)}")
+    
+    def monitor_resource_usage(self):
+        """Monitor system resource usage"""
+        try:
+            import psutil
+            import gc
+            
+            # Check memory usage
+            memory_info = psutil.virtual_memory()
+            memory_percent = memory_info.percent
+            
+            if memory_percent > 90:
+                self.register_error("RESOURCE_EXHAUSTION", f"High memory usage: {memory_percent:.1f}%")
+            elif memory_percent > 80:
+                print(f"Warning: High memory usage: {memory_percent:.1f}%")
+                # Trigger memory cleanup
+                self.cleanup_memory_resources()
+            else:
+                # Clear resource exhaustion error if memory usage is acceptable AND error is active
+                if "RESOURCE_EXHAUSTION" in self.error_state["active_errors"]:
+                    self.clear_error("RESOURCE_EXHAUSTION")
+            
+            # Check CPU usage
+            cpu_percent = psutil.cpu_percent(interval=1)
+            if cpu_percent > 95:
+                print(f"Warning: High CPU usage: {cpu_percent:.1f}%")
+            
+            # Check available disk space
+            disk_info = psutil.disk_usage('/')
+            disk_percent = (disk_info.used / disk_info.total) * 100
+            if disk_percent > 95:
+                print(f"Warning: Low disk space: {disk_percent:.1f}% used")
+            
+            # Trigger garbage collection if memory usage is high
+            if memory_percent > 70:
+                gc.collect()
+                
+        except ImportError:
+            # psutil not available, use basic checks
+            self.monitor_basic_resources()
+        except Exception as e:
+            print(f"Error in monitor_resource_usage: {e}")
+    
+    def monitor_basic_resources(self):
+        """Basic resource monitoring when psutil is not available"""
+        try:
+            import gc
+            
+            # Get object count before and after garbage collection
+            initial_objects = len(gc.get_objects())
+            gc.collect()
+            final_objects = len(gc.get_objects())
+            
+            if initial_objects > 50000:  # Arbitrary threshold
+                print(f"High object count: {initial_objects} objects in memory")
+                
+        except Exception as e:
+            print(f"Error in monitor_basic_resources: {e}")
+    
+    def monitor_ai_model_health(self):
+        """Monitor AI model status and performance"""
+        try:
+            if self.model is None:
+                self.register_error("MODEL_LOADING_FAILED", "DeGirum model is not loaded")
+            else:
+                # Clear model loading error if model is loaded AND error is active
+                if "MODEL_LOADING_FAILED" in self.error_state["active_errors"]:
+                    self.clear_error("MODEL_LOADING_FAILED")
+                
+                # Additional model health checks could be added here
+                # For example, testing inference with a dummy frame
+                
+        except Exception as e:
+            print(f"Error in monitor_ai_model_health: {e}")
+            self.register_error("MODEL_LOADING_FAILED", f"AI model health check failed: {str(e)}")
+    
+    def get_detailed_health_report(self):
+        """Get detailed system health report"""
+        try:
+            health_report = {
+                "timestamp": time.time(),
+                "system_status": self.get_system_health_status(),
+                "active_modes": self.current_mode,
+                "cameras": {
+                    "top_connected": hasattr(self, 'cap_top') and self.cap_top and self.cap_top.isOpened(),
+                    "bottom_connected": hasattr(self, 'cap_bottom') and self.cap_bottom and self.cap_bottom.isOpened()
+                },
+                "arduino": {
+                    "connected": hasattr(self, 'ser') and self.ser and self.ser.is_open
+                },
+                "ai_model": {
+                    "loaded": self.model is not None
+                },
+                "detection_monitoring": self.detection_monitoring.copy(),
+                "error_state": {
+                    "active_errors": list(self.error_state["active_errors"]),
+                    "error_counts": self.error_state["error_count"].copy(),
+                    "system_paused": self.error_state["system_paused"],
+                    "manual_inspection_required": self.error_state["manual_inspection_required"]
+                }
+            }
+            
+            # Add resource information if available
+            try:
+                import psutil
+                health_report["resources"] = {
+                    "memory_percent": psutil.virtual_memory().percent,
+                    "cpu_percent": psutil.cpu_percent(),
+                    "disk_percent": (psutil.disk_usage('/').used / psutil.disk_usage('/').total) * 100
+                }
+            except ImportError:
+                health_report["resources"] = {"status": "monitoring_unavailable"}
+            
+            return health_report
+            
+        except Exception as e:
+            print(f"Error generating health report: {e}")
+            return {"error": str(e), "timestamp": time.time()}
+
+    # ==================== END SYSTEM HEALTH MONITORING ====================
+
+    # ==================== OPERATOR ALERT SYSTEM ====================
+    
+    def show_error_alert(self, error_type, message, severity="WARNING"):
+        """Show visual error alert to operator"""
+        try:
+            from tkinter import messagebox
+            
+            error_config = self.ERROR_TYPES.get(error_type, {})
+            error_name = error_config.get("name", error_type)
+            
+            # Determine icon and urgency based on severity
+            if severity == "CRITICAL":
+                icon = "error"
+                title = "CRITICAL SYSTEM ERROR"
+                color = "red"
+            elif severity == "ERROR":
+                icon = "warning"
+                title = "SYSTEM ERROR"
+                color = "orange"
+            else:
+                icon = "warning"
+                title = "SYSTEM WARNING"
+                color = "yellow"
+            
+            # Special handling for disconnection during SCAN_PHASE
+            if error_type in ["CAMERA_DISCONNECTED", "ARDUINO_DISCONNECTED"] and self.current_mode == "SCAN_PHASE":
+                title = "🚨 SCAN PHASE INTERRUPTED"
+                
+                if error_type == "CAMERA_DISCONNECTED":
+                    scan_message = (
+                        "CAMERA DISCONNECTION DETECTED!\n\n"
+                        "The scanning process has been STOPPED for safety.\n"
+                        "Current scan data may be lost.\n\n"
+                        "Actions taken:\n"
+                        "• Conveyor stopped immediately\n"
+                        "• System switched to IDLE mode\n"
+                        "• Scan session data cleared\n"
+                        "• Automatic reconnection started\n\n"
+                        "System will automatically attempt to reconnect cameras.\n"
+                        "You will be notified when cameras are ready.\n\n"
+                        "To resume:\n"
+                        "1. Wait for automatic reconnection (or reconnect manually)\n"
+                        "2. Restart scan phase\n"
+                        "3. Re-scan the wood piece"
+                    )
+                elif error_type == "ARDUINO_DISCONNECTED":
+                    scan_message = (
+                        "ARDUINO DISCONNECTION DETECTED!\n\n"
+                        "The scanning process has been STOPPED for safety.\n"
+                        "Conveyor control is lost.\n\n"
+                        "Actions taken:\n"
+                        "• System switched to IDLE mode\n"
+                        "• Scan session data cleared\n\n"
+                        "To resume:\n"
+                        "1. Reconnect Arduino\n"
+                        "2. Restart scan phase\n"
+                        "3. Re-scan the wood piece"
+                    )
+                message = scan_message
+            
+            # Show popup alert
+            if error_type == "CAMERA_DISCONNECTED" and self.current_mode != "SCAN_PHASE":
+                # Enhanced message for camera disconnection outside scan phase
+                alert_message = (
+                    f"{error_name}\n\n{message}\n\n"
+                    "The system will automatically attempt to reconnect cameras in the background.\n"
+                    "You will be notified when cameras are ready.\n\n"
+                    "Please check camera connections and ensure they are properly plugged in."
+                )
+            else:
+                alert_message = f"{error_name}\n\n{message}\n\nPlease check system status and take appropriate action."
+            
+            if severity == "CRITICAL":
+                messagebox.showerror(title, alert_message)
+            else:
+                messagebox.showwarning(title, alert_message)
+                
+            # Update status display with error information
+            self.update_status_text(f"{title}: {error_name}", color)
+            
+            # Play audio alert if available
+            self.play_audio_alert(severity)
+            
+            # Show desktop notification if possible
+            self.show_desktop_notification(title, error_name, severity)
+            
+        except Exception as e:
+            print(f"Error showing alert: {e}")
+    
+    def show_desktop_notification(self, title, message, severity="WARNING"):
+        """Show desktop notification for system events"""
+        try:
+            import subprocess
+            import platform
+            
+            system = platform.system()
+            
+            if system == "Linux":
+                # Use notify-send for Linux desktop notifications
+                if severity == "CRITICAL":
+                    urgency = "critical"
+                    icon = "error"
+                elif severity == "INFO":
+                    urgency = "normal"
+                    icon = "info"
+                else:
+                    urgency = "normal"
+                    icon = "warning"
+                
+                subprocess.run([
+                    "notify-send", 
+                    "--urgency", urgency,
+                    "--icon", icon,
+                    "--app-name", "Wood Sorting System",
+                    title, 
+                    message
+                ], capture_output=True, timeout=5)
+                
+                print(f"Desktop notification sent: {title}")
+                
+        except Exception as e:
+            print(f"Could not send desktop notification: {e}")
+    
+    def play_audio_alert(self, severity="WARNING"):
+        """Play audio alert for error conditions"""
+        try:
+            # Different sounds for different severities
+            if severity == "CRITICAL":
+                # Play urgent beep pattern
+                self.play_system_beep(pattern="urgent")
+            elif severity == "ERROR":
+                # Play warning beep pattern
+                self.play_system_beep(pattern="warning")
+            else:
+                # Play simple beep
+                self.play_system_beep(pattern="simple")
+                
+        except Exception as e:
+            print(f"Error playing audio alert: {e}")
+    
+    def play_system_beep(self, pattern="simple"):
+        """Play system beep with different patterns"""
+        try:
+            import subprocess
+            import platform
+            
+            system = platform.system()
+            
+            if pattern == "urgent":
+                # Urgent: 3 quick beeps
+                for _ in range(3):
+                    if system == "Linux":
+                        subprocess.run(["pactl", "upload-sample", "/usr/share/sounds/alsa/Front_Left.wav", "beep"], 
+                                     capture_output=True, timeout=1)
+                        subprocess.run(["pactl", "play-sample", "beep"], capture_output=True, timeout=1)
+                    time.sleep(0.2)
+            elif pattern == "warning":
+                # Warning: 2 medium beeps
+                for _ in range(2):
+                    if system == "Linux":
+                        subprocess.run(["pactl", "upload-sample", "/usr/share/sounds/alsa/Front_Right.wav", "warning"], 
+                                     capture_output=True, timeout=1)
+                        subprocess.run(["pactl", "play-sample", "warning"], capture_output=True, timeout=1)
+                    time.sleep(0.5)
+            else:
+                # Simple: 1 beep
+                if system == "Linux":
+                    subprocess.run(["pactl", "upload-sample", "/usr/share/sounds/alsa/Front_Center.wav", "simple"], 
+                                 capture_output=True, timeout=1)
+                    subprocess.run(["pactl", "play-sample", "simple"], capture_output=True, timeout=1)
+                    
+        except Exception as e:
+            # Fallback to basic system bell
+            try:
+                print("\a")  # ASCII bell character
+            except:
+                pass
+            print(f"Error playing system beep: {e}")
+    
+    def show_manual_inspection_dialog(self, error_details):
+        """Show dialog for manual inspection routing"""
+        try:
+            from tkinter import messagebox, simpledialog
+            
+            # Show manual inspection required dialog
+            message = (
+                "Manual Inspection Required\n\n"
+                f"Error Details: {error_details}\n\n"
+                "The system has detected issues that require manual inspection.\n"
+                "Please inspect the wood piece and choose an action:\n\n"
+                "• ACCEPT - Continue processing with manual override\n"
+                "• REJECT - Route to reject bin\n"
+                "• RETRY - Attempt automatic processing again\n"
+                "• PAUSE - Pause system for maintenance"
+            )
+            
+            # Custom dialog with buttons
+            result = messagebox.askyesnocancel(
+                "Manual Inspection Required", 
+                message + "\n\nYes=Accept, No=Reject, Cancel=Pause"
+            )
+            
+            if result is True:
+                action = "ACCEPT"
+            elif result is False:
+                action = "REJECT"
+            else:
+                action = "PAUSE"
+                
+            # Handle the selected action
+            self.handle_manual_inspection_action(action, error_details)
+            
+            return action
+            
+        except Exception as e:
+            print(f"Error showing manual inspection dialog: {e}")
+            return "PAUSE"  # Default to pause on error
+    
+    def handle_manual_inspection_action(self, action, error_details):
+        """Handle the action selected during manual inspection"""
+        try:
+            print(f"Manual inspection action: {action} for error: {error_details}")
+            
+            if action == "ACCEPT":
+                # Clear errors and continue processing
+                self.clear_all_errors()
+                # Notify Arduino that manual inspection is complete
+                self.send_arduino_command("MANUAL_INSPECTION_COMPLETE")
+                print("Manual override: Accepting piece and continuing processing")
+                
+            elif action == "REJECT":
+                # Send reject command to Arduino
+                self.send_arduino_command('R')  # Reject command for Arduino
+                self.clear_all_errors()
+                print("Manual override: Rejecting piece")
+                
+            elif action == "RETRY":
+                # Clear errors and retry detection
+                self.clear_all_errors()
+                # Resume system operations
+                self.send_arduino_command("RESUME_SYSTEM")
+                print("Manual override: Retrying automatic processing")
+                
+            elif action == "PAUSE":
+                # Keep system paused and switch to IDLE mode
+                self.send_arduino_command("PAUSE_SYSTEM")
+                self.set_idle_mode()
+                print("Manual override: System paused for maintenance")
+                
+            # Update operator about the action taken
+            self.update_status_text(f"Manual Inspection: {action} completed", "blue")
+            
+        except Exception as e:
+            print(f"Error handling manual inspection action: {e}")
+    
+    def create_error_status_panel(self, parent_frame):
+        """Create a visual error status panel in the UI"""
+        try:
+            # Create error status frame
+            error_frame = tk.Frame(parent_frame, relief=tk.RAISED, bd=2)
+            error_frame.pack(fill=tk.X, padx=5, pady=2)
+            
+            # Error indicator light
+            self.error_indicator = tk.Label(error_frame, text="●", font=("Arial", 16), fg="green")
+            self.error_indicator.pack(side=tk.LEFT, padx=5)
+            
+            # Error status text
+            self.error_status_text = tk.Label(error_frame, text="System Healthy", font=("Arial", 10))
+            self.error_status_text.pack(side=tk.LEFT, padx=5)
+            
+            # Manual inspection button (initially hidden)
+            self.manual_inspection_btn = tk.Button(
+                error_frame, 
+                text="Manual Inspection", 
+                command=self.open_manual_inspection_dialog,
+                bg="orange", 
+                fg="white",
+                font=("Arial", 10, "bold")
+            )
+            # Don't pack initially - will be shown when needed
+            
+            # Clear all errors button
+            self.clear_errors_btn = tk.Button(
+                error_frame,
+                text="Clear Errors",
+                command=self.clear_all_errors_ui,
+                bg="red",
+                fg="white",
+                font=("Arial", 8)
+            )
+            # Don't pack initially - will be shown when needed
+            
+            return error_frame
+            
+        except Exception as e:
+            print(f"Error creating error status panel: {e}")
+            return None
+    
+    def update_error_status_panel(self):
+        """Update the visual error status panel"""
+        try:
+            if not hasattr(self, 'error_indicator'):
+                return
+                
+            if self.error_state["active_errors"]:
+                # Has errors - update indicator
+                error_count = len(self.error_state["active_errors"])
+                
+                if self.error_state["system_paused"]:
+                    self.error_indicator.config(fg="red", text="●")
+                    self.error_status_text.config(text=f"SYSTEM PAUSED - {error_count} Error(s)")
+                elif self.error_state["manual_inspection_required"]:
+                    self.error_indicator.config(fg="orange", text="●")
+                    self.error_status_text.config(text=f"MANUAL INSPECTION - {error_count} Error(s)")
+                    # Show manual inspection button
+                    if hasattr(self, 'manual_inspection_btn'):
+                        self.manual_inspection_btn.pack(side=tk.RIGHT, padx=5)
+                else:
+                    self.error_indicator.config(fg="yellow", text="●")
+                    self.error_status_text.config(text=f"WARNING - {error_count} Error(s)")
+                
+                # Show clear errors button
+                if hasattr(self, 'clear_errors_btn'):
+                    self.clear_errors_btn.pack(side=tk.RIGHT, padx=5)
+                    
+            else:
+                # No errors - healthy status
+                self.error_indicator.config(fg="green", text="●")
+                self.error_status_text.config(text="System Healthy")
+                
+                # Hide action buttons
+                if hasattr(self, 'manual_inspection_btn'):
+                    self.manual_inspection_btn.pack_forget()
+                if hasattr(self, 'clear_errors_btn'):
+                    self.clear_errors_btn.pack_forget()
+                    
+        except Exception as e:
+            print(f"Error updating error status panel: {e}")
+    
+    def open_manual_inspection_dialog(self):
+        """Open manual inspection dialog from UI button"""
+        try:
+            active_errors = list(self.error_state["active_errors"])
+            error_details = ", ".join(active_errors) if active_errors else "System requires manual inspection"
+            self.show_manual_inspection_dialog(error_details)
+            
+        except Exception as e:
+            print(f"Error opening manual inspection dialog: {e}")
+    
+    def clear_all_errors_ui(self):
+        """Clear all errors from UI button"""
+        try:
+            self.clear_all_errors()
+            self.update_error_status_panel()
+            
+        except Exception as e:
+            print(f"Error clearing errors from UI: {e}")
+
+    # ==================== END OPERATOR ALERT SYSTEM ====================
+
     def on_closing(self):
         print("Releasing resources...")
         
         # Set a flag to indicate shutdown is in progress
         self._shutting_down = True
+        
+        # Stop camera monitoring
+        self.camera_monitor_active = False
         
         # Clean up memory resources first to prevent X11 errors
         self.cleanup_memory_resources()
