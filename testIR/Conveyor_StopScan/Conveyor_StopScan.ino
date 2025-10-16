@@ -101,8 +101,11 @@ void setup() {
 }
 
 void loop() {
-  // Check for system errors first
-  if (systemPaused) {
+  // CRITICAL: Process serial commands FIRST to handle CLEAR_ERROR immediately
+  checkSerialCommands();
+  
+  // Check for system errors AFTER processing commands
+  if (systemPaused && strlen(lastErrorType) > 0) {
     handleSystemPause();
     return; // Don't continue normal operations while paused
   }
@@ -113,7 +116,6 @@ void loop() {
     handleStepper();
 
   checkIrSensor();
-  checkSerialCommands();
 }
 
 // ---------------- Stepper Handler ----------------
@@ -411,6 +413,21 @@ void processCommand(char* command, int len) {
 
 // ---------------- Error Handling Functions ----------------
 void handleSystemPause() {
+  // FIRST: Check if system is not actually paused anymore
+  if (!systemPaused) {
+    return; // Exit immediately if pause state has been cleared
+  }
+  
+  // SECOND: Check if error type has been cleared (indicates cleared error)
+  if (strlen(lastErrorType) == 0) {
+    // Error has been cleared, force clear pause state
+    systemPaused = false;
+    manualInspectionRequired = false;
+    errorRecoveryActive = false;
+    Serial.println("STATUS_CLEARED: Error state cleared, resuming normal operations");
+    return;
+  }
+  
   // Stop all motion during system pause
   digitalWrite(STEPPER_ENA_PIN, HIGH); // Disable stepper
   
@@ -420,10 +437,23 @@ void handleSystemPause() {
     currentMode = IDLE;
     systemPaused = false;
     manualInspectionRequired = false;
+    strncpy(lastErrorType, "", sizeof(lastErrorType) - 1);
+    lastErrorType[0] = '\0'; // Clear error type
+    return;
   }
   
-  // Send periodic status updates
+  // Send periodic status updates (only if we still have an active error)
   static unsigned long lastStatusUpdate = 0;
+  
+  // CRITICAL FIX: Reset timer when error state changes
+  static char lastReportedError[20] = "";
+  if (strcmp(lastReportedError, lastErrorType) != 0) {
+    // Error type changed, reset timer and update tracking
+    strncpy(lastReportedError, lastErrorType, sizeof(lastReportedError) - 1);
+    lastReportedError[sizeof(lastReportedError) - 1] = '\0';
+    lastStatusUpdate = 0; // Reset timer for new error type
+  }
+  
   if (millis() - lastStatusUpdate > 10000) { // Every 10 seconds
     lastStatusUpdate = millis();
     Serial.print("STATUS_PAUSED: ");
@@ -466,18 +496,26 @@ void pauseSystemForError(const char* errorType) {
 }
 
 void resumeSystemFromError() {
-  if (systemPaused && !manualInspectionRequired) {
-    systemPaused = false;
-    errorRecoveryActive = false;
-    Serial.println("SYSTEM_RESUMED: Error cleared, resuming operations");
-    
-    // Resume scan phase if it was in progress
-    if (currentMode == SCAN_PHASE && scanInProgress) {
-      Serial.println("SCAN_RESUMED: Continuing scan phase");
-      digitalWrite(STEPPER_ENA_PIN, LOW);
-    }
-  } else if (manualInspectionRequired) {
-    Serial.println("ERROR: Cannot resume - manual inspection still required");
+  // Force clear all error states when explicitly requested
+  systemPaused = false;
+  manualInspectionRequired = false;
+  errorRecoveryActive = false;
+  
+  // Clear the last error type
+  strncpy(lastErrorType, "", sizeof(lastErrorType) - 1);
+  lastErrorType[0] = '\0'; // Ensure empty string
+  
+  Serial.println("SYSTEM_RESUMED: All errors cleared, resuming operations");
+  
+  // Resume scan phase if it was in progress
+  if (currentMode == SCAN_PHASE && scanInProgress) {
+    Serial.println("SCAN_RESUMED: Continuing scan phase");
+    digitalWrite(STEPPER_ENA_PIN, LOW);
+  }
+  else if (currentMode == CONTINUOUS || currentMode == TRIGGER) {
+    // Re-enable stepper for active modes
+    digitalWrite(STEPPER_ENA_PIN, LOW);
+    Serial.println("STEPPER_RESUMED: Motor re-enabled for active mode");
   }
 }
 
@@ -532,12 +570,26 @@ void handleClearErrorCommand(const char* command) {
   Serial.print(F("ERROR_CLEARED: "));
   Serial.println(errorType);
   
-  // If this was a critical error causing pause, try to resume
-  if (strcmp(errorType, "CAMERA_DISCONNECTED") == 0 || 
-      strcmp(errorType, "ARDUINO_DISCONNECTED") == 0 ||
-      strcmp(errorType, "RESOURCE_EXHAUSTION") == 0 ||
-      strcmp(errorType, "MODEL_LOADING_FAILED") == 0) {
-    resumeSystemFromError();
+  // IMMEDIATELY clear ALL error states - no conditions
+  systemPaused = false;
+  manualInspectionRequired = false;
+  errorRecoveryActive = false;
+  
+  // Clear the last error type completely
+  strncpy(lastErrorType, "", sizeof(lastErrorType) - 1);
+  lastErrorType[0] = '\0'; // Ensure empty string
+  
+  // Send immediate confirmation that system is resumed
+  Serial.println(F("STATUS_RESUMED: Error cleared, operations continuing"));
+  
+  // Re-enable stepper if we're in an active mode
+  if (currentMode == CONTINUOUS || currentMode == TRIGGER) {
+    digitalWrite(STEPPER_ENA_PIN, LOW);
+    Serial.println(F("STEPPER_RESUMED: Motor re-enabled"));
+  }
+  else if (currentMode == SCAN_PHASE && scanInProgress) {
+    digitalWrite(STEPPER_ENA_PIN, LOW);
+    Serial.println(F("SCAN_RESUMED: Continuing scan phase"));
   }
 }
 

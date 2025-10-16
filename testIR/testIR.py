@@ -539,13 +539,13 @@ class CameraHandler:
 
             if self.top_camera and self.top_camera.isOpened():
                 # Try to read a frame multiple times to account for temporary failures
-                for attempt in range(3):
+                for attempt in range(5):  # Increased from 3 to 5 retries
                     ret, _ = self.top_camera.read()
                     if ret:
                         top_ok = True
                         break
                     else:
-                        time.sleep(0.1)  # Short delay between retries
+                        time.sleep(0.2)  # Increased delay between retries
                 if not top_ok:
                     print("⚠️ Top camera is not responding after retries")
                     camera_errors.append("top camera not responding")
@@ -558,13 +558,13 @@ class CameraHandler:
 
             if self.bottom_camera and self.bottom_camera.isOpened():
                 # Try to read a frame multiple times to account for temporary failures
-                for attempt in range(3):
+                for attempt in range(5):  # Increased from 3 to 5 retries
                     ret, _ = self.bottom_camera.read()
                     if ret:
                         bottom_ok = True
                         break
                     else:
-                        time.sleep(0.1)  # Short delay between retries
+                        time.sleep(0.2)  # Increased delay between retries
                 if not bottom_ok:
                     print("⚠️ Bottom camera is not responding after retries")
                     camera_errors.append("bottom camera not responding")
@@ -3439,7 +3439,17 @@ class App(tk.Tk):
         self._frame_counter += 1
         if self._frame_counter % 20 == 0:
             # Check camera status and reconnect if needed (skip during cooldown after mode changes)
-            if time.time() > self._camera_check_cooldown:
+            # Also skip during grace period after recent reconnection
+            current_time = time.time()
+            
+            # Check if we're in grace period after reconnection
+            in_grace_period = False
+            if hasattr(self, 'camera_reconnection_grace_start'):
+                grace_elapsed = current_time - self.camera_reconnection_grace_start
+                if grace_elapsed < self.camera_reconnection_grace_period:
+                    in_grace_period = True
+            
+            if current_time > self._camera_check_cooldown and not in_grace_period:
                 camera_status = self.camera_handler.check_camera_status()
                 if not camera_status['both_ok']:
                     print("Camera status check failed - attempting reconnection...")
@@ -5012,7 +5022,11 @@ class App(tk.Tk):
                 delay_needed = min_delay - time_since_last
                 print(f"⏱️ Rate limiting: Waiting {delay_needed:.2f}s before sending command")
                 time.sleep(delay_needed)
-                
+        
+        # Initialize _last_command_time if it doesn't exist
+        if not hasattr(self, '_last_command_time'):
+            self._last_command_time = 0
+            
         # Prevent duplicate commands from being sent too frequently (but allow error commands through)
         if hasattr(self, '_last_command_sent') and not is_error_command:
             cooldown_time = 3.0 if is_grading_command else 2.0  # Longer cooldown for grading commands
@@ -5166,7 +5180,13 @@ class App(tk.Tk):
         """Disables all operations and stops the conveyor."""
         print("Setting IDLE Mode")
         self.current_mode = "IDLE"
-        self.send_arduino_command('X')  # Send stop command to Arduino
+        
+        # Only send command to Arduino if it's connected
+        if self.ser and hasattr(self.ser, 'is_open') and self.ser.is_open:
+            self.send_arduino_command('X')  # Send stop command to Arduino
+        else:
+            print("⚠️ Arduino not connected, skipping 'X' command")
+        
         self.live_detection_var.set(False)
         self.auto_grade_var.set(False)
         self.auto_detection_active = False  # Ensure automatic detection is disabled
@@ -5850,6 +5870,16 @@ class App(tk.Tk):
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
                 current_detections.append((bbox, standard_defect_type, size_mm, confidence))
 
+            # Notify user if low confidence detections were found
+            if low_confidence_count > 0:
+                warning_msg = f"⚠️ {low_confidence_count} low confidence detection(s) found on {camera_name} camera"
+                print(warning_msg)
+                # Show warning notification (non-blocking)
+                try:
+                    messagebox.showwarning("Low Confidence Detection", warning_msg)
+                except Exception as e:
+                    print(f"Could not show warning dialog: {e}")
+
             # Check for wood detection issues (if this is a wood detection analysis)
             if run_defect_model and hasattr(self, 'wood_detection_results'):
                 self.check_wood_detection_status(frame, camera_name)
@@ -6412,6 +6442,12 @@ class App(tk.Tk):
             self.error_state["active_errors"].discard(error_type)
             print(f"📝 Removed {error_type} from active errors")
             
+            # CRITICAL FIX: Clear system_paused flag if no more active errors
+            if len(self.error_state["active_errors"]) == 0:
+                self.error_state["system_paused"] = False
+                self.error_state["manual_inspection_required"] = False
+                print(f"✅ All errors cleared - system_paused = False")
+            
             # Reset recovery attempts for this error
             if error_type in self.error_state["error_recovery_attempts"]:
                 self.error_state["error_recovery_attempts"][error_type] = 0
@@ -6442,7 +6478,7 @@ class App(tk.Tk):
             print(f"Error sending error to Arduino: {e}")
     
     def send_error_clear_to_arduino(self, error_type):
-        """Send error clear command to Arduino"""
+        """Send error clear command to Arduino with improved synchronization"""
         try:
             clear_command = f"CLEAR_ERROR:{error_type}"
             print(f"📤 Sending clear command: {clear_command}")
@@ -6458,8 +6494,16 @@ class App(tk.Tk):
             self.send_arduino_command(clear_command)
             print(f"✅ Sent error clear to Arduino: {error_type}")
             
-            # Brief delay to ensure command is processed
-            time.sleep(0.2)
+            # Extended delay to ensure Arduino processes the command fully
+            time.sleep(0.5)  # Increased from 0.2s to 0.5s
+            
+            # Send a second flush to clear any remaining status messages
+            if hasattr(self, 'ser') and self.ser and self.ser.is_open:
+                try:
+                    self.ser.reset_input_buffer()
+                    print("🧹 Final flush after clear command")
+                except:
+                    pass
             
         except Exception as e:
             print(f"❌ Error sending error clear to Arduino: {e}")
@@ -6703,20 +6747,48 @@ class App(tk.Tk):
                 # Clear the error (this sends CLEAR_ERROR to Arduino)
                 self.clear_error("CAMERA_DISCONNECTED")
                 
-                # Give Arduino more time to process the clear command
+                # Give Arduino more time to process the clear command and stop sending status messages
                 print("🕐 Waiting for Arduino to process CLEAR_ERROR command...")
-                time.sleep(1.0)  # Increased from 0.5s to 1.0s
+                time.sleep(2.0)  # Increased from 1.0s to 2.0s for better synchronization
+                
+                # Flush any remaining STATUS_PAUSED messages from Arduino buffer
+                if hasattr(self, 'ser') and self.ser and self.ser.is_open:
+                    try:
+                        self.ser.reset_input_buffer()
+                        print("🧹 Flushed remaining Arduino messages after error clear")
+                    except:
+                        pass
                 
                 print("✅ Camera connection recovered successfully")
                 
-                # Final verification before showing success notification
-                final_status = self.camera_handler.check_camera_status()
-                if final_status['both_ok']:
+                # Give cameras additional time to stabilize before final verification
+                print("⏳ Allowing cameras to stabilize...")
+                time.sleep(3.0)  # Additional stabilization time
+                
+                # Final verification with retry mechanism
+                print("🔍 Performing final verification...")
+                verification_success = False
+                for verify_attempt in range(3):
+                    time.sleep(1.0)  # Wait between verification attempts
+                    final_status = self.camera_handler.check_camera_status()
+                    if final_status['both_ok']:
+                        verification_success = True
+                        print(f"✅ Verification successful on attempt {verify_attempt + 1}")
+                        break
+                    else:
+                        print(f"⚠️ Verification attempt {verify_attempt + 1} failed - retrying...")
+                
+                if verification_success:
                     # Show success notification to user
                     self.show_reconnection_success_notification()
                     
                     # Update status
                     self.update_status_text("Status: Cameras reconnected successfully", STATUS_READY_COLOR)
+                    
+                    # Set a grace period to prevent immediate re-detection of camera errors
+                    self.camera_reconnection_grace_start = time.time()
+                    self.camera_reconnection_grace_period = 30.0  # 30 seconds grace period
+                    print("🛡️ Camera reconnection grace period activated (30 seconds)")
                 else:
                     print("⚠️ Warning: Final camera status check failed after apparent success")
                     print(f"   Final status: Top={'✅ OK' if final_status['top_ok'] else '❌ FAIL'}, Bottom={'✅ OK' if final_status['bottom_ok'] else '❌ FAIL'}")
@@ -7246,6 +7318,22 @@ class App(tk.Tk):
     def monitor_camera_health(self):
         """Monitor camera connection and performance"""
         try:
+            # Check if we're in a grace period after recent reconnection
+            if hasattr(self, 'camera_reconnection_grace_start'):
+                grace_elapsed = time.time() - self.camera_reconnection_grace_start
+                if grace_elapsed < self.camera_reconnection_grace_period:
+                    # Still in grace period - skip health checks
+                    if not hasattr(self, '_grace_period_logged'):
+                        print(f"🛡️ Skipping camera health check - grace period active ({self.camera_reconnection_grace_period - grace_elapsed:.1f}s remaining)")
+                        self._grace_period_logged = True
+                    return
+                else:
+                    # Grace period expired - remove grace period attributes
+                    delattr(self, 'camera_reconnection_grace_start')
+                    if hasattr(self, '_grace_period_logged'):
+                        delattr(self, '_grace_period_logged')
+                    print("🛡️ Camera reconnection grace period expired - resuming health monitoring")
+            
             # Use existing check_camera_status method
             camera_status = self.camera_handler.check_camera_status()
             
@@ -7542,27 +7630,41 @@ class App(tk.Tk):
             system = platform.system()
             
             if system == "Linux":
-                # Use notify-send for Linux desktop notifications
-                if severity == "CRITICAL":
-                    urgency = "critical"
-                    icon = "error"
-                elif severity == "INFO":
-                    urgency = "normal"
-                    icon = "info"
-                else:
-                    urgency = "normal"
-                    icon = "warning"
-                
-                subprocess.run([
-                    "notify-send", 
-                    "--urgency", urgency,
-                    "--icon", icon,
-                    "--app-name", "Wood Sorting System",
-                    title, 
-                    message
-                ], capture_output=True, timeout=5)
-                
-                print(f"Desktop notification sent: {title}")
+                # Use notify-send for Linux desktop notifications (if available)
+                try:
+                    # Check if notify-send is available
+                    result = subprocess.run(["which", "notify-send"], capture_output=True, timeout=2)
+                    if result.returncode != 0:
+                        print("notify-send not available - skipping desktop notification")
+                        return
+                    
+                    if severity == "CRITICAL":
+                        urgency = "critical"
+                        icon = "error"
+                    elif severity == "INFO":
+                        urgency = "normal"
+                        icon = "info"
+                    else:
+                        urgency = "normal"
+                        icon = "warning"
+                    
+                    subprocess.run([
+                        "notify-send", 
+                        "--urgency", urgency,
+                        "--icon", icon,
+                        "--app-name", "Wood Sorting System",
+                        title, 
+                        message
+                    ], capture_output=True, timeout=5)
+                    
+                    print(f"Desktop notification sent: {title}")
+                    
+                except subprocess.TimeoutExpired:
+                    print("Desktop notification timed out")
+                except FileNotFoundError:
+                    print("notify-send not found - desktop notifications disabled")
+                except Exception as notify_error:
+                    print(f"Failed to send desktop notification: {notify_error}")
                 
         except Exception as e:
             print(f"Could not send desktop notification: {e}")
