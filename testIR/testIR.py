@@ -336,9 +336,6 @@ class CameraHandler:
             if success:
                 print("✅ Dynamic camera reassignment successful")
                 
-                # Add a small stabilization delay before status check
-                time.sleep(0.2)
-                
                 # Double-check that both cameras are actually working
                 camera_status = self.check_camera_status()
                 if camera_status['both_ok']:
@@ -540,12 +537,11 @@ class CameraHandler:
             bottom_ok = False
             camera_errors = []
 
-            # Enhanced validation for top camera
             if self.top_camera and self.top_camera.isOpened():
                 # Try to read a frame multiple times to account for temporary failures
                 for attempt in range(3):
-                    ret, frame = self.top_camera.read()
-                    if ret and frame is not None and frame.size > 0:
+                    ret, _ = self.top_camera.read()
+                    if ret:
                         top_ok = True
                         break
                     else:
@@ -560,12 +556,11 @@ class CameraHandler:
             if not top_ok:
                 print("🔌 Top camera disconnection detected")
 
-            # Enhanced validation for bottom camera
             if self.bottom_camera and self.bottom_camera.isOpened():
                 # Try to read a frame multiple times to account for temporary failures
                 for attempt in range(3):
-                    ret, frame = self.bottom_camera.read()
-                    if ret and frame is not None and frame.size > 0:
+                    ret, _ = self.bottom_camera.read()
+                    if ret:
                         bottom_ok = True
                         break
                     else:
@@ -573,12 +568,6 @@ class CameraHandler:
                 if not bottom_ok:
                     print("⚠️ Bottom camera is not responding after retries")
                     camera_errors.append("bottom camera not responding")
-            else:
-                print("⚠️ Bottom camera is not opened")
-                camera_errors.append("bottom camera not opened")
-
-            if not bottom_ok:
-                print("🔌 Bottom camera disconnection detected")
             else:
                 print("⚠️ Bottom camera is not opened")
                 camera_errors.append("bottom camera not opened")
@@ -706,27 +695,27 @@ class SSEN1611_1_PineGrader_Final:
     KNOT_TYPES = ["Sound Knots", "Dead Knots", "Unsound/Missing Knots"]
 
     # --- KNOT SIZE LIMITS (A) ---
-    # Note: Encased Knot limits have been removed from the array definition.
+    # Formula: max_size = (percent_width * wood_width_mm) + constant_mm + size_increase_mm
     # The order of the tuples must match the order of KNOT_TYPES.
     # (Sound Knots, Dead Knots, Unsound/Missing Knots)
     KNOT_SIZE_LIMITS = {
         # Unsound/Missing NOT PERMITTED (0.00, 0) in G2-0/G2-1
-        "G2-0": [(0.10, 10), (0.10, 0), (0.00, 0)],
-        "G2-1": [(0.10, 20), (0.10, 10), (0.00, 0)],
-        "G2-2": [(0.10, 35), (0.10, 20), (0.10, 15)],
-        "G2-3": [(0.10, 50), (0.10, 50), (0.10, 40)],
-        "G2-4": [(1.00, 9999), (1.00, 9999), (1.00, 9999)]
+        "G2-0": [(0.10, 10), (0.10, 0), (0.00, 0)],      # Sound: 10%W+10, Dead: 10%W+0, Unsound: NOT PERMITTED
+        "G2-1": [(0.10, 20), (0.10, 10), (0.00, 0)],     # Sound: 10%W+20, Dead: 10%W+10, Unsound: NOT PERMITTED
+        "G2-2": [(0.10, 35), (0.10, 20), (0.10, 15)],    # Sound: 10%W+35, Dead: 10%W+20, Unsound: 10%W+15
+        "G2-3": [(0.10, 50), (0.10, 50), (0.10, 40)],    # Sound: 10%W+50, Dead: 10%W+50, Unsound: 10%W+40
+        "G2-4": [(1.00, 0), (1.00, 0), (1.00, 0)]        # All unlimited (formula allows any size)
     }
 
     # --- KNOT FREQUENCY LIMITS (C) ---
     # Limits are tuples: (Max Total Knots/m, Max Poor-Quality Knots/m)
     # Poor-Quality Knots are now ONLY Unsound/Missing.
     KNOT_NUMBER_LIMITS = {
-        "G2-0": (2, 0), # Max 0 Poor-Quality (Unsound/Missing)
-        "G2-1": (4, 0), # Max 0 Poor-Quality (Unsound/Missing) - was 1 for Encased, now 0
-        "G2-2": (6, 2),
-        "G2-3": (9999, 5),
-        "G2-4": (9999, 9999)
+        "G2-0": (2, 0), # Max 2 Total, 0 Unsound/Missing
+        "G2-1": (4, 0), # Max 4 Total, 0 Unsound/Missing
+        "G2-2": (6, 2), # Max 6 Total, 2 Unsound/Missing
+        "G2-3": (float('inf'), 5), # Unlimited Total, 5 Unsound/Missing max
+        "G2-4": (float('inf'), float('inf')) # Unlimited both
     }
 
     def __init__(self, width_mm):
@@ -798,7 +787,11 @@ class SSEN1611_1_PineGrader_Final:
             grade_passed = True
 
             # 1. Check Total Number Limit
-            adjusted_total_limit = int(total_limit * number_increase_factor)
+            if total_limit == float('inf'):
+                adjusted_total_limit = float('inf')  # Keep as infinity
+            else:
+                adjusted_total_limit = int(total_limit * number_increase_factor)
+            
             if total_knots_found > adjusted_total_limit:
                 grade_passed = False
 
@@ -938,6 +931,7 @@ BOTTOM_CAMERA_PIXEL_TO_MM = 3.18  # Bottom camera: 3.18 pixels per mm
 WOOD_PALLET_WIDTH_MM = 0  # Global variable for current detected wood width
 
 # SS-EN 1611-1 Grading constants for size limits: limit = (0.10 * wood_width) + constant
+# SS-EN 1611-1 Official Grading Constants (Constants for formula: 10% W + constant)
 GRADING_CONSTANTS = {
     "Sound_Knot": {"G2-0": 10, "G2-1": 20, "G2-2": 35, "G2-3": 50},
     "Dead_Knot": {"G2-0": 0, "G2-1": 10, "G2-2": 20, "G2-3": 50},
@@ -946,12 +940,21 @@ GRADING_CONSTANTS = {
     "Crack_Knot": {"G2-2": 15, "G2-3": 40}  # Same as Unsound_Knot for "Knot with Crack"
 }
 
-# Knot count limits per meter for Dead and Unsound knots
+# SS-EN 1611-1 Knot Frequency Limits (Total Knots per meter, Unsound Knots per meter)
+KNOT_FREQUENCY_LIMITS = {
+    "G2-0": {"total_per_meter": 2, "unsound_per_meter": 0},
+    "G2-1": {"total_per_meter": 4, "unsound_per_meter": 0},
+    "G2-2": {"total_per_meter": 6, "unsound_per_meter": 2},
+    "G2-3": {"total_per_meter": float('inf'), "unsound_per_meter": 5},
+    "G2-4": {"total_per_meter": float('inf'), "unsound_per_meter": float('inf')}
+}
+
+# Legacy compatibility - DEPRECATED: Use KNOT_FREQUENCY_LIMITS instead
 KNOT_COUNT_LIMITS = {
-    "G2-0": 0,
-    "G2-1": 1,
-    "G2-2": 2,
-    "G2-3": 5,
+    "G2-0": 0,  # Legacy - refers to unsound knots only
+    "G2-1": 0,  # Legacy - refers to unsound knots only  
+    "G2-2": 2,  # Legacy - refers to unsound knots only
+    "G2-3": 5,  # Legacy - refers to unsound knots only
     "G2-4": float('inf')
 }
 
@@ -1013,11 +1016,56 @@ class DetectionDeduplicator:
 
         # Check spatial proximity with all detections in cluster
         for cluster_detection in cluster:
+            # Must be same defect type AND similar size to be considered the same defect
             if (detection['defect_type'] == cluster_detection['defect_type'] and
                 abs(detection['size_mm'] - cluster_detection['size_mm']) <= self.spatial_threshold_mm):
-                return True
+                
+                # Additional check: If we have bbox information, check spatial overlap
+                # This prevents deduplicating defects that are just similar in size but spatially separate
+                detection_bbox = detection.get('bbox')
+                cluster_bbox = cluster_detection.get('bbox')
+                
+                if detection_bbox and cluster_bbox:
+                    # Calculate IoU (Intersection over Union) to check spatial overlap
+                    iou = self._calculate_bbox_iou(detection_bbox, cluster_bbox)
+                    # Only merge if there's significant spatial overlap (>50%)
+                    if iou > 0.5:
+                        return True
+                else:
+                    # If no bbox info, fall back to size-based deduplication (less reliable)
+                    return True
 
         return False
+
+    def _calculate_bbox_iou(self, bbox1, bbox2):
+        """Calculate Intersection over Union (IoU) of two bounding boxes"""
+        try:
+            # Handle different bbox formats
+            if len(bbox1) == 4 and len(bbox2) == 4:
+                x1_1, y1_1, x2_1, y2_1 = bbox1
+                x1_2, y1_2, x2_2, y2_2 = bbox2
+                
+                # Calculate intersection
+                x1_i = max(x1_1, x1_2)
+                y1_i = max(y1_1, y1_2)
+                x2_i = min(x2_1, x2_2)
+                y2_i = min(y2_1, y2_2)
+                
+                if x2_i <= x1_i or y2_i <= y1_i:
+                    return 0.0
+                
+                intersection = (x2_i - x1_i) * (y2_i - y1_i)
+                
+                # Calculate areas
+                area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+                area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+                union = area1 + area2 - intersection
+                
+                return intersection / union if union > 0 else 0.0
+            else:
+                return 0.0
+        except Exception:
+            return 0.0
 
     def _select_best_detection(self, cluster):
         """Select the best detection from a cluster (largest size, highest confidence)"""
@@ -2170,7 +2218,8 @@ class App(tk.Tk):
         
 
         # Initialize detection deduplicator for low FPS scenarios
-        self.deduplicator = DetectionDeduplicator(spatial_threshold_mm=15.0, temporal_threshold_sec=1.0)
+        # Deduplication for wood sorting (conservative settings to preserve all legitimate defects)
+        self.deduplicator = DetectionDeduplicator(spatial_threshold_mm=5.0, temporal_threshold_sec=0.2)
 
         # Initialize Camera Handler with optimized settings
         self.camera_handler = CameraHandler()
@@ -2305,11 +2354,11 @@ class App(tk.Tk):
 
         # Tab 1: Grade Summary (Overview with Live Grading)
         grade_summary_tab = ttk.Frame(self.stats_notebook)
-        self.stats_notebook.add(grade_summary_tab, text="Grade Summary")
+        self.stats_notebook.add(grade_summary_tab, text="SS-EN 1611-1 Summary")
 
 
         # Live Grading Section (includes both individual grades and grade counts)
-        live_grading_frame = ttk.LabelFrame(grade_summary_tab, text="Live Grading Results", padding="10")
+        live_grading_frame = ttk.LabelFrame(grade_summary_tab, text="SS-EN 1611-1 Live Grading Results", padding="10")
         live_grading_frame.pack(fill="both", expand=True, pady=(10, 5), padx=10)
 
         # Configure the main frame for proper layout
@@ -2361,14 +2410,14 @@ class App(tk.Tk):
         grade_counts_container.grid_columnconfigure(3, weight=1)
         grade_counts_container.grid_columnconfigure(4, weight=1)
 
-        # Initialize stats labels with consistent spacing and fonts
+        # Initialize stats labels with consistent spacing and fonts - aligned with SS-EN 1611-1
         self.live_stats_labels = {}
         grade_info = [
-            ("grade1", "G2-0", GRADE_PERFECT_COLOR),
-            ("grade2", "G2-1", GRADE_GOOD_COLOR),
-            ("grade3", "G2-2", GRADE_FAIR_COLOR),
-            ("grade4", "G2-3", GRADE_FAIR_COLOR),
-            ("grade5", "G2-4", GRADE_POOR_COLOR)
+            ("grade1", "G2-0\n(Premium)", GRADE_PERFECT_COLOR),
+            ("grade2", "G2-1\n(Good)", GRADE_GOOD_COLOR),
+            ("grade3", "G2-2\n(Fair)", GRADE_FAIR_COLOR),
+            ("grade4", "G2-3\n(Poor)", GRADE_FAIR_COLOR),
+            ("grade5", "G2-4\n(Reject)", GRADE_POOR_COLOR)
         ]
 
         for i, (grade_key, label_text, color) in enumerate(grade_info):
@@ -2397,9 +2446,9 @@ class App(tk.Tk):
                                                           anchor="center")
             self.live_stats_labels[grade_key].grid(row=1, column=0, sticky="ew", padx=2, pady=(2, 8))
 
-        # Tab 2: Grading Details
+        # Tab 2: Grading Details - SS-EN 1611-1 Standards
         grading_details_tab = ttk.Frame(self.stats_notebook)
-        self.stats_notebook.add(grading_details_tab, text="Grading Details")
+        self.stats_notebook.add(grading_details_tab, text="Grading Standards")
 
         # Grading details content
         self.grading_details_frame = ttk.Frame(grading_details_tab)
@@ -2408,64 +2457,13 @@ class App(tk.Tk):
 
         # Tab 3: Performance Metrics
         performance_tab = ttk.Frame(self.stats_notebook)
-        self.stats_notebook.add(performance_tab, text="Performance")
+        self.stats_notebook.add(performance_tab, text="System Performance")
 
         # Performance metrics content
         self.performance_frame = ttk.Frame(performance_tab)
         self.performance_frame.pack(fill="both", expand=True, padx=5, pady=5)
         self.update_performance_tab()
         
-        # Tab 4: Recent Activity
-        activity_tab = ttk.Frame(self.stats_notebook)
-        self.stats_notebook.add(activity_tab, text="Recent Activity")
-
-        # Main container with two sections
-        activity_main_container = ttk.Frame(activity_tab)
-        activity_main_container.pack(fill="both", expand=True, padx=5, pady=5)
-
-        # Session Summary Section (wider, fixed height)
-        self.session_summary_frame = ttk.LabelFrame(activity_main_container, text="Current Session Summary", padding="10")
-        self.session_summary_frame.place(x=0, y=0, relwidth=1, height=70)
-
-        # Processing Log Section (scrollable)
-        log_container = ttk.LabelFrame(activity_main_container, text="Recent Processing Log", padding="5")
-        log_container.place(x=0, y=70, relwidth=1, relheight=1)
-
-        # Scrollable canvas for processing log
-        log_canvas = tk.Canvas(log_container, height=LOG_SCROLLABLE_HEIGHT)  # Configurable height
-        log_scrollbar = ttk.Scrollbar(log_container, orient="vertical", command=log_canvas.yview)
-        self.processing_log_frame = ttk.Frame(log_canvas)
-
-        self.processing_log_frame.bind(
-            "<Configure>",
-            lambda e: log_canvas.configure(scrollregion=log_canvas.bbox("all"))
-        )
-
-        def on_log_scroll(event):
-            self._user_scrolling_log = True
-            if hasattr(self, '_log_scroll_timer'):
-                self.after_cancel(self._log_scroll_timer)
-            self._log_scroll_timer = self.after(3000, lambda: setattr(self, '_user_scrolling_log', False))
-
-        log_canvas.bind("<MouseWheel>", on_log_scroll)
-
-        # Bind scrollbar interactions
-        log_scrollbar.bind("<ButtonPress-1>", lambda e: setattr(self, '_user_scrolling_log', True))
-
-        log_canvas.create_window((0, 0), window=self.processing_log_frame, anchor="nw")
-        log_canvas.configure(yscrollcommand=log_scrollbar.set)
-
-        log_canvas.place(x=0, y=0, relwidth=0.9, relheight=1)
-        log_scrollbar.place(relx=0.9, y=0, relwidth=0.1, relheight=1)
-
-        # Store canvas references for updates
-        self.log_canvas = log_canvas
-        self.activity_canvas = log_canvas  # Keep for compatibility
-
-        # Initialize scroll state variables
-        self._user_scrolling_log = False
-        self._last_defects_files_count = 0  # Track number of defects files for change detection
-
         # Create simplified detection tracking (retain logic without complex UI)
         self.top_dashboard_widgets = self.create_simple_detection_tracker("top")
         self.bottom_dashboard_widgets = self.create_simple_detection_tracker("bottom")
@@ -2482,7 +2480,6 @@ class App(tk.Tk):
         # Initialize tab content
         self.update_grade_details_tab()
         self.update_performance_tab()
-        self.update_recent_activity_tab()
 
         # Removed grading_status_label as requested
 
@@ -3435,12 +3432,12 @@ class App(tk.Tk):
         self.update_single_feed(self.cap_bottom, self.bottom_canvas, "bottom")
 
         # Reduce update frequency for non-critical components to prevent UI lag
-        # Only update every 15th frame (~4.4 FPS for dashboard updates) to reduce load
+        # Only update every 20th frame (~1.5 FPS for dashboard updates) to reduce load
         if not hasattr(self, '_frame_counter'):
             self._frame_counter = 0
 
         self._frame_counter += 1
-        if self._frame_counter % 15 == 0:
+        if self._frame_counter % 20 == 0:
             # Check camera status and reconnect if needed (skip during cooldown after mode changes)
             if time.time() > self._camera_check_cooldown:
                 camera_status = self.camera_handler.check_camera_status()
@@ -3481,8 +3478,8 @@ class App(tk.Tk):
             if not getattr(self, '_in_active_inference', False):
                 self.ensure_detection_details_updated()
 
-        # Optimize for constant detection - update every 10ms for ~100 FPS
-        self.after(10, self.update_feeds)
+        # Optimize for smoother display - update every 33ms for ~30 FPS (more realistic for camera feeds)
+        self.after(33, self.update_feeds)
         
         # Start system health monitoring
         self.start_health_monitoring()
@@ -3913,17 +3910,21 @@ class App(tk.Tk):
             if camera_name == "bottom":
                 frame = cv2.flip(frame, 1)  # Horizontal flip
 
-            # Skip detection processing if frame rate is too high
+            # Skip detection processing for smoother frame rate - only detect every 3rd frame
             if not hasattr(self, '_detection_frame_skip'):
                 self._detection_frame_skip = {"top": 0, "bottom": 0}
+
+            # Skip heavy detection processing to maintain smooth frame rate
+            self._detection_frame_skip[camera_name] += 1
+            should_run_detection = (self._detection_frame_skip[camera_name] % 3 == 0)
 
             # Initialize memory management counter
             if not hasattr(self, '_memory_cleanup_counter'):
                 self._memory_cleanup_counter = 0
 
-            # Perform memory cleanup every 100 frames (~8 seconds at 12.5 FPS) - more frequent
+            # Perform memory cleanup every 150 frames (~15 seconds at 10 FPS) - less frequent
             self._memory_cleanup_counter += 1
-            if self._memory_cleanup_counter % 100 == 0:
+            if self._memory_cleanup_counter % 150 == 0:
                 import gc
                 gc.collect()  # Force garbage collection
                 
@@ -3946,7 +3947,7 @@ class App(tk.Tk):
                 print(f"Memory cleanup performed at frame {self._memory_cleanup_counter} - Frames: {len(self.detection_frames) if hasattr(self, 'detection_frames') else 0}")
             
             # Process detection based on automatic IR beam OR live detection toggle
-            should_detect = self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER")
+            should_detect = should_run_detection and (self.auto_detection_active or (self.live_detection_var.get() and self.current_mode != "TRIGGER"))
             
             # Check for error states that should prevent detection
             if self.error_state["system_paused"]:
@@ -4134,12 +4135,12 @@ class App(tk.Tk):
 
                 self.live_grades[camera_name] = grade_info
 
-                # Update dashboard every 5th frame for smoother updates
-                if self._detection_frame_skip[camera_name] % 5 == 0:
+                # Update dashboard every 10th frame for smoother updates (reduced frequency)
+                if self._detection_frame_skip[camera_name] % 10 == 0:
                     self.update_dashboard_display(camera_name, defect_dict, detections_for_grading)
 
-                # Update the live grading display every 3rd frame
-                if self._detection_frame_skip[camera_name] % 3 == 0:
+                # Update the live grading display every 8th frame (reduced frequency)
+                if self._detection_frame_skip[camera_name] % 8 == 0:
                     self.update_live_grading_display()
 
                 cv2image = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
@@ -4162,13 +4163,10 @@ class App(tk.Tk):
                     self.live_grades[camera_name] = " "
                     if hasattr(self, 'live_measurements'):
                         self.live_measurements[camera_name] = []
-                    # Update dashboard every 10th frame when no detection
-                    if self._detection_frame_skip[camera_name] % 10 == 0:
+                    # Update dashboard every 15th frame when no detection (further reduced)
+                    if self._detection_frame_skip[camera_name] % 15 == 0:
                         self.update_dashboard_display(camera_name, {}, [])
                         self.update_live_grading_display()
-            
-            # Increment frame skip counter
-            self._detection_frame_skip[camera_name] += 1
             
             # Convert to PIL Image and ensure consistent scaling
             img = Image.fromarray(cv2image)
@@ -4225,8 +4223,8 @@ class App(tk.Tk):
                 display_dims = self._label_dimensions[f"{cache_key}_display"]
                 
                 # Resize the camera image to exactly these dimensions (stretch if needed)
-                # Use NEAREST for speed in real-time processing
-                img = img.resize((display_dims['display_width'], display_dims['display_height']), Image.NEAREST)
+                # Use LANCZOS for better quality at manageable speed (compromise between NEAREST and BICUBIC)
+                img = img.resize((display_dims['display_width'], display_dims['display_height']), Image.LANCZOS)
                 
                 # Create a black background of the full label size
                 final_img = Image.new('RGB', (label_width, label_height), 'black')
@@ -5336,10 +5334,17 @@ class App(tk.Tk):
                 # Store detection results for this segment
                 if not hasattr(self, 'segment_defects'):
                     self.segment_defects = {"top": [], "bottom": []}
+                
+                # STRICT RULE VERIFICATION: Log what's being stored vs what's detected
+                print(f"🔍 STRICT SEGMENT STORAGE: {camera_name} segment {segment_num}")
+                print(f"🔍 DETECTED: {len(detections_for_grading)} defects detected and stored for grading")
+                print(f"🔍 DEFECT TYPES: {defect_dict}")
+                
                 self.segment_defects[camera_name].append({
                     "segment": segment_num,
                     "defects": defect_dict,
-                    "measurements": detections_for_grading
+                    "measurements": detections_for_grading,
+                    "detected_count": len(detections_for_grading)  # Track for verification
                 })
 
             else:
@@ -5418,6 +5423,17 @@ class App(tk.Tk):
         }
 
         # Save accumulated defect details
+        print(f"🔍 STRICT VERIFICATION: Saving defects.txt for Wood {wood_number}")
+        print(f"🔍 STRICT VERIFICATION: Top defects to write: {data['top_defects']}")
+        print(f"🔍 STRICT VERIFICATION: Bottom defects to write: {data['bottom_defects']}")
+        
+        # Count total defects for verification
+        total_top_defects = len(data['top_defects'])
+        total_bottom_defects = len(data['bottom_defects'])
+        total_defects = total_top_defects + total_bottom_defects
+        
+        print(f"✅ STRICT RULE VERIFICATION: Recording {total_top_defects} top + {total_bottom_defects} bottom = {total_defects} total defects")
+        
         with open(os.path.join(wood_folder, "defects.txt"), "w") as f:
             f.write(f"Wood No. ({wood_number}) - {wood_width}mm\n")
             f.write(f"Top Panel Grade: {top_grade}\n")
@@ -5427,16 +5443,22 @@ class App(tk.Tk):
             if data['top_defects']:
                 for i, (defect_type, size_mm, percentage) in enumerate(data['top_defects'], 1):
                     display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
-                    f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+                    defect_line = f"{i}. {display_name} - {size_mm:.1f}mm\n"
+                    f.write(defect_line)
+                    print(f"✅ RECORDED: Top defect {i}: {defect_line.strip()}")
             else:
                 f.write("No defects detected\n")
+                print(f"✅ RECORDED: No top defects")
             f.write("\nBottom Panel Defects:\n")
             if data['bottom_defects']:
                 for i, (defect_type, size_mm, percentage) in enumerate(data['bottom_defects'], 1):
                     display_name = defect_display_names.get(defect_type, defect_type.replace('_', ' '))
-                    f.write(f"{i}. {display_name} - {size_mm:.1f}mm\n")
+                    defect_line = f"{i}. {display_name} - {size_mm:.1f}mm\n"
+                    f.write(defect_line)
+                    print(f"✅ RECORDED: Bottom defect {i}: {defect_line.strip()}")
             else:
                 f.write("No defects detected\n")
+                print(f"✅ RECORDED: No bottom defects")
 
         print(f"Saved final defect data for Wood {wood_number}")
 
@@ -5521,13 +5543,31 @@ class App(tk.Tk):
             wood_bottom_defects = []
 
             # Aggregate defects from all segments
-            for segment_data in self.segment_defects["top"]:
+            print(f"🔍 STRICT AGGREGATION: Processing {len(self.segment_defects['top'])} top segments and {len(self.segment_defects['bottom'])} bottom segments")
+            
+            total_annotated_top = 0
+            total_annotated_bottom = 0
+            
+            for i, segment_data in enumerate(self.segment_defects["top"]):
                 if segment_data.get("measurements"):
-                    wood_top_defects.extend(segment_data["measurements"])
+                    segment_defects = segment_data["measurements"]
+                    detected_count = segment_data.get("detected_count", len(segment_defects))
+                    total_annotated_top += detected_count
+                    print(f"🔍 TOP Segment {i+1}: {len(segment_defects)} stored, {detected_count} detected")
+                    wood_top_defects.extend(segment_defects)
 
-            for segment_data in self.segment_defects["bottom"]:
+            for i, segment_data in enumerate(self.segment_defects["bottom"]):
                 if segment_data.get("measurements"):
-                    wood_bottom_defects.extend(segment_data["measurements"])
+                    segment_defects = segment_data["measurements"]
+                    detected_count = segment_data.get("detected_count", len(segment_defects))
+                    total_annotated_bottom += detected_count
+                    print(f"🔍 BOTTOM Segment {i+1}: {len(segment_defects)} stored, {detected_count} detected")
+                    wood_bottom_defects.extend(segment_defects)
+            
+            print(f"🔍 STRICT AGGREGATION SUMMARY:")
+            print(f"   Top: {len(wood_top_defects)} stored vs {total_annotated_top} detected")
+            print(f"   Bottom: {len(wood_bottom_defects)} stored vs {total_annotated_bottom} detected")
+            print(f"🔍 TOTAL: {len(wood_top_defects) + len(wood_bottom_defects)} raw defects collected")
 
             # Deduplicate defects before grading to prevent overcounting
             # Convert defect tuples to detection dicts for deduplication
@@ -5545,7 +5585,8 @@ class App(tk.Tk):
                             'timestamp': segment_time.isoformat(),
                             'defect_type': defect_type,
                             'size_mm': size_mm,
-                            'percentage': percentage
+                            'percentage': percentage,
+                            'segment': segment_data.get("segment", 0)  # Add segment info for better deduplication
                         })
                 segment_timestamp += 0.1  # Increment timestamp for each segment
 
@@ -5558,20 +5599,27 @@ class App(tk.Tk):
                             'timestamp': segment_time.isoformat(),
                             'defect_type': defect_type,
                             'size_mm': size_mm,
-                            'percentage': percentage
+                            'percentage': percentage,
+                            'segment': segment_data.get("segment", 0)  # Add segment info for better deduplication
                         })
                 segment_timestamp += 0.1  # Increment timestamp for each segment
 
-            # Deduplicate detections
-            deduplicated_top = self.deduplicator.deduplicate(top_detections_for_dedup)
-            deduplicated_bottom = self.deduplicator.deduplicate(bottom_detections_for_dedup)
+            # STRICT RULE: NO DEDUPLICATION - Annotations must match defects.txt exactly
+            print(f"🔍 STRICT MODE: Preserving ALL annotated defects without deduplication")
+            print(f"🔍 DEBUG: Total detections - Top: {len(top_detections_for_dedup)}, Bottom: {len(bottom_detections_for_dedup)}")
+            
+            # Use ALL detections without any deduplication to ensure annotation-recording synchronization
+            deduplicated_top = top_detections_for_dedup  # No deduplication
+            deduplicated_bottom = bottom_detections_for_dedup  # No deduplication
 
             # Convert back to defect tuples for grading
             deduplicated_top_defects = [(d['defect_type'], d['size_mm'], d['percentage']) for d in deduplicated_top]
             deduplicated_bottom_defects = [(d['defect_type'], d['size_mm'], d['percentage']) for d in deduplicated_bottom]
 
-            print(f"  Top defects: {len(wood_top_defects)} raw -> {len(deduplicated_top_defects)} deduplicated")
-            print(f"  Bottom defects: {len(wood_bottom_defects)} raw -> {len(deduplicated_bottom_defects)} deduplicated")
+            print(f"🔍 STRICT MODE: After NO deduplication - Top: {len(deduplicated_top_defects)} defects, Bottom: {len(deduplicated_bottom_defects)} defects")
+            print(f"🔍 STRICT MODE: Final top defects for recording: {deduplicated_top_defects}")
+            print(f"🔍 STRICT MODE: Final bottom defects for recording: {deduplicated_bottom_defects}")
+            print(f"✅ STRICT RULE ENFORCED: All {len(wood_top_defects)} top + {len(wood_bottom_defects)} bottom annotated defects will be recorded")
 
             # Store deduplicated defects in scan session data
             # CRITICAL: Use the authoritative WOOD_PALLET_WIDTH_MM (which follows detected_width_mm)
@@ -5625,6 +5673,43 @@ class App(tk.Tk):
 
         self.scan_phase_active = False
         self.update_status_text("Status: SCAN_PHASE completed - grading finished", STATUS_READY_COLOR)
+
+    def _scan_mode_deduplicate(self, detections):
+        """Conservative deduplication for scan mode - only remove true duplicates within same segment"""
+        if not detections:
+            return []
+        
+        # Group detections by segment first
+        segments = {}
+        for detection in detections:
+            segment_id = detection.get('segment', 0)
+            if segment_id not in segments:
+                segments[segment_id] = []
+            segments[segment_id].append(detection)
+        
+        # Only deduplicate within each segment, preserve all cross-segment detections
+        deduplicated = []
+        for segment_id, segment_detections in segments.items():
+            print(f"🔍 DEBUG: Processing segment {segment_id} with {len(segment_detections)} detections")
+            
+            # For each segment, only remove exact duplicates (same type, very similar size)
+            segment_unique = []
+            for detection in segment_detections:
+                is_duplicate = False
+                for existing in segment_unique:
+                    if (detection['defect_type'] == existing['defect_type'] and
+                        abs(detection['size_mm'] - existing['size_mm']) < 2.0):  # Very strict threshold
+                        print(f"🔍 DEBUG: Removing duplicate in segment {segment_id}: {detection['defect_type']} {detection['size_mm']:.1f}mm (similar to {existing['size_mm']:.1f}mm)")
+                        is_duplicate = True
+                        break
+                
+                if not is_duplicate:
+                    segment_unique.append(detection)
+            
+            print(f"🔍 DEBUG: Segment {segment_id}: {len(segment_detections)} -> {len(segment_unique)} after conservative deduplication")
+            deduplicated.extend(segment_unique)
+        
+        return deduplicated
 
     def finalize_grading(self, final_grade, all_measurements):
         """Central function to log piece details, update stats, and send Arduino command."""
@@ -5782,7 +5867,9 @@ class App(tk.Tk):
 
             for bbox, defect_type, size_mm, confidence in filtered_detections:
                 # Use detection information directly for grading (already within cropped area)
-                detections_for_grading.append((defect_type, size_mm, 0.0))  # percentage not needed for grading
+                # Round to 1 decimal place for consistent formatting
+                size_mm_rounded = round(size_mm, 1)
+                detections_for_grading.append((defect_type, size_mm_rounded, 0.0))  # percentage not needed for grading
 
                 # Count by defect type for display
                 if defect_type in final_defect_dict:
@@ -5817,7 +5904,7 @@ class App(tk.Tk):
             display_name = self.get_display_name_for_defect(defect_type)
             
             # Create label with display name and size measurement
-            label = f"{display_name} - {size_mm:.0f}mm"
+            label = f"{display_name} - {size_mm:.1f}mm"
             
             # Add confidence if it's reasonably high
             if confidence > 0.5:
@@ -5957,7 +6044,6 @@ class App(tk.Tk):
         try:
             self.update_grade_details_tab()
             self.update_performance_tab()
-            self.update_recent_activity_tab()
         except Exception as e:
             print(f"Error updating statistics tabs: {e}")
     
@@ -5979,51 +6065,123 @@ class App(tk.Tk):
         for widget in self.grading_details_frame.winfo_children():
             widget.destroy()
         
+        # Get the actual system background color from the parent window
+        try:
+            tab_bg = self.cget('bg')  # Get background from main window
+        except:
+            tab_bg = '#d9d9d9'  # Default Tkinter gray if unable to get
+        
+        # Create scrollable frame container with canvas that fills the entire area
+        canvas = tk.Canvas(self.grading_details_frame, bg=tab_bg, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(self.grading_details_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=tab_bg)  # Use tk.Frame instead of ttk.Frame
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Pack canvas and scrollbar to fill the entire area
+        canvas.pack(side="left", fill="both", expand=True, padx=0, pady=0)
+        scrollbar.pack(side="right", fill="y")
+
+        # Bind mouse wheel to canvas for scrolling
+        def _on_mousewheel_standards(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel_standards)
+
         # Grading thresholds reference - Dynamic based on current wood width
-        thresholds_frame = ttk.LabelFrame(self.grading_details_frame, text="SS-EN 1611-1 Grading Thresholds", padding="5")
-        thresholds_frame.pack(fill="x", pady=2)
+        thresholds_frame = tk.LabelFrame(scrollable_frame, text="SS-EN 1611-1 Pine Timber Grading Reference", 
+                                       bg=tab_bg, padx=5, pady=5)
+        thresholds_frame.pack(fill="both", expand=True, pady=5, padx=5)
 
         # Calculate dynamic thresholds based on current wood width
         wood_width = WOOD_PALLET_WIDTH_MM if WOOD_PALLET_WIDTH_MM > 0 else 115  # Default to 115mm if not detected
 
-        threshold_text = f"SS-EN 1611-1 Grading Thresholds (Wood Width: {wood_width}mm):\n"
-        threshold_text += "Limit = (0.10 × width) + constant\n\n"
+        threshold_text = f"SS-EN 1611-1 Pine Timber Grading Standard (Official Implementation)\n"
+        threshold_text += f"Current Wood Width: {wood_width:.1f}mm\n\n"
+        
+        threshold_text += "GRADING CRITERIA (G2-0 = Best Quality):\n"
+        threshold_text += "• G2-0 (Premium): Max 2 knots/meter, 0 unsound knots\n"
+        threshold_text += "• G2-1 (Good): Max 4 knots/meter, 0 unsound knots\n"
+        threshold_text += "• G2-2 (Fair): Max 6 knots/meter, 2 unsound knots\n"
+        threshold_text += "• G2-3 (Poor): Unlimited knots, 5 unsound knots max\n"
+        threshold_text += "• G2-4 (Reject): Unlimited knots and defects\n\n"
+        
+        threshold_text += "KNOT SIZE LIMITS (Formula: 10% × Width + Constant):\n\n"
+
+        # Calculate size adjustment for display
+        size_adjustment = 10 if wood_width >= 180 else 0
+        adjustment_note = f" (+{size_adjustment}mm for ≥180mm width)" if size_adjustment > 0 else ""
 
         # Sound Knots thresholds
         sound_limits = {}
         for grade, constant in GRADING_CONSTANTS["Sound_Knot"].items():
-            limit = (0.10 * wood_width) + constant
+            limit = (0.10 * wood_width) + constant + size_adjustment
             sound_limits[grade] = limit
 
-        threshold_text += "Sound Knots:\n"
-        threshold_text += f"  G2-0: ≤{sound_limits.get('G2-0', 21.5):.1f}mm  |  G2-1: ≤{sound_limits.get('G2-1', 31.5):.1f}mm  |  G2-2: ≤{sound_limits.get('G2-2', 46.5):.1f}mm  |  G2-3: ≤{sound_limits.get('G2-3', 61.5):.1f}mm\n\n"
+        threshold_text += f"Sound Knots (Live Knots){adjustment_note}:\n"
+        threshold_text += f"  G2-0: ≤{sound_limits.get('G2-0', 21.5):.1f}mm | G2-1: ≤{sound_limits.get('G2-1', 31.5):.1f}mm | G2-2: ≤{sound_limits.get('G2-2', 46.5):.1f}mm | G2-3: ≤{sound_limits.get('G2-3', 61.5):.1f}mm\n\n"
 
         # Dead Knots thresholds
         dead_limits = {}
         for grade, constant in GRADING_CONSTANTS["Dead_Knot"].items():
-            limit = (0.10 * wood_width) + constant
+            limit = (0.10 * wood_width) + constant + size_adjustment
             dead_limits[grade] = limit
 
-        threshold_text += "Dead Knots:\n"
-        threshold_text += f"  G2-0: ≤{dead_limits.get('G2-0', 11.5):.1f}mm  |  G2-1: ≤{dead_limits.get('G2-1', 21.5):.1f}mm  |  G2-2: ≤{dead_limits.get('G2-2', 31.5):.1f}mm  |  G2-3: ≤{dead_limits.get('G2-3', 61.5):.1f}mm\n\n"
+        threshold_text += f"Dead Knots{adjustment_note}:\n"
+        threshold_text += f"  G2-0: ≤{dead_limits.get('G2-0', 11.5):.1f}mm | G2-1: ≤{dead_limits.get('G2-1', 21.5):.1f}mm | G2-2: ≤{dead_limits.get('G2-2', 31.5):.1f}mm | G2-3: ≤{dead_limits.get('G2-3', 61.5):.1f}mm\n\n"
 
         # Unsound Knots thresholds (includes Crack Knots)
         unsound_limits = {}
         for grade, constant in GRADING_CONSTANTS["Unsound_Knot"].items():
-            limit = (0.10 * wood_width) + constant
+            limit = (0.10 * wood_width) + constant + size_adjustment
             unsound_limits[grade] = limit
 
-        threshold_text += "Unsound Knots (incl. Crack Knots):\n"
-        threshold_text += f"  G2-2: ≤{unsound_limits.get('G2-2', 25.5):.1f}mm  |  G2-3: ≤{unsound_limits.get('G2-3', 50.5):.1f}mm\n\n"
+        threshold_text += f"Unsound/Missing Knots (incl. Knots with Cracks){adjustment_note}:\n"
+        threshold_text += f"  G2-0: NOT PERMITTED | G2-1: NOT PERMITTED\n"
+        threshold_text += f"  G2-2: ≤{unsound_limits.get('G2-2', 25.5):.1f}mm | G2-3: ≤{unsound_limits.get('G2-3', 50.5):.1f}mm\n\n"
 
-        threshold_text += "Count Limits (Dead/Unsound per meter):\n"
-        threshold_text += "  G2-0: 0  |  G2-1: 1  |  G2-2: 2  |  G2-3: 5\n\n"
-        threshold_text += "Note: 'Knot with Crack' is classified as Unsound Knot"
+        # Number adjustments
+        number_adjustment = 1.5 if wood_width > 225 else 1.0
+        number_note = f" (×{number_adjustment:.1f} for >225mm width)" if number_adjustment > 1.0 else ""
 
-        ttk.Label(thresholds_frame, text=threshold_text, font=self.font_small, justify="left", wraplength=600).pack(anchor="w")
+        threshold_text += f"KNOT FREQUENCY LIMITS (Per Meter){number_note}:\n"
+        threshold_text += f"  G2-0: Max {int(2 * number_adjustment)} total knots, 0 unsound\n"
+        threshold_text += f"  G2-1: Max {int(4 * number_adjustment)} total knots, 0 unsound\n"
+        threshold_text += f"  G2-2: Max {int(6 * number_adjustment)} total knots, 2 unsound\n"
+        threshold_text += f"  G2-3: Unlimited total knots, 5 unsound max\n"
+        threshold_text += f"  G2-4: Unlimited both\n\n"
+
+        threshold_text += "WIDTH-BASED ADJUSTMENTS:\n"
+        threshold_text += "• Size Adjustment: +10mm to ALL knot limits if width ≥ 180mm\n"
+        threshold_text += "• Number Adjustment: +50% to total knot limits if width > 225mm\n"
+        threshold_text += "• Unsound knot frequency limits are NOT adjusted\n\n"
+
+        threshold_text += "GRADING LOGIC:\n"
+        threshold_text += "1. Both size AND frequency limits must be satisfied\n"
+        threshold_text += "2. Final grade = WORST grade between top and bottom surfaces\n"
+        threshold_text += "3. Any Encased knot automatically fails G2-0 and G2-1\n"
+        threshold_text += "4. Grade assigned is the BEST grade that passes all criteria\n\n"
+        
+        threshold_text += "DETECTION MAPPING:\n"
+        threshold_text += "• Sound_Knot → Sound Knots (best quality)\n"
+        threshold_text += "• Dead_Knot → Dead Knots (reduced quality)\n"
+        threshold_text += "• Crack_Knot → Unsound Knots (poor quality)\n"
+        threshold_text += "• Missing_Knot → Unsound Knots (poor quality)\n"
+        threshold_text += "• Unsound_Knot → Unsound Knots (poor quality)"
+
+        # Use a Text widget for better scrollable content display with larger font
+        text_widget = tk.Text(thresholds_frame, wrap=tk.WORD, height=20, font=("TkDefaultFont", 11), bg=tab_bg)
+        text_widget.insert("1.0", threshold_text)
+        text_widget.config(state=tk.DISABLED)  # Make it read-only
+        text_widget.pack(fill="both", expand=True, padx=5, pady=5)
 
     def update_performance_tab(self):
-        """Update the Performance Metrics tab"""
+        """Update the Performance Metrics tab with scrollable canvas"""
         if not hasattr(self, 'performance_frame'):
             return
             
@@ -6031,20 +6189,53 @@ class App(tk.Tk):
         for widget in self.performance_frame.winfo_children():
             widget.destroy()
         
+        # Get the actual system background color from the parent window
+        try:
+            tab_bg = self.cget('bg')  # Get background from main window
+        except:
+            tab_bg = '#d9d9d9'  # Default Tkinter gray if unable to get
+        
+        # Create scrollable frame container with canvas that fills the entire area
+        canvas = tk.Canvas(self.performance_frame, bg=tab_bg, highlightthickness=0, borderwidth=0)
+        scrollbar = ttk.Scrollbar(self.performance_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=tab_bg)  # Use tk.Frame instead of ttk.Frame
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Pack canvas and scrollbar to fill the entire area
+        canvas.pack(side="left", fill="both", expand=True, padx=0, pady=0)
+        scrollbar.pack(side="right", fill="y")
+
+        # Bind mouse wheel to canvas for scrolling
+        def _on_mousewheel_performance(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel_performance)
+        
         # System calibration info
-        calibration_frame = ttk.LabelFrame(self.performance_frame, text="System Calibration", padding="5")
-        calibration_frame.pack(fill="x", pady=2)
+        calibration_frame = tk.LabelFrame(scrollable_frame, text="System Configuration", 
+                                        bg=tab_bg, padx=5, pady=5)
+        calibration_frame.pack(fill="x", pady=5, padx=5)
         
-        calibration_text = f"Wood Pallet Width: {WOOD_PALLET_WIDTH_MM}mm\n"
-        calibration_text += f"Top Camera: {TOP_CAMERA_DISTANCE_CM}cm distance, {TOP_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
-        calibration_text += f"Bottom Camera: {BOTTOM_CAMERA_DISTANCE_CM}cm distance, {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/px\n"
-        calibration_text += "Standard: SS-EN 1611-1 European Wood Grading"
+        calibration_text = f"Grading Standard: SS-EN 1611-1 European Pine Timber\n"
+        calibration_text += f"Frame Rate: 30 FPS (optimized for smooth display)\n"
+        calibration_text += f"Detection Rate: Every 3rd frame (10 FPS for AI processing)\n\n"
+        calibration_text += f"Wood Pallet Width: {WOOD_PALLET_WIDTH_MM:.1f}mm\n"
+        calibration_text += f"Top Camera: {TOP_CAMERA_DISTANCE_CM}cm distance, {TOP_CAMERA_PIXEL_TO_MM:.3f}mm/pixel\n"
+        calibration_text += f"Bottom Camera: {BOTTOM_CAMERA_DISTANCE_CM}cm distance, {BOTTOM_CAMERA_PIXEL_TO_MM:.3f}mm/pixel"
         
-        ttk.Label(calibration_frame, text=calibration_text, font=self.font_small, justify="left").pack(anchor="w")
+        tk.Label(calibration_frame, text=calibration_text, font=("TkDefaultFont", 10), 
+                justify="left", bg=tab_bg, anchor="w").pack(fill="x", padx=5, pady=5)
         
         # Processing speed metrics
-        speed_frame = ttk.LabelFrame(self.performance_frame, text="Processing Metrics", padding="5")
-        speed_frame.pack(fill="x", pady=2)
+        speed_frame = tk.LabelFrame(scrollable_frame, text="Processing Metrics", 
+                                  bg=tab_bg, padx=5, pady=5)
+        speed_frame.pack(fill="x", pady=5, padx=5)
         
         total_processed = getattr(self, 'total_pieces_processed', 0)
         session_start = getattr(self, 'session_start_time', time.time())
@@ -6060,286 +6251,48 @@ class App(tk.Tk):
         else:
             speed_text = "No processing data available yet"
         
-        ttk.Label(speed_frame, text=speed_text, font=self.font_small, justify="left").pack(anchor="w")
+        tk.Label(speed_frame, text=speed_text, font=("TkDefaultFont", 10), 
+                justify="left", bg=tab_bg, anchor="w").pack(fill="x", padx=5, pady=5)
         
         # Grade distribution
-        distribution_frame = ttk.LabelFrame(self.performance_frame, text="Grade Distribution", padding="5")
-        distribution_frame.pack(fill="x", pady=2)
+        distribution_frame = tk.LabelFrame(scrollable_frame, text="Grade Distribution", 
+                                         bg=tab_bg, padx=5, pady=5)
+        distribution_frame.pack(fill="x", pady=5, padx=5)
 
         if total_processed > 0:
             grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
-            distribution_text = ""
-            grade_names = {1: "G2-0", 2: "G2-1", 3: "G2-2", 4: "G2-3", 5: "G2-4"}
+            distribution_text = "SS-EN 1611-1 Grade Distribution:\n\n"
+            grade_descriptions = {
+                1: "G2-0 (Premium)",
+                2: "G2-1 (Good)", 
+                3: "G2-2 (Fair)",
+                4: "G2-3 (Poor)",
+                5: "G2-4 (Reject)"
+            }
 
             for grade, count in grade_counts.items():
                 percentage = (count / total_processed) * 100 if total_processed > 0 else 0
-                distribution_text += f"Grade {grade} ({grade_names.get(grade, 'Unknown')}): {count} pieces ({percentage:.1f}%)\n"
+                description = grade_descriptions.get(grade, 'Unknown')
+                distribution_text += f"{description}: {count} pieces ({percentage:.1f}%)\n"
+                
+            # Add quality summary
+            premium_quality = grade_counts.get(1, 0) + grade_counts.get(2, 0)
+            acceptable_quality = grade_counts.get(3, 0)
+            poor_quality = grade_counts.get(4, 0) + grade_counts.get(5, 0)
+            
+            distribution_text += f"\nQuality Summary:\n"
+            distribution_text += f"Premium+Good (G2-0/G2-1): {premium_quality} ({(premium_quality/total_processed)*100:.1f}%)\n"
+            distribution_text += f"Fair Quality (G2-2): {acceptable_quality} ({(acceptable_quality/total_processed)*100:.1f}%)\n"
+            distribution_text += f"Poor+Reject (G2-3/G2-4): {poor_quality} ({(poor_quality/total_processed)*100:.1f}%)"
         else:
-            distribution_text = "No processing data available yet"
+            distribution_text = "No processing data available yet\n\nGrades will appear here after wood pieces are processed and graded according to SS-EN 1611-1 standard."
 
-        ttk.Label(distribution_frame, text=distribution_text, font=self.font_small, justify="left").pack(anchor="w")
-
-    def update_recent_activity_tab(self):
-        """Update the Recent Activity tab with widened summary and scrollable processing log from defects.txt files"""
-        # Update Session Summary (wider display) - always update this, regardless of scrolling
-        for widget in self.session_summary_frame.winfo_children():
-            widget.destroy()
-
-        total_processed = getattr(self, 'total_pieces_processed', 0)
-        session_start = getattr(self, 'session_start_time', time.time())
-        session_duration = time.time() - session_start
-        hours = int(session_duration // 3600)
-        minutes = int((session_duration % 3600) // 60)
-
-        # Create a wider summary display with better formatting
-        summary_main_frame = ttk.Frame(self.session_summary_frame)
-        summary_main_frame.pack(fill="x", expand=True)
-
-        # Left column - Basic stats
-        left_frame = ttk.Frame(summary_main_frame)
-        left_frame.pack(side="left", fill="both", expand=True)
-
-        basic_stats = f"Total Pieces Processed: {total_processed}\n"
-        basic_stats += f"Session Duration: {hours}h {minutes}m\n"
-        if total_processed > 0:
-            avg_per_hour = (total_processed / session_duration) * 3600 if session_duration > 0 else 0
-            basic_stats += f"Average Rate: {avg_per_hour:.1f} pieces/hour"
-
-        ttk.Label(left_frame, text=basic_stats, font=self.font_small, justify="left").pack(anchor="w")
-
-        # Right column - Grade distribution
-        if total_processed > 0:
-            right_frame = ttk.Frame(summary_main_frame)
-            right_frame.pack(side="right", fill="both", expand=True)
-
-            grade_counts = getattr(self, 'grade_counts', {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
-            grade_stats = "Grade Distribution:\n"
-            grade_names = {1: "G2-0", 2: "G2-1", 3: "G2-2", 4: "G2-3", 5: "G2-4"}
-
-            for grade, count in grade_counts.items():
-                percentage = (count / total_processed) * 100 if total_processed > 0 else 0
-                grade_stats += f"{grade_names.get(grade, 'Unknown')}: {count} ({percentage:.1f}%)\n"
-
-            ttk.Label(right_frame, text=grade_stats, font=self.font_small, justify="left").pack(anchor="w")
-
-        # Don't update log if user is scrolling through it
-        if getattr(self, '_user_scrolling_log', False):
-            return
-
-        # Check if number of defects files has changed (only update processing log when grading cycle completes)
-        defects_entries = self._read_defects_files()
-        current_file_count = len(defects_entries)
-
-        # Only update processing log if the number of defects files has changed (new wood processed) OR if this is the first update
-        if (current_file_count != self._last_defects_files_count or not hasattr(self, '_last_stats_content')):
-            self._last_defects_files_count = current_file_count
-
-            # Update Processing Log from defects.txt files
-            for widget in self.processing_log_frame.winfo_children():
-                widget.destroy()
-
-            if defects_entries:
-                # Sort by timestamp (newest first)
-                defects_entries.sort(key=lambda x: x['timestamp'], reverse=True)
-
-                for i, entry in enumerate(defects_entries):
-                    wood_number = entry.get('wood_number', 'Unknown')
-                    final_grade = entry.get('final_grade', 'Unknown')
-                    top_grade = entry.get('top_grade', 'Unknown')
-                    bottom_grade = entry.get('bottom_grade', 'Unknown')
-                    wood_width = entry.get('wood_width', 'Unknown')
-                    top_defects = entry.get('top_defects', [])
-                    bottom_defects = entry.get('bottom_defects', [])
-                    timestamp = entry.get('timestamp', 'Unknown')
-                    session_name = entry.get('session_name', 'Unknown')
-
-                    # Create a frame for each log entry for better formatting
-                    entry_frame = ttk.Frame(self.processing_log_frame)
-                    entry_frame.pack(fill="x", pady=2, padx=5)
-
-                    # Display the clean defects.txt format
-                    log_text = f"[{timestamp}] Wood No. ({wood_number}) - {wood_width}mm\n"
-                    log_text += f"Top Panel Grade: {top_grade}\n"
-                    log_text += f"Bottom Panel Grade: {bottom_grade}\n"
-                    log_text += f"Final Grade: {final_grade}\n\n"
-
-                    if top_defects:
-                        log_text += "Top Panel Defects:\n"
-                        for j, defect in enumerate(top_defects, 1):
-                            log_text += f"{j}. {defect.get('type', 'Unknown')} - {defect.get('size', 'Unknown')}mm\n"
-                    else:
-                        log_text += "Top Panel Defects:\nNo defects detected\n"
-
-                    log_text += "\n"
-
-                    if bottom_defects:
-                        log_text += "Bottom Panel Defects:\n"
-                        for j, defect in enumerate(bottom_defects, 1):
-                            log_text += f"{j}. {defect.get('type', 'Unknown')} - {defect.get('size', 'Unknown')}mm\n"
-                    else:
-                        log_text += "Bottom Panel Defects:\nNo defects detected\n"
-
-                    # Color code by grade
-                    grade_colors = {
-                        "G2-0": "dark green",
-                        "G2-1": "green",
-                        "G2-2": "orange",
-                        "G2-3": "red",
-                        "G2-4": "dark red"
-                    }
-                    text_color = grade_colors.get(final_grade, "black")
-
-                    log_label = ttk.Label(entry_frame, text=log_text, font=("Arial", 9),
-                                        justify="left", foreground=text_color)
-                    log_label.pack(anchor="w", fill="x")
-
-                    # Add separator line (except for last entry)
-                    if i < len(defects_entries) - 1:
-                        separator = ttk.Separator(self.processing_log_frame, orient="horizontal")
-                        separator.pack(fill="x", pady=2)
-            else:
-                # Show message when no defects files exist
-                no_data_label = ttk.Label(self.processing_log_frame,
-                                        text="No processed wood data yet...\nDefects files will appear here after processing.",
-                                        font=self.font_small, foreground="gray")
-                no_data_label.pack(pady=20)
-
-            # Cache the content
-            self._last_stats_content = self._generate_stats_content()
-
-            # Update scroll region for log
-            if hasattr(self, 'log_canvas'):
-                self.log_canvas.configure(scrollregion=self.log_canvas.bbox("all"))
+        tk.Label(distribution_frame, text=distribution_text, font=("TkDefaultFont", 11), 
+                justify="left", bg=tab_bg, anchor="w").pack(fill="x", padx=5, pady=5)
 
     def update_detailed_statistics(self):
-        """Legacy method - now redirects to update_recent_activity_tab for compatibility"""
-        self.update_recent_activity_tab()
-
-    def _read_defects_files(self):
-        """Read defects.txt files from Detections directory and parse wood processing data"""
-        import os
-        import glob
-        from datetime import datetime
-
-        defects_entries = []
-
-        # Look for defects.txt files in Detections directory
-        detections_dir = os.path.join("testIR", "Detections")
-        if not os.path.exists(detections_dir):
-            return defects_entries
-
-        # Find all defects.txt files
-        defects_files = glob.glob(os.path.join(detections_dir, "**", "defects.txt"), recursive=True)
-
-        for defects_file in defects_files:
-            try:
-                with open(defects_file, 'r') as f:
-                    content = f.read()
-
-                # Parse the defects.txt content
-                lines = content.strip().split('\n')
-                if not lines:
-                    continue
-
-                # Extract session and wood info from file path
-                # Path format: testIR/Detections/MMDDYY:TT-Session/Wood (No.)/defects.txt
-                path_parts = defects_file.split(os.sep)
-                session_name = ""
-                wood_number = 0
-
-                for part in path_parts:
-                    if "H-Session" in part:
-                        session_name = part
-                    elif part.startswith("Wood (") and part.endswith(")"):
-                        wood_number = int(part.replace("Wood (", "").replace(")", ""))
-
-                # Parse content
-                entry = {
-                    'session_name': session_name,
-                    'wood_number': wood_number,
-                    'timestamp': 'Unknown',
-                    'final_grade': 'Unknown',
-                    'top_grade': 'Unknown',
-                    'bottom_grade': 'Unknown',
-                    'wood_width': 'Unknown',
-                    'top_defects': [],
-                    'bottom_defects': []
-                }
-
-                # Extract timestamp from session name (MMDDYY:TT format)
-                if session_name:
-                    try:
-                        # Parse MMDDYY:TT format
-                        date_part, time_part = session_name.split(':')
-                        month = int(date_part[:2])
-                        day = int(date_part[2:4])
-                        year = 2000 + int(date_part[4:6])
-                        hour = int(time_part[:2])
-
-                        # Create datetime object (assume current minute/second for display)
-                        dt = datetime(year, month, day, hour, 0, 0)
-                        entry['timestamp'] = dt.strftime("%m/%d/%Y %H:00")
-                    except:
-                        entry['timestamp'] = session_name
-
-                current_section = None
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        continue
-
-                    # Parse header line (Wood No. (X) - Ymm)
-                    if line.startswith("Wood No."):
-                        # Extract wood width if available
-                        if " - " in line:
-                            width_part = line.split(" - ")[1]
-                            entry['wood_width'] = width_part.replace("mm", "").strip()
-                        continue
-
-                    # Parse grade lines
-                    elif "Top Panel Grade:" in line:
-                        entry['top_grade'] = line.split(": ")[1].strip()
-                    elif "Bottom Panel Grade:" in line:
-                        entry['bottom_grade'] = line.split(": ")[1].strip()
-                    elif "Final Grade:" in line:
-                        entry['final_grade'] = line.split(": ")[1].strip()
-
-                    # Parse defect sections
-                    elif line == "Top Panel Defects:":
-                        current_section = 'top'
-                    elif line == "Bottom Panel Defects:":
-                        current_section = 'bottom'
-                    elif current_section and line.startswith("No defects detected"):
-                        current_section = None
-                    elif current_section and line[0].isdigit():
-                        # Parse defect line: "1. Defect Type - Size mm"
-                        try:
-                            parts = line.split('. ', 1)[1]  # Remove number prefix
-                            if ' - ' in parts:
-                                defect_type, size_part = parts.split(' - ', 1)
-                                size_mm = float(size_part.replace('mm', '').strip())
-
-                                defect_info = {
-                                    'type': defect_type.strip(),
-                                    'size': size_mm
-                                }
-
-                                if current_section == 'top':
-                                    entry['top_defects'].append(defect_info)
-                                elif current_section == 'bottom':
-                                    entry['bottom_defects'].append(defect_info)
-                        except:
-                            continue
-
-                # Only add entries that have valid data
-                if entry['final_grade'] != 'Unknown':
-                    defects_entries.append(entry)
-
-            except Exception as e:
-                print(f"Error reading defects file {defects_file}: {e}")
-                continue
-
-        return defects_entries
+        """Legacy method - functionality removed since Recent Activity tab was removed"""
+        pass
 
     def _generate_stats_content(self):
         """Generate a string representation of current stats for change detection"""
@@ -6740,16 +6693,12 @@ class App(tk.Tk):
         """Attempt to recover camera connection"""
         try:
             print("Attempting camera reconnection...")
-            # Set recovery flag to prevent health monitoring interference
-            self._recovering_cameras = True
-            
             # Use camera handler's reconnect_cameras method
             success = self.camera_handler.reconnect_cameras()
             if success:
                 # Update the cap references after successful reconnection
                 self.cap_top = self.camera_handler.top_camera
                 self.cap_bottom = self.camera_handler.bottom_camera
-                print(f"🔄 Updated camera references: cap_top={self.cap_top is not None}, cap_bottom={self.cap_bottom is not None}")
                 
                 # Clear the error (this sends CLEAR_ERROR to Arduino)
                 self.clear_error("CAMERA_DISCONNECTED")
@@ -6760,8 +6709,7 @@ class App(tk.Tk):
                 
                 print("✅ Camera connection recovered successfully")
                 
-                # Final verification before showing success notification with additional delay
-                time.sleep(0.3)  # Additional stabilization delay
+                # Final verification before showing success notification
                 final_status = self.camera_handler.check_camera_status()
                 if final_status['both_ok']:
                     # Show success notification to user
@@ -6769,18 +6717,14 @@ class App(tk.Tk):
                     
                     # Update status
                     self.update_status_text("Status: Cameras reconnected successfully", STATUS_READY_COLOR)
-                    
-                    # Clear recovery flag
-                    self._recovering_cameras = False
-                    return True
                 else:
                     print("⚠️ Warning: Final camera status check failed after apparent success")
                     print(f"   Final status: Top={'✅ OK' if final_status['top_ok'] else '❌ FAIL'}, Bottom={'✅ OK' if final_status['bottom_ok'] else '❌ FAIL'}")
                     # Don't show success notification if final check fails
-                    self._recovering_cameras = False
                     return False
                 
                 self.camera_reconnection_attempts = 0  # Reset counter on success
+                return True
             else:
                 print("Camera reconnection failed - not all cameras reconnected")
                 
@@ -6793,12 +6737,10 @@ class App(tk.Tk):
                     
                 error_details = f"Failed to reconnect {', '.join(missing_cameras)} camera(s)"
                 self.register_error("CAMERA_DISCONNECTED", error_details)
-                self._recovering_cameras = False
                 return False
         except Exception as e:
             print(f"Error in recover_camera_connection: {e}")
             self.register_error("CAMERA_DISCONNECTED", f"Recovery exception: {str(e)}")
-            self._recovering_cameras = False
             return False
 
     def monitor_camera_connectivity(self):
@@ -7269,8 +7211,8 @@ class App(tk.Tk):
             # Perform health check
             self.perform_health_check()
             
-            # Schedule next check in 5 seconds
-            self.after(5000, self.schedule_health_check)
+            # Schedule next check in 10 seconds (reduced frequency to reduce system load)
+            self.after(10000, self.schedule_health_check)
             
         except Exception as e:
             print(f"Error in schedule_health_check: {e}")
@@ -7304,10 +7246,6 @@ class App(tk.Tk):
     def monitor_camera_health(self):
         """Monitor camera connection and performance"""
         try:
-            # Skip health check if currently recovering cameras to prevent race conditions
-            if hasattr(self, '_recovering_cameras') and self._recovering_cameras:
-                return
-                
             # Use existing check_camera_status method
             camera_status = self.camera_handler.check_camera_status()
             
@@ -7337,7 +7275,7 @@ class App(tk.Tk):
                     print("✅ Camera health check: Both cameras working, clearing disconnection error")
                     self.clear_error("CAMERA_DISCONNECTED")
                 
-            # Log status periodically (not every check to avoid spam) - only when there are issues
+            # Log status periodically (not every check to avoid spam)
             if not camera_status['both_ok']:
                 top_status = '✅ OK' if camera_status['top_ok'] else '❌ FAIL'
                 bottom_status = '✅ OK' if camera_status['bottom_ok'] else '❌ FAIL'
