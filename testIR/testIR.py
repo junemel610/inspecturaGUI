@@ -157,6 +157,42 @@ ROI_COORDINATES = {
     }
 }
 
+# ------------------------------------------------------------------------------
+# WOOD ALIGNMENT LANE ROIs (Highway Lane Style)
+# Define top and bottom "lane" boundaries to detect misaligned wood
+# Wood should stay within the center area, not touching these lanes
+# ------------------------------------------------------------------------------
+ALIGNMENT_LANE_ROIS = {
+    "top": {
+        "top_lane": {
+            "x1": 345,  # Start from left edge of main ROI
+            "y1": 0,    # Top edge
+            "x2": 880,  # Right edge of main ROI
+            "y2": 65    # Reduced from 100 to 65 (-35 pixels) - smaller red zone
+        },
+        "bottom_lane": {
+            "x1": 345,  # Start from left edge of main ROI
+            "y1": 655,  # Increased from 620 to 655 (+35 pixels) - smaller red zone
+            "x2": 880,  # Right edge of main ROI
+            "y2": 720   # Bottom edge
+        }
+    },
+    "bottom": {
+        "top_lane": {
+            "x1": 350,  # Start from left edge of main ROI
+            "y1": 0,    # Top edge
+            "x2": 965,  # Right edge of main ROI
+            "y2": 40    # Reduced from 75 to 40 (-35 pixels) - smaller red zone
+        },
+        "bottom_lane": {
+            "x1": 350,  # Start from left edge of main ROI
+            "y1": 685,  # Increased from 650 to 685 (+35 pixels) - smaller red zone
+            "x2": 965,  # Right edge of main ROI
+            "y2": 720   # Bottom edge
+        }
+    }
+}
+
 # =============================================================================
 # END OF UI CONFIGURATION SECTION
 # =============================================================================
@@ -1083,7 +1119,9 @@ class DetectionDeduplicator:
 
 
 class ColorWoodDetector:
-    def __init__(self):
+    def __init__(self, parent_app=None):
+        self.parent_app = parent_app  # Reference to main application for accessing GUI variables
+        
         self.wood_color_profiles = {
             'top_panel': {
                 'rgb_lower': np.array([160, 160, 160]),  # BGR
@@ -1126,7 +1164,38 @@ class ColorWoodDetector:
             return bbox_pixels / self.pixel_per_mm_bottom
         else:
             raise ValueError("Camera must be 'top' or 'bottom'")
-
+    
+    def check_roi_collision(self, roi1_x, roi1_y, roi1_w, roi1_h, roi2_x, roi2_y, roi2_w, roi2_h):
+        """
+        Check if two rectangular ROIs overlap/collide.
+        Returns True if they intersect, False otherwise.
+        
+        Args:
+            roi1_x, roi1_y, roi1_w, roi1_h: First ROI (x, y, width, height)
+            roi2_x, roi2_y, roi2_w, roi2_h: Second ROI (x, y, width, height)
+        
+        Returns:
+            bool: True if ROIs overlap, False otherwise
+        """
+        # Calculate boundaries for both ROIs
+        roi1_x2 = roi1_x + roi1_w
+        roi1_y2 = roi1_y + roi1_h
+        roi2_x2 = roi2_x + roi2_w
+        roi2_y2 = roi2_y + roi2_h
+        
+        # Check if rectangles overlap using standard AABB collision detection
+        # Two rectangles overlap if:
+        # 1. Left edge of rect1 is to the left of right edge of rect2
+        # 2. Right edge of rect1 is to the right of left edge of rect2
+        # 3. Top edge of rect1 is above bottom edge of rect2
+        # 4. Bottom edge of rect1 is below top edge of rect2
+        overlap = (roi1_x < roi2_x2 and 
+                  roi1_x2 > roi2_x and 
+                  roi1_y < roi2_y2 and 
+                  roi1_y2 > roi2_y)
+        
+        return overlap
+    
     def calibrate_pixel_to_mm(self, reference_object_width_px, reference_object_width_mm, camera_name="top"):
         """Calibrate the pixel-to-millimeter conversion factor for specific camera"""
         global TOP_CAMERA_PIXEL_TO_MM, BOTTOM_CAMERA_PIXEL_TO_MM
@@ -1818,6 +1887,90 @@ class ColorWoodDetector:
                 self.wood_detection_results[camera] = result
                 self.dynamic_roi[camera] = auto_roi
                 
+                # Step 7: CHECK COLLISION WITH LANE BOUNDARIES
+                # This is where we check if wood is misaligned (touching top/bottom lanes)
+                if auto_roi and self.parent_app and hasattr(self.parent_app, 'lane_roi_var') and self.parent_app.lane_roi_var.get():
+                    roi_x, roi_y, roi_w, roi_h = auto_roi
+                    roi_y_bottom = roi_y + roi_h
+                    
+                    print(f"\n{'='*60}")
+                    print(f"[COLLISION CHECK] Checking wood alignment for {camera.upper()} camera")
+                    print(f"{'='*60}")
+                    print(f"  Wood ROI: x={roi_x}, y={roi_y}, w={roi_w}, h={roi_h}")
+                    print(f"  ROI Top Edge: y={roi_y}")
+                    print(f"  ROI Bottom Edge: y={roi_y_bottom}")
+                    
+                    collision_detected = False
+                    
+                    # Get camera-specific lane boundaries from configuration
+                    from testIR import ALIGNMENT_LANE_ROIS
+                    camera_lanes = ALIGNMENT_LANE_ROIS.get(camera, {})
+                    top_lane_config = camera_lanes.get('top_lane', {})
+                    bottom_lane_config = camera_lanes.get('bottom_lane', {})
+                    
+                    # TOP LANE COLLISION: Use camera-specific boundary
+                    top_lane_boundary = top_lane_config.get('y2', 100)  # Default to 100 if not configured
+                    top_collision = (roi_y <= top_lane_boundary)
+                    print(f"  Top Lane Boundary: y={top_lane_boundary} (camera-specific)")
+                    print(f"  TOP COLLISION: {top_collision} (Wood top={roi_y} {'<=' if top_collision else '>'} {top_lane_boundary})")
+                    
+                    if top_collision:
+                        collision_detected = True
+                        result['lane_collision'] = 'TOP'
+                        print(f"  ⚠️  MISALIGNMENT DETECTED: Wood is TOO HIGH (touching TOP lane)")
+                        # Trigger notification
+                        print(f"  📞 Checking if parent_app has show_alignment_warning method...")
+                        if hasattr(self.parent_app, 'show_alignment_warning'):
+                            print(f"  📞 Calling parent_app.show_alignment_warning('{camera}', 'TOP')...")
+                            self.parent_app.show_alignment_warning(camera, "TOP")
+                            print(f"  📞 show_alignment_warning() call completed")
+                        else:
+                            print(f"  ❌ parent_app does NOT have show_alignment_warning method!")
+
+                    
+                    # BOTTOM LANE COLLISION: Use camera-specific boundary
+                    bottom_lane_boundary = bottom_lane_config.get('y1', 620)  # Default to 620 if not configured
+                    bottom_collision = (roi_y_bottom >= bottom_lane_boundary)
+                    print(f"  Bottom Lane Boundary: y={bottom_lane_boundary} (camera-specific)")
+                    print(f"  BOTTOM COLLISION: {bottom_collision} (Wood bottom={roi_y_bottom} {'>=' if bottom_collision else '<'} {bottom_lane_boundary})")
+                    
+                    if bottom_collision:
+                        collision_detected = True
+                        result['lane_collision'] = 'BOTTOM'
+                        print(f"  ⚠️  MISALIGNMENT DETECTED: Wood is TOO LOW (touching BOTTOM lane)")
+                        # Trigger notification
+                        print(f"  📞 Checking if parent_app has show_alignment_warning method...")
+                        if hasattr(self.parent_app, 'show_alignment_warning'):
+                            print(f"  📞 Calling parent_app.show_alignment_warning('{camera}', 'BOTTOM')...")
+                            self.parent_app.show_alignment_warning(camera, "BOTTOM")
+                            print(f"  📞 show_alignment_warning() call completed")
+                        else:
+                            print(f"  ❌ parent_app does NOT have show_alignment_warning method!")
+
+
+                    
+                    # Summary
+                    if collision_detected:
+                        print(f"  🚨 RESULT: COLLISION DETECTED - Wood is MISALIGNED!")
+                    else:
+                        result['lane_collision'] = None
+                        print(f"  ✅ RESULT: NO COLLISION - Wood is properly aligned")
+                        # Clear any previous warnings
+                        if hasattr(self.parent_app, 'clear_alignment_warning'):
+                            self.parent_app.clear_alignment_warning(camera)
+                    
+                    print(f"{'='*60}\n")
+                else:
+                    # Lane ROI is disabled or parent_app not available
+                    if auto_roi:
+                        if not self.parent_app:
+                            print(f"[COLLISION CHECK] Skipped - parent_app not set")
+                        elif not hasattr(self.parent_app, 'lane_roi_var'):
+                            print(f"[COLLISION CHECK] Skipped - lane_roi_var not available")
+                        elif not self.parent_app.lane_roi_var.get():
+                            print(f"[COLLISION CHECK] Skipped - Lane ROI checkbox is unchecked")
+
+                
                 # Report wood width status to verify synchronization
                 self.report_wood_width_status(f"after {camera} detection")
             else:
@@ -1882,6 +2035,62 @@ class ColorWoodDetector:
         """Draw wood detection overlay similar to testIR.py"""
         overlay_frame = frame.copy()
         
+        # DEBUG: Print to verify function is called
+        print(f"[DEBUG] draw_wood_detection_overlay called for {camera_name}")
+        print(f"[DEBUG] lane_roi_var value: {self.lane_roi_var.get()}")
+        print(f"[DEBUG] camera_name in ALIGNMENT_LANE_ROIS: {camera_name in ALIGNMENT_LANE_ROIS}")
+        
+        # Draw alignment lane ROIs (highway lane style) - horizontal lanes at top and bottom
+        # ALWAYS show if Lane ROI checkbox is enabled
+        if self.lane_roi_var.get() and camera_name in ALIGNMENT_LANE_ROIS:
+            print(f"[DEBUG] Drawing lanes for {camera_name}!")
+            lane_rois = ALIGNMENT_LANE_ROIS[camera_name]
+            
+            # Create semi-transparent overlay for lanes
+            overlay = overlay_frame.copy()
+            
+            # Draw top lane with semi-transparent red fill
+            top_lane = lane_rois['top_lane']
+            cv2.rectangle(overlay, 
+                         (top_lane['x1'], top_lane['y1']), 
+                         (top_lane['x2'], top_lane['y2']), 
+                         (0, 0, 255), -1)  # Filled rectangle
+            
+            # Draw bottom lane with semi-transparent red fill
+            bottom_lane = lane_rois['bottom_lane']
+            cv2.rectangle(overlay, 
+                         (bottom_lane['x1'], bottom_lane['y1']), 
+                         (bottom_lane['x2'], bottom_lane['y2']), 
+                         (0, 0, 255), -1)  # Filled rectangle
+            
+            # Blend overlay with original frame (30% transparency)
+            cv2.addWeighted(overlay, 0.3, overlay_frame, 0.7, 0, overlay_frame)
+            
+            # Draw lane borders (solid red lines)
+            cv2.rectangle(overlay_frame, 
+                         (top_lane['x1'], top_lane['y1']), 
+                         (top_lane['x2'], top_lane['y2']), 
+                         (0, 0, 255), 3)  # Red border, 3px thick
+            cv2.rectangle(overlay_frame, 
+                         (bottom_lane['x1'], bottom_lane['y1']), 
+                         (bottom_lane['x2'], bottom_lane['y2']), 
+                         (0, 0, 255), 3)  # Red border, 3px thick
+            
+            # Add lane labels (horizontal text)
+            # Top lane label
+            top_label_x = (top_lane['x1'] + top_lane['x2']) // 2 - 70
+            top_label_y = (top_lane['y1'] + top_lane['y2']) // 2 + 10
+            cv2.putText(overlay_frame, "TOP LANE", 
+                       (top_label_x, top_label_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            
+            # Bottom lane label
+            bottom_label_x = (bottom_lane['x1'] + bottom_lane['x2']) // 2 - 90
+            bottom_label_y = (bottom_lane['y1'] + bottom_lane['y2']) // 2 + 10
+            cv2.putText(overlay_frame, "BOTTOM LANE", 
+                       (bottom_label_x, bottom_label_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        
         # Get stored wood detection results
         if hasattr(self, 'wood_detection_results') and self.wood_detection_results.get(camera_name):
             wood_detection = self.wood_detection_results[camera_name]
@@ -1910,8 +2119,29 @@ class ColorWoodDetector:
             # Draw auto ROI if available
             if wood_detection.get('auto_roi'):
                 roi_x, roi_y, roi_w, roi_h = wood_detection['auto_roi']
-                cv2.rectangle(overlay_frame, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (255, 255, 0), 2)
-                cv2.putText(overlay_frame, "AUTO ROI", (roi_x, roi_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+                
+                # Check if collision was detected in wood detection function
+                lane_collision = wood_detection.get('lane_collision')
+                
+                if lane_collision:
+                    # COLLISION DETECTED - Draw red warning overlay
+                    warning_overlay = overlay_frame.copy()
+                    cv2.rectangle(warning_overlay, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (0, 0, 255), -1)
+                    cv2.addWeighted(warning_overlay, 0.3, overlay_frame, 0.7, 0, overlay_frame)
+                    
+                    # Draw red border
+                    cv2.rectangle(overlay_frame, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (0, 0, 255), 3)
+                    
+                    # Add warning text
+                    warning_text = f"⚠ MISALIGNED - {lane_collision} LANE"
+                    cv2.putText(overlay_frame, warning_text, 
+                               (roi_x, roi_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                else:
+                    # NO COLLISION - Draw normal yellow AUTO ROI
+                    cv2.rectangle(overlay_frame, (roi_x, roi_y), (roi_x + roi_w, roi_y + roi_h), (255, 255, 0), 2)
+                    cv2.putText(overlay_frame, "AUTO ROI", (roi_x, roi_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+
+
         
         return overlay_frame
 
@@ -2155,6 +2385,12 @@ class App(tk.Tk):
             "alignment_failures": 0,
             "detection_retries": 0
         }
+        
+        # Alignment warning tracking (to prevent notification spam)
+        self.alignment_warnings = {
+            "top": {"last_warning_time": 0, "warning_cooldown": 5.0, "current_warning": None},
+            "bottom": {"last_warning_time": 0, "warning_cooldown": 5.0, "current_warning": None}
+        }
 
         # SCAN_PHASE mode variables
         self.scan_phase_active = False
@@ -2239,7 +2475,7 @@ class App(tk.Tk):
             self.cap_bottom = None
 
         # Initialize RGB Wood Detector for dynamic ROI generation
-        self.rgb_wood_detector = ColorWoodDetector()
+        self.rgb_wood_detector = ColorWoodDetector(parent_app=self)
         print("RGB Wood Detector initialized for dynamic ROI generation")
 
         # Initialize dynamic ROI storage
@@ -2254,7 +2490,7 @@ class App(tk.Tk):
         self.live_grades = {"top": "", "bottom": ""}
 
         # ROI (Region of Interest) settings
-        self.roi_enabled = {"top": True, "bottom": True, "wood_detection": True, "exit_wood": True}  # Enable ROI for both cameras and wood detection
+        self.roi_enabled = {"top": True, "bottom": True, "wood_detection": True, "exit_wood": True, "lane_alignment": True}  # Enable ROI for both cameras, wood detection, and lane alignment
         self.roi_coordinates = ROI_COORDINATES.copy()
 
         # UI colors
@@ -2297,6 +2533,10 @@ class App(tk.Tk):
         self.bottom_roi_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(roi_frame, text="Bottom ROI", variable=self.bottom_roi_var,
                         command=self.toggle_bottom_roi).pack(anchor="w")
+
+        self.lane_roi_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(roi_frame, text="Lane ROI", variable=self.lane_roi_var,
+                        command=self.toggle_lane_roi).pack(anchor="w")
 
         # Conveyor Control (place next to ROI)
         control_frame = ttk.LabelFrame(self, text="Conveyor Control", padding=FRAME_PADDING)
@@ -3557,6 +3797,67 @@ class App(tk.Tk):
         status = "enabled" if self.roi_enabled["bottom"] else "disabled"
         print(f"ROI for bottom camera {status}")
 
+    def toggle_lane_roi(self):
+        """Toggle lane ROI visibility for alignment detection"""
+        self.roi_enabled["lane_alignment"] = self.lane_roi_var.get()
+        status = "enabled" if self.roi_enabled["lane_alignment"] else "disabled"
+        print(f"Lane ROI display {status}")
+
+    def show_alignment_warning(self, camera_name, lane_type):
+        """
+        Show notification warning when wood touches alignment lanes.
+        Uses cooldown to prevent notification spam.
+        
+        Args:
+            camera_name: "top" or "bottom"
+            lane_type: "TOP" or "BOTTOM" lane
+        """
+        print(f"[DEBUG] show_alignment_warning called: camera={camera_name}, lane={lane_type}")
+        
+        current_time = time.time()
+        warning_state = self.alignment_warnings[camera_name]
+        
+        # Check if we're in cooldown period
+        time_since_last = current_time - warning_state["last_warning_time"]
+        if time_since_last < warning_state["warning_cooldown"]:
+            print(f"[DEBUG] In cooldown: {time_since_last:.1f}s < {warning_state['warning_cooldown']}s")
+            return  # Skip notification during cooldown
+        
+        # Check if this is a new warning (different from current)
+        warning_key = f"{lane_type}_LANE"
+        if warning_state["current_warning"] == warning_key:
+            print(f"[DEBUG] Duplicate warning: {warning_key} already active")
+            return  # Same warning still active
+        
+        print(f"[DEBUG] Showing new warning: {warning_key}")
+        
+        # Update warning state
+        warning_state["last_warning_time"] = current_time
+        warning_state["current_warning"] = warning_key
+        
+        # Show notification popup
+        warning_title = "⚠ WOOD MISALIGNMENT DETECTED"
+        warning_message = "The wood is misaligned."
+        
+        # Use message queue to show popup from main thread
+        print(f"[DEBUG] Putting warning message into queue...")
+        self.message_queue.put(("warning", warning_title, warning_message))
+        print(f"[DEBUG] Warning message queued successfully")
+        
+        # Also log to console
+        from datetime import datetime as dt
+        print(f"\n{'='*60}")
+        print(f"⚠ ALIGNMENT WARNING - {camera_name.upper()} CAMERA")
+        print(f"{'='*60}")
+        print(f"Lane: {lane_type} LANE")
+        print(f"Coordinate: y = {100 if lane_type == 'TOP' else 620} pixels")
+        print(f"Timestamp: {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}\n")
+    
+    def clear_alignment_warning(self, camera_name):
+        """Clear current alignment warning for a camera"""
+        self.alignment_warnings[camera_name]["current_warning"] = None
+
     def start_automatic_detection(self):
         """Start automatic detection when IR beam detects object"""
         self.auto_detection_active = True
@@ -3857,11 +4158,64 @@ class App(tk.Tk):
 
     def draw_wood_detection_overlay(self, frame, camera_name):
         """Draw wood detection results overlay on frame for visualization"""
-        # Only show wood detection overlay when live detection is active (beam blocked) or in scan mode
-        if not self.live_detection_var.get() and self.current_mode != "SCAN_PHASE":
-            return frame
-
         frame_copy = frame.copy()
+
+        # Draw alignment lane ROIs (highway lane style) - horizontal lanes at top and bottom
+        # ALWAYS show if Lane ROI checkbox is enabled (independent of Live Detection)
+        if self.lane_roi_var.get() and camera_name in ALIGNMENT_LANE_ROIS:
+            lane_rois = ALIGNMENT_LANE_ROIS[camera_name]
+            
+            # Create semi-transparent overlay for lanes
+            overlay = frame_copy.copy()
+            
+            # Draw top lane with semi-transparent red fill
+            top_lane = lane_rois['top_lane']
+            cv2.rectangle(overlay, 
+                         (top_lane['x1'], top_lane['y1']), 
+                         (top_lane['x2'], top_lane['y2']), 
+                         (0, 0, 255), -1)  # Filled rectangle
+            
+            # Draw bottom lane with semi-transparent red fill
+            bottom_lane = lane_rois['bottom_lane']
+            cv2.rectangle(overlay, 
+                         (bottom_lane['x1'], bottom_lane['y1']), 
+                         (bottom_lane['x2'], bottom_lane['y2']), 
+                         (0, 0, 255), -1)  # Filled rectangle
+            
+            # Blend overlay with original frame (30% transparency)
+            cv2.addWeighted(overlay, 0.3, frame_copy, 0.7, 0, frame_copy)
+            
+            # Draw lane borders (solid red lines)
+            cv2.rectangle(frame_copy, 
+                         (top_lane['x1'], top_lane['y1']), 
+                         (top_lane['x2'], top_lane['y2']), 
+                         (0, 0, 255), 3)  # Red border, 3px thick
+            cv2.rectangle(frame_copy, 
+                         (bottom_lane['x1'], bottom_lane['y1']), 
+                         (bottom_lane['x2'], bottom_lane['y2']), 
+                         (0, 0, 255), 3)  # Red border, 3px thick
+            
+            # Add lane labels (horizontal text)
+            # Top lane label
+            top_label_x = (top_lane['x1'] + top_lane['x2']) // 2 - 70
+            top_label_y = (top_lane['y1'] + top_lane['y2']) // 2 + 10
+            cv2.putText(frame_copy, "TOP LANE", 
+                       (top_label_x, top_label_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            
+            # Bottom lane label
+            bottom_label_x = (bottom_lane['x1'] + bottom_lane['x2']) // 2 - 90
+            bottom_label_y = (bottom_lane['y1'] + bottom_lane['y2']) // 2 + 10
+            cv2.putText(frame_copy, "BOTTOM LANE", 
+                       (bottom_label_x, bottom_label_y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+        # Check if we should show wood detection overlay
+        # Lanes are ALWAYS visible when checkbox is checked (above code)
+        # Wood detection overlay only shown when live detection is active or in scan mode
+        if not self.live_detection_var.get() and self.current_mode != "SCAN_PHASE":
+            # Return frame with lanes visible but without wood detection overlay
+            return frame_copy
 
         # Check if we have wood detection results
         if hasattr(self, 'wood_detection_results') and self.wood_detection_results:
@@ -3887,10 +4241,30 @@ class App(tk.Tk):
                     roi = self.dynamic_roi[camera_name]
                     if roi:
                         x, y, w, h = roi
-                        # Draw dynamic ROI (blue border)
-                        cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                        cv2.putText(frame_copy, " ",
-                                    (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                        
+                        # Check if collision was detected in wood detection function
+                        lane_collision = detection_result.get('lane_collision')
+                        
+                        if lane_collision:
+                            # COLLISION DETECTED - Draw red warning overlay
+                            warning_overlay = frame_copy.copy()
+                            cv2.rectangle(warning_overlay, (x, y), (x + w, y + h), (0, 0, 255), -1)
+                            cv2.addWeighted(warning_overlay, 0.3, frame_copy, 0.7, 0, frame_copy)
+                            
+                            # Draw red border
+                            cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (0, 0, 255), 3)
+                            
+                            # Add warning text
+                            warning_text = f"⚠ MISALIGNED - {lane_collision} LANE"
+                            cv2.putText(frame_copy, warning_text,
+                                        (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                        else:
+                            # NO COLLISION - Draw normal blue AUTO ROI
+                            cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                            cv2.putText(frame_copy, "AUTO ROI",
+                                        (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+
+
 
                 # Add wood detection summary
                 wood_count = detection_result.get('wood_count', 0)
@@ -3992,6 +4366,9 @@ class App(tk.Tk):
 
                     # Store wood detection results for overlay display
                     self.wood_detection_results[camera_name] = wood_detection
+
+                    # Check for wood lane alignment (highway lane style check)
+                    self.check_wood_lane_alignment(camera_name)
 
                     # Store dynamic ROI for defect detection
                     self.dynamic_roi[camera_name] = wood_detection.get('auto_roi')
@@ -4666,10 +5043,23 @@ class App(tk.Tk):
         """Process messages from background threads safely in the main thread"""
         try:
             while True:
-                msg_type, data = self.message_queue.get_nowait()
+                msg_type, *data = self.message_queue.get_nowait()
+                
+                # Handle alignment warning notifications
+                if msg_type == "warning":
+                    print(f"[DEBUG QUEUE] Processing warning message from queue...")
+                    warning_title, warning_message = data
+                    print(f"[DEBUG QUEUE] Title: {warning_title}")
+                    print(f"[DEBUG QUEUE] Message: {warning_message[:50]}...")
+                    print(f"[DEBUG QUEUE] Showing messagebox...")
+                    messagebox.showwarning(warning_title, warning_message)
+                    print(f"[DEBUG QUEUE] Messagebox shown successfully")
+                    continue
                 
                 if msg_type == "arduino_message":
-                    message = data
+                    message = data[0] if data else None
+                    if not message:
+                        continue
 
                     # --- IR BEAM HANDLING (Arduino sends "B" for beam broken) ---
                     if message == "B":
@@ -7205,6 +7595,79 @@ class App(tk.Tk):
                 
         except Exception as e:
             print(f"Error in check_plank_alignment: {e}")
+    
+    def check_wood_lane_alignment(self, camera_name):
+        """Check if wood detection bounding box touches the lane ROIs (highway lane style check)"""
+        try:
+            # Get wood detection results for this camera
+            if not hasattr(self, 'wood_detection_results') or not self.wood_detection_results.get(camera_name):
+                return  # No wood detected, skip check
+            
+            wood_detection = self.wood_detection_results[camera_name]
+            wood_candidates = wood_detection.get('wood_candidates', [])
+            
+            if not wood_candidates:
+                return  # No wood candidates, skip check
+            
+            # Get the best wood candidate (first one)
+            best_candidate = wood_candidates[0]
+            wood_bbox = best_candidate['bbox']  # (x, y, w, h)
+            wx, wy, ww, wh = wood_bbox
+            
+            # Convert to (x1, y1, x2, y2) format
+            wood_x1, wood_y1 = wx, wy
+            wood_x2, wood_y2 = wx + ww, wy + wh
+            
+            # Get lane ROIs for this camera
+            if camera_name not in ALIGNMENT_LANE_ROIS:
+                print(f"No lane ROIs defined for camera: {camera_name}")
+                return
+            
+            lane_rois = ALIGNMENT_LANE_ROIS[camera_name]
+            misalignment_detected = False
+            touched_lane = None
+            
+            # Check top lane
+            top_lane = lane_rois['top_lane']
+            if self._check_bbox_intersection(wood_x1, wood_y1, wood_x2, wood_y2,
+                                            top_lane['x1'], top_lane['y1'],
+                                            top_lane['x2'], top_lane['y2']):
+                misalignment_detected = True
+                touched_lane = "top"
+            
+            # Check bottom lane
+            bottom_lane = lane_rois['bottom_lane']
+            if self._check_bbox_intersection(wood_x1, wood_y1, wood_x2, wood_y2,
+                                            bottom_lane['x1'], bottom_lane['y1'],
+                                            bottom_lane['x2'], bottom_lane['y2']):
+                misalignment_detected = True
+                touched_lane = "bottom" if not touched_lane else "both"
+            
+            # Display warning if misalignment detected
+            if misalignment_detected:
+                warning_msg = f"⚠️ Wood Misalignment Detected on {camera_name.upper()} camera!\n"
+                warning_msg += f"Wood is touching the {touched_lane} lane boundary."
+                print(warning_msg)
+                
+                # Show warning notification (non-blocking)
+                try:
+                    messagebox.showwarning("Wood Misalignment", warning_msg)
+                except Exception as e:
+                    print(f"Could not show warning dialog: {e}")
+                
+        except Exception as e:
+            print(f"Error in check_wood_lane_alignment: {e}")
+    
+    def _check_bbox_intersection(self, box1_x1, box1_y1, box1_x2, box1_y2,
+                                  box2_x1, box2_y1, box2_x2, box2_y2):
+        """Check if two bounding boxes intersect (overlap)"""
+        # Check if boxes do NOT intersect, then negate
+        no_intersection = (box1_x2 < box2_x1 or  # box1 is to the left of box2
+                          box1_x1 > box2_x2 or  # box1 is to the right of box2
+                          box1_y2 < box2_y1 or  # box1 is above box2
+                          box1_y1 > box2_y2)    # box1 is below box2
+        
+        return not no_intersection
     
     def check_detection_quality(self, detections, frame_area):
         """Check overall detection quality and flag issues"""
