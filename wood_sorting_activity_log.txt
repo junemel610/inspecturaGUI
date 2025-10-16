@@ -93426,3 +93426,6 @@
 2025-10-15 15:35:49 - SCAN INTERRUPTED: Scan state cleared due to system error
 2025-10-15 15:58:18 - SCAN INTERRUPTED: Scan state cleared due to system error
 2025-10-15 17:25:14 - SCAN INTERRUPTED: Scan state cleared due to system error
+2025-10-16 09:22:38 - Graded Piece #1 as G2-2 -> Arduino Cmd: 2
+2025-10-16 12:49:51 - Graded Piece #1 as G2-1 -> Arduino Cmd: 2
+2025-10-16 13:00:29 - Graded Piece #2 as G2-1 -> Arduino Cmd: 2
