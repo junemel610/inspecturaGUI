@@ -1,0 +1,15 @@
+Wood No. (131) - 132.43243243243242mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-3
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Dead Knot - 11.0mm
+2. Missing Knot - 11.1mm
+3. Missing Knot - 29.8mm
+
+Bottom Panel Defects:
+1. Missing Knot - 20.4mm
+2. Live Knot - 33.0mm
+3. Missing Knot - 20.7mm
+4. Missing Knot - 41.6mm

@@ -1,0 +1,12 @@
+Wood No. (87) - 132.77027027027026mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-2
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Dead Knot - 27.9mm
+2. Dead Knot - 31.8mm
+
+Bottom Panel Defects:
+1. Knot with Crack - 25.1mm
+2. Dead Knot - 24.8mm

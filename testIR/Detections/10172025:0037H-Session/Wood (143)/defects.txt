@@ -1,0 +1,19 @@
+Wood No. (143) - 119.25675675675676mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-2
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Dead Knot - 33.6mm
+2. Dead Knot - 21.3mm
+3. Missing Knot - 29.6mm
+4. Dead Knot - 16.9mm
+5. Dead Knot - 17.0mm
+6. Missing Knot - 28.5mm
+7. Missing Knot - 34.1mm
+
+Bottom Panel Defects:
+1. Dead Knot - 27.6mm
+2. Dead Knot - 19.3mm
+3. Missing Knot - 12.1mm
+4. Missing Knot - 20.0mm

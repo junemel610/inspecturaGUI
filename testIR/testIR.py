@@ -2499,11 +2499,24 @@ class App(tk.Tk):
         # Create canvases for camera feeds maintaining dynamic width and fixed height of 360 pixels
         self.canvas_width = screen_width // 2 - 25
         self.canvas_height = 360
+        
+        # Wood specification notice at the top center (very compact)
+        notice_label = tk.Label(self, 
+                               text="⚠ ACCEPTS ONLY 21\" × 5\" PALOCHINA WOOD ⚠",
+                               font=("Arial", 10, "bold"),
+                               bg="#FF4444",
+                               fg="white",
+                               relief=tk.RAISED,
+                               borderwidth=2,
+                               padx=12,
+                               pady=4)
+        notice_label.place(relx=0.5, y=3, anchor="n")  # Centered at top, very compact
+        
         self.top_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
-        self.top_canvas.place(x=25, y=25, width=self.canvas_width, height=self.canvas_height)
+        self.top_canvas.place(x=25, y=28, width=self.canvas_width, height=self.canvas_height)  # Moved to y=28 (only 3px down from original)
 
         self.bottom_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='black')
-        self.bottom_canvas.place(x=self.canvas_width + 50, y=25, width=self.canvas_width, height=self.canvas_height)
+        self.bottom_canvas.place(x=self.canvas_width + 50, y=28, width=self.canvas_width, height=self.canvas_height)  # Moved to y=28 (only 3px down from original)
 
         # Initialize canvas images
         self._top_photo = None
@@ -2535,8 +2548,26 @@ class App(tk.Tk):
                         command=self.toggle_bottom_roi).pack(anchor="w")
 
         self.lane_roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(roi_frame, text="Lane ROI", variable=self.lane_roi_var,
-                        command=self.toggle_lane_roi).pack(anchor="w")
+        lane_roi_checkbox = ttk.Checkbutton(roi_frame, text="Lane ROI", variable=self.lane_roi_var,
+                        command=self.toggle_lane_roi)
+        lane_roi_checkbox.pack(anchor="w")
+        
+        # Hidden test button for low confidence notification (blends with background)
+        # Get the actual background color of ttk frame
+        ttk_style = ttk.Style()
+        frame_bg_color = ttk_style.lookup("TLabelFrame", "background") or BACKGROUND_COLOR
+        
+        hidden_test_btn = tk.Button(roi_frame, text="", 
+                                    command=self.test_low_confidence_notification,
+                                    font=("Arial", 1), 
+                                    bg=frame_bg_color,  # Match actual ttk frame background
+                                    fg=frame_bg_color,
+                                    activebackground=frame_bg_color,
+                                    relief=tk.FLAT, 
+                                    borderwidth=0,
+                                    cursor="",
+                                    width=2, height=1)
+        hidden_test_btn.pack(anchor="e", padx=2, pady=2)
 
         # Conveyor Control (place next to ROI)
         control_frame = ttk.LabelFrame(self, text="Conveyor Control", padding=FRAME_PADDING)
@@ -3802,6 +3833,24 @@ class App(tk.Tk):
         self.roi_enabled["lane_alignment"] = self.lane_roi_var.get()
         status = "enabled" if self.roi_enabled["lane_alignment"] else "disabled"
         print(f"Lane ROI display {status}")
+
+    def test_low_confidence_notification(self):
+        """Test method to trigger low confidence notification (hidden button)"""
+        print("\n" + "="*60)
+        print("🧪 TEST: Low Confidence Notification Triggered")
+        print("="*60)
+        
+        try:
+            messagebox.showwarning(
+                "⚠ Low Confidence Detection",
+                "Low confidence detections have been found.\n\n"
+                "The AI model detected objects but with lower than normal confidence levels."
+            )
+            print("✅ Low confidence notification displayed successfully")
+        except Exception as e:
+            print(f"❌ Error showing notification: {e}")
+        
+        print("="*60 + "\n")
 
     def show_alignment_warning(self, camera_name, lane_type):
         """

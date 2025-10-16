@@ -1,0 +1,12 @@
+Wood No. (137) - 132.43243243243242mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-3
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Dead Knot - 30.8mm
+
+Bottom Panel Defects:
+1. Missing Knot - 35.1mm
+2. Missing Knot - 9.9mm
+3. Missing Knot - 49.2mm

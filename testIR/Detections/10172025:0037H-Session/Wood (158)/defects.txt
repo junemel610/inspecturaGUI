@@ -1,0 +1,12 @@
+Wood No. (158) - 132.09459459459458mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-2
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Missing Knot - 29.9mm
+2. Missing Knot - 23.7mm
+
+Bottom Panel Defects:
+1. Missing Knot - 12.2mm
+2. Missing Knot - 21.1mm

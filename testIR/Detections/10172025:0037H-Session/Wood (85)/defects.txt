@@ -1,0 +1,11 @@
+Wood No. (85) - 132.77027027027026mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-3
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Knot with Crack - 29.4mm
+
+Bottom Panel Defects:
+1. Knot with Crack - 32.9mm
+2. Dead Knot - 25.4mm

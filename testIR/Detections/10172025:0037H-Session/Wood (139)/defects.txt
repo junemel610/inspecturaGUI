@@ -1,0 +1,11 @@
+Wood No. (139) - 109.45945945945947mm
+Top Panel Grade: G2-0
+Bottom Panel Grade: G2-0
+Final Grade: G2-0
+
+Top Panel Defects:
+1. Dead Knot - 9.5mm
+2. Dead Knot - 10.9mm
+
+Bottom Panel Defects:
+No defects detected

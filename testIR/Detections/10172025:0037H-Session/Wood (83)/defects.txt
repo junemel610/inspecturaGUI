@@ -1,0 +1,14 @@
+Wood No. (83) - 131.41891891891893mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-2
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Dead Knot - 20.3mm
+2. Dead Knot - 9.9mm
+3. Dead Knot - 23.3mm
+
+Bottom Panel Defects:
+1. Dead Knot - 7.8mm
+2. Live Knot - 18.6mm
+3. Dead Knot - 29.5mm

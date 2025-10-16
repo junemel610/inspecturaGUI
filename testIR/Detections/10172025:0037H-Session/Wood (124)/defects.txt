@@ -1,0 +1,12 @@
+Wood No. (124) - 129.72972972972974mm
+Top Panel Grade: G2-2
+Bottom Panel Grade: G2-1
+Final Grade: G2-2
+
+Top Panel Defects:
+1. Dead Knot - 10.1mm
+2. Missing Knot - 14.0mm
+
+Bottom Panel Defects:
+1. Dead Knot - 14.4mm
+2. Dead Knot - 22.7mm

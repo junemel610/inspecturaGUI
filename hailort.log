@@ -506,3 +506,149 @@
 [2025-10-16 23:06:02.695] [24172] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
 [2025-10-16 23:06:02.696] [24172] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
 [2025-10-16 23:06:02.696] [24172] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-16 23:08:25.747] [24801] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-16 23:08:25.748] [24801] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:25.749] [24801] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:25.809] [24801] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-16 23:08:25.810] [24801] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:25.811] [24801] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:46.607] [24818] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-16 23:08:46.610] [24818] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:46.613] [24818] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:46.647] [24818] [HailoRT] [info] [vdevice.cpp:523] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: ROUND_ROBIN, multi_process_service: true
+[2025-10-16 23:08:47.664] [24818] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-16 23:08:47.665] [24818] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-16 23:08:47.736] [24818] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-16 23:08:47.736] [24818] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-16 23:08:47.909] [24818] [HailoRT] [info] [infer_model.cpp:436] [configure] Configuring network group 'best_v8' with params: batch size: 1, power mode: ULTRA_PERFORMANCE, latency: NONE
+[2025-10-16 23:08:47.909] [24818] [HailoRT] [info] [multi_io_elements.cpp:756] [create] Created (AsyncHwEl)
+[2025-10-16 23:08:47.910] [24818] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (EntryPushQEl0best_v8/input_layer1 | timeout: 10s)
+[2025-10-16 23:08:47.910] [24818] [HailoRT] [info] [filter_elements.cpp:101] [create] Created (PreInferEl7best_v8/input_layer1 | Reorder - src_order: NHWC, src_shape: (640, 640, 3), dst_order: NHCW, dst_shape: (640, 640, 3))
+[2025-10-16 23:08:47.910] [24818] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (PushQEl7best_v8/input_layer1 | timeout: 10s)
+[2025-10-16 23:08:47.910] [24818] [HailoRT] [info] [multi_io_elements.cpp:135] [create] Created (NmsPPMuxEl0YOLOV8-Post-Process | Op YOLOV8, Name: YOLOV8-Post-Process, Score threshold: 0.300, IoU threshold: 0.60, Classes: 4, Cross classes: false, NMS results order: BY_CLASS, Max bboxes per class: 100, Image height: 640, Image width: 640)
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [queue_elements.cpp:942] [create] Created (MultiPushQEl0YOLOV8-Post-Process | timeout: 10s)
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [edge_elements.cpp:187] [create] Created (LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process)
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] EntryPushQEl0best_v8/input_layer1 | inputs: user | outputs: PreInferEl7best_v8/input_layer1(running in thread_id: 25004)
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PreInferEl7best_v8/input_layer1 | inputs: EntryPushQEl0best_v8/input_layer1[0] | outputs: PushQEl7best_v8/input_layer1
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PushQEl7best_v8/input_layer1 | inputs: PreInferEl7best_v8/input_layer1[0] | outputs: AsyncHwEl(running in thread_id: 25005)
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] AsyncHwEl | inputs: PushQEl7best_v8/input_layer1[0] | outputs: MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] MultiPushQEl0YOLOV8-Post-Process | inputs: AsyncHwEl[0] AsyncHwEl[1] AsyncHwEl[2] AsyncHwEl[3] AsyncHwEl[4] AsyncHwEl[5] | outputs: NmsPPMuxEl0YOLOV8-Post-Process(running in thread_id: 25006)
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] NmsPPMuxEl0YOLOV8-Post-Process | inputs: MultiPushQEl0YOLOV8-Post-Process[0] | outputs: LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-16 23:08:47.911] [24818] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-17 00:36:26.057] [31882] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 00:36:26.059] [31882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:36:26.060] [31882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:36:26.122] [31882] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 00:36:26.123] [31882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:36:26.124] [31882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:00.945] [32109] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 00:37:00.946] [32109] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:00.947] [32109] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:01.002] [32109] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 00:37:01.003] [32109] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:01.004] [32109] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:37.731] [32124] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 00:37:37.732] [32124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:37.733] [32124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:37.758] [32124] [HailoRT] [info] [vdevice.cpp:523] [create] Creating vdevice with params: device_count: 1, scheduling_algorithm: ROUND_ROBIN, multi_process_service: true
+[2025-10-17 00:37:38.776] [32124] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 00:37:38.777] [32124] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 00:37:38.856] [32124] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-17 00:37:38.856] [32124] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-17 00:37:39.024] [32124] [HailoRT] [info] [infer_model.cpp:436] [configure] Configuring network group 'best_v8' with params: batch size: 1, power mode: ULTRA_PERFORMANCE, latency: NONE
+[2025-10-17 00:37:39.025] [32124] [HailoRT] [info] [multi_io_elements.cpp:756] [create] Created (AsyncHwEl)
+[2025-10-17 00:37:39.026] [32124] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (EntryPushQEl0best_v8/input_layer1 | timeout: 10s)
+[2025-10-17 00:37:39.026] [32124] [HailoRT] [info] [filter_elements.cpp:101] [create] Created (PreInferEl7best_v8/input_layer1 | Reorder - src_order: NHWC, src_shape: (640, 640, 3), dst_order: NHCW, dst_shape: (640, 640, 3))
+[2025-10-17 00:37:39.026] [32124] [HailoRT] [info] [queue_elements.cpp:450] [create] Created (PushQEl7best_v8/input_layer1 | timeout: 10s)
+[2025-10-17 00:37:39.026] [32124] [HailoRT] [info] [multi_io_elements.cpp:135] [create] Created (NmsPPMuxEl0YOLOV8-Post-Process | Op YOLOV8, Name: YOLOV8-Post-Process, Score threshold: 0.300, IoU threshold: 0.60, Classes: 4, Cross classes: false, NMS results order: BY_CLASS, Max bboxes per class: 100, Image height: 640, Image width: 640)
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [queue_elements.cpp:942] [create] Created (MultiPushQEl0YOLOV8-Post-Process | timeout: 10s)
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [edge_elements.cpp:187] [create] Created (LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process)
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] EntryPushQEl0best_v8/input_layer1 | inputs: user | outputs: PreInferEl7best_v8/input_layer1(running in thread_id: 32247)
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PreInferEl7best_v8/input_layer1 | inputs: EntryPushQEl0best_v8/input_layer1[0] | outputs: PushQEl7best_v8/input_layer1
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] PushQEl7best_v8/input_layer1 | inputs: PreInferEl7best_v8/input_layer1[0] | outputs: AsyncHwEl(running in thread_id: 32248)
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] AsyncHwEl | inputs: PushQEl7best_v8/input_layer1[0] | outputs: MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process MultiPushQEl0YOLOV8-Post-Process
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] MultiPushQEl0YOLOV8-Post-Process | inputs: AsyncHwEl[0] AsyncHwEl[1] AsyncHwEl[2] AsyncHwEl[3] AsyncHwEl[4] AsyncHwEl[5] | outputs: NmsPPMuxEl0YOLOV8-Post-Process(running in thread_id: 32249)
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] NmsPPMuxEl0YOLOV8-Post-Process | inputs: MultiPushQEl0YOLOV8-Post-Process[0] | outputs: LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [pipeline.cpp:891] [print_deep_description] LastAsyncEl0NmsPPMuxEl0YOLOV8-Post-Process | inputs: NmsPPMuxEl0YOLOV8-Post-Process[0] | outputs: user
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-17 00:37:39.027] [32124] [HailoRT] [info] [hef.cpp:1929] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: best_v8
+[2025-10-17 07:03:57.845] [64026] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:03:57.846] [64026] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:03:57.847] [64026] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:03:57.923] [64026] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:03:57.924] [64026] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:03:57.925] [64026] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:05:24.331] [64339] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:05:24.332] [64339] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:05:24.333] [64339] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:05:24.402] [64339] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:05:24.403] [64339] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:05:24.404] [64339] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:06:42.017] [64531] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:06:42.018] [64531] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:06:42.019] [64531] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:06:42.090] [64531] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:06:42.091] [64531] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:06:42.092] [64531] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:08:47.861] [64882] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:08:47.863] [64882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:08:47.863] [64882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:08:47.922] [64882] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:08:47.923] [64882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:08:47.924] [64882] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:03.791] [65211] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:11:03.792] [65211] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:03.793] [65211] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:03.854] [65211] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:11:03.855] [65211] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:03.856] [65211] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:51.031] [65419] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:11:51.032] [65419] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:51.033] [65419] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:51.093] [65419] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:11:51.094] [65419] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:11:51.095] [65419] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:13:22.823] [65681] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:13:22.832] [65681] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:13:22.838] [65681] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:13:22.905] [65681] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:13:22.912] [65681] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:13:22.917] [65681] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:18:44.743] [66286] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:18:44.745] [66286] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:18:44.746] [66286] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:18:44.813] [66286] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:18:44.815] [66286] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:18:44.816] [66286] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:22:18.137] [66655] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:22:18.140] [66655] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:22:18.141] [66655] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:22:18.209] [66655] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:22:18.212] [66655] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:22:18.216] [66655] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:23:28.381] [66851] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:23:28.383] [66851] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:23:28.384] [66851] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:23:28.439] [66851] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:23:28.440] [66851] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:23:28.442] [66851] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:28:49.577] [67524] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:28:49.579] [67524] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:28:49.581] [67524] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:28:49.646] [67524] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:28:49.647] [67524] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:28:49.648] [67524] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:31:03.742] [67902] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:31:03.743] [67902] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:31:03.744] [67902] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:31:03.798] [67902] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:31:03.799] [67902] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:31:03.800] [67902] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:33:38.446] [68258] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:33:38.447] [68258] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:33:38.448] [68258] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:33:38.510] [68258] [HailoRT] [info] [device.cpp:49] [Device] OS Version: Linux 6.12.47+rpt-rpi-2712 #1 SMP PREEMPT Debian 1:6.12.47-1+rpt1~bookworm (2025-09-16) aarch64
+[2025-10-17 07:33:38.511] [68258] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
+[2025-10-17 07:33:38.512] [68258] [HailoRT] [info] [control.cpp:108] [control__parse_identify_results] firmware_version is: 4.20.0
