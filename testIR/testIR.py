@@ -1148,9 +1148,9 @@ class ColorWoodDetector:
         self.opening_iterations = 2
 
         # Pixel to mm conversion parameters for width measurement
-        self.pixel_per_mm_top = 2.96     # Placeholder: calibrate based on top camera distance (31cm)
-        self.pixel_per_mm_bottom = 3.18  # Placeholder: calibrate based on bottom camera distance
-        
+        self.pixel_per_mm_top = 2.915    # Placeholder: calibrate based on top camera distance (31cm)
+        self.pixel_per_mm_bottom = 3.35  # Placeholder: calibrate based on bottom camera distance
+
         # Dynamic wood width storage - matches testIR.py functionality
         self.detected_wood_width_mm = {'top': 0, 'bottom': 0}
         self.wood_detection_results = {'top': None, 'bottom': None}
@@ -1335,7 +1335,7 @@ class ColorWoodDetector:
 
             # Prevent division by zero
             if pixel_to_mm <= 0:
-                pixel_to_mm = 2.96 if camera_name == "top" else 3.18
+                pixel_to_mm = 2.915 if camera_name == "top" else 3.35
                 print(f"Warning: pixel_to_mm was zero, using default {pixel_to_mm}")
 
             # Convert to millimeters using division (pixels per mm factor)
@@ -2947,7 +2947,7 @@ class App(tk.Tk):
 
             # Prevent division by zero
             if pixel_to_mm <= 0:
-                pixel_to_mm = 2.96 if camera_name == "top" else 3.18
+                pixel_to_mm = 2.915 if camera_name == "top" else 3.35
                 print(f"Warning: pixel_to_mm was zero, using default {pixel_to_mm}")
 
             # Convert to millimeters using division (pixels per mm factor)
@@ -6272,6 +6272,42 @@ class App(tk.Tk):
             self.status_label.insert(1.0, "Status: Manual grade - no wood detected")
             self.status_label.config(state=tk.DISABLED)
 
+    def resize_to_640(self, frame):
+        """
+        Resize frame to 640x640 WITH PADDING to maintain aspect ratio
+        This prevents distortion of defects (copied from live_inference.py)
+        
+        Returns:
+            resized_frame: 640x640 image with padding
+            scale: uniform scale factor used
+            pad_x: left padding pixels
+            pad_y: top padding pixels
+        """
+        h, w = frame.shape[:2]
+        MODEL_INPUT_SIZE = 640
+        
+        # Calculate scale to fit the larger dimension to 640
+        scale = MODEL_INPUT_SIZE / max(h, w)
+        
+        # Calculate new dimensions
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        
+        # Resize maintaining aspect ratio
+        resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        
+        # Create black canvas 640x640
+        canvas = np.zeros((MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3), dtype=np.uint8)
+        
+        # Calculate padding to center the image
+        pad_x = (MODEL_INPUT_SIZE - new_w) // 2
+        pad_y = (MODEL_INPUT_SIZE - new_h) // 2
+        
+        # Place resized image on canvas
+        canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
+        
+        return canvas, scale, pad_x, pad_y
+
     def analyze_frame(self, frame, camera_name="top", run_defect_model=True):
         """Analyze frame using DeGirum model with object tracking and error detection"""
         if self.model is None:
@@ -6279,8 +6315,22 @@ class App(tk.Tk):
             return frame, {}, [], []
 
         try:
-            # Run inference using DeGirum
-            inference_result = self.model(frame)
+            # Get original frame dimensions
+            original_h, original_w = frame.shape[:2]
+            
+            # Resize frame to 640x640 with padding (maintains aspect ratio)
+            frame_640, scale, pad_x, pad_y = self.resize_to_640(frame)
+            
+            # Run inference using DeGirum on padded 640x640 frame
+            inference_result = self.model(frame_640)
+
+            # Debug: Print all raw detections
+            print(f"📊 RAW DETECTIONS [{camera_name}] (total: {len(inference_result.results)}):")
+            for i, det in enumerate(inference_result.results):
+                label = det.get('label', 'unknown')
+                confidence = det.get('confidence', 0.0)
+                bbox = det.get('bbox', [0, 0, 0, 0])
+                print(f"   #{i+1}: {label} @ {confidence:.3f} | bbox: [{bbox[0]:.0f}, {bbox[1]:.0f}, {bbox[2]:.0f}, {bbox[3]:.0f}]")
 
             # Process detections for object tracking
             current_detections = []
@@ -6292,13 +6342,34 @@ class App(tk.Tk):
                 confidence = det.get('confidence', 0.7)
 
                 # Check for low confidence detections
-                if confidence < self.DETECTION_THRESHOLDS["MIN_CONFIDENCE"]:
+                # WORKAROUND: Accept 0.000 confidence due to Hailo-8 quantization issue
+                # TODO: Fix model quantization to restore proper confidence scores
+                if confidence < self.DETECTION_THRESHOLDS["MIN_CONFIDENCE"] and confidence != 0.0:
                     low_confidence_count += 1
                     print(f"Low confidence detection: {model_label} with confidence {confidence:.2f}")
                     continue  # Skip low confidence detections
 
-                # Extract bounding box for size calculation
-                bbox_info = {'bbox': bbox}
+                # Adjust bounding box coordinates from 640x640 padded back to original frame
+                # Remove padding offset and apply inverse scale
+                x1 = (bbox[0] - pad_x) / scale
+                y1 = (bbox[1] - pad_y) / scale
+                x2 = (bbox[2] - pad_x) / scale
+                y2 = (bbox[3] - pad_y) / scale
+                
+                # Clip to original frame bounds
+                x1 = max(0, min(x1, original_w))
+                y1 = max(0, min(y1, original_h))
+                x2 = max(0, min(x2, original_w))
+                y2 = max(0, min(y2, original_h))
+                
+                # Only keep detections that are within the valid area (not in padding)
+                if x2 <= x1 or y2 <= y1:
+                    print(f"   ⚠️  Skipping detection in padding area: {model_label}")
+                    continue
+                
+                # Create adjusted bbox in original frame coordinates
+                adjusted_bbox = [x1, y1, x2, y2]
+                bbox_info = {'bbox': adjusted_bbox}
 
                 # Calculate defect size in mm and percentage using camera-specific calibration
                 size_mm, percentage = self.calculate_defect_size(bbox_info, camera_name)
@@ -6307,7 +6378,9 @@ class App(tk.Tk):
                 standard_defect_type = self.map_model_output_to_standard(model_label)
 
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
-                current_detections.append((bbox, standard_defect_type, size_mm, confidence))
+                current_detections.append((adjusted_bbox, standard_defect_type, size_mm, confidence))
+
+            print(f"🔍 Filtered detections [{camera_name}]: {len(current_detections)} (confidence >= {self.DETECTION_THRESHOLDS['MIN_CONFIDENCE']} or == 0.0)")
 
             # Notify user if low confidence detections were found
             if low_confidence_count > 0:
