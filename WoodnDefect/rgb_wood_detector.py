@@ -22,8 +22,8 @@ WOOD_PALLET_WIDTH_MM = 0  # Global variable for current detected wood width
 # Camera-specific calibration constants (matching testIR.py)
 TOP_CAMERA_DISTANCE_CM = 28
 BOTTOM_CAMERA_DISTANCE_CM = 27.5
-TOP_CAMERA_PIXEL_TO_MM = 3.5  # Top camera: 2.96 pixels per mm
-BOTTOM_CAMERA_PIXEL_TO_MM = 3.18  # Bottom camera: 3.18 pixels per mm
+TOP_CAMERA_PIXEL_TO_MM = 2.
+BOTTOM_CAMERA_PIXEL_TO_MM = 2  # Bottom camera: 3.18 pixels per mm
 
 class ColorWoodDetector:
     def __init__(self):
@@ -53,8 +53,8 @@ class ColorWoodDetector:
         self.opening_iterations = 2
 
         # Pixel to mm conversion parameters for width measurement
-        self.pixel_per_mm_top = 2.96     # Placeholder: calibrate based on top camera distance (31cm)
-        self.pixel_per_mm_bottom = 3.18  # Placeholder: calibrate based on bottom camera distance
+        self.pixel_per_mm_top = 2.915     # Placeholder: calibrate based on top camera distance (31cm)
+        self.pixel_per_mm_bottom = 3.35  # Placeholder: calibrate based on bottom camera distance
         
         # Dynamic wood width storage - matches testIR.py functionality
         self.detected_wood_width_mm = {'top': 0, 'bottom': 0}
@@ -1359,7 +1359,13 @@ def main():
                         detection_result2 = detector.detect_wood_comprehensive(frame2_flipped, roi=roi_bottom, camera='bottom')
                         wood_detected2 = detection_result2['wood_detected']
                         confidence2 = detection_result2['confidence']
-                        bottom_width_mm = None  # Bottom camera measurements disabled
+                        # Calculate bottom camera width measurement
+                        if detection_result2['wood_candidates']:
+                            candidate = detection_result2['wood_candidates'][0]
+                            _, _, w, h = candidate['bbox']
+                            bottom_width_mm = detector.calculate_width_mm(h, camera='bottom')  # Use height for width
+                        else:
+                            bottom_width_mm = None
                     else:
                         # No top detection, skip bottom processing
                         detection_result2 = {'wood_candidates': [], 'color_mask': np.zeros(frame2_flipped.shape[:2], dtype=np.uint8), 'wood_detected': False, 'wood_count': 0, 'confidence': 0.0}
@@ -1406,9 +1412,14 @@ def main():
                 color = (0, 255, 0)
                 cv2.rectangle(frame2_flipped, (x, y), (x + w, y + h), color, 2)
 
-                # Add confidence label only (no width measurement)
-                label = f"Wood: {candidate['confidence']:.2f}"
+                # Add confidence and width label - now showing bottom camera measurement
+                label = f"Wood: {candidate['confidence']:.2f} | Width: {bottom_width_mm:.1f}mm" if bottom_width_mm is not None else f"Wood: {candidate['confidence']:.2f}"
                 cv2.putText(frame2_flipped, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                
+                # Add local measurement indicator (doesn't update global) - only if width is available
+                if bottom_width_mm is not None:
+                    cv2.putText(frame2_flipped, f"Local Width: {bottom_width_mm:.1f}mm (Bottom Cam)", (10, 120),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 165, 0), 2)
             
             
             # Add text overlays

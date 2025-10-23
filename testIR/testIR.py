@@ -2684,11 +2684,11 @@ class App(tk.Tk):
         # Initialize stats labels with consistent spacing and fonts - aligned with SS-EN 1611-1
         self.live_stats_labels = {}
         grade_info = [
-            ("grade1", "G2-0\n(Premium)", GRADE_PERFECT_COLOR),
+            ("grade1", "G2-0\n(Good)", GRADE_PERFECT_COLOR),
             ("grade2", "G2-1\n(Good)", GRADE_GOOD_COLOR),
             ("grade3", "G2-2\n(Fair)", GRADE_FAIR_COLOR),
-            ("grade4", "G2-3\n(Poor)", GRADE_FAIR_COLOR),
-            ("grade5", "G2-4\n(Reject)", GRADE_POOR_COLOR)
+            ("grade4", "G2-3\n(Fair)", GRADE_FAIR_COLOR),
+            ("grade5", "G2-4\n(Poor)", GRADE_POOR_COLOR)
         ]
 
         for i, (grade_key, label_text, color) in enumerate(grade_info):
@@ -6574,11 +6574,11 @@ class App(tk.Tk):
         threshold_text += f"Current Wood Width: {wood_width:.1f}mm\n\n"
         
         threshold_text += "GRADING CRITERIA (G2-0 = Best Quality):\n"
-        threshold_text += "• G2-0 (Premium): Max 2 knots/meter, 0 unsound knots\n"
+        threshold_text += "• G2-0 (Good): Max 2 knots/meter, 0 unsound knots\n"
         threshold_text += "• G2-1 (Good): Max 4 knots/meter, 0 unsound knots\n"
         threshold_text += "• G2-2 (Fair): Max 6 knots/meter, 2 unsound knots\n"
-        threshold_text += "• G2-3 (Poor): Unlimited knots, 5 unsound knots max\n"
-        threshold_text += "• G2-4 (Reject): Unlimited knots and defects\n\n"
+        threshold_text += "• G2-3 (Fair): Unlimited knots, 5 unsound knots max\n"
+        threshold_text += "• G2-4 (Poor): Unlimited knots and defects\n\n"
         
         threshold_text += "KNOT SIZE LIMITS (Formula: 10% × Width + Constant):\n\n"
 
