@@ -1229,7 +1229,7 @@ class ColorWoodDetector:
         return top_factor, bottom_factor
 
     def update_wood_width_dynamic(self, camera_name: str, wood_candidates: List[Dict]) -> float:
-        """Update global wood width based on detected wood dimensions - matches testIR.py algorithm"""
+        """Update global wood width based on detected wood dimensions - BOTTOM camera is authoritative"""
         global WOOD_PALLET_WIDTH_MM
         
         if wood_candidates:
@@ -1240,30 +1240,30 @@ class ColorWoodDetector:
             # Store the detected width for this camera
             self.detected_wood_width_mm[camera_name] = detected_width_mm
             
-            # CRITICAL: Only use TOP CAMERA as the authoritative source for global wood width
-            if camera_name == 'top':
-                # TOP CAMERA: Update global wood width (authoritative source)
+            # CRITICAL: Only use BOTTOM CAMERA as the authoritative source for global wood width
+            if camera_name == 'bottom':
+                # BOTTOM CAMERA: Update global wood width (authoritative source)
                 WOOD_PALLET_WIDTH_MM = detected_width_mm
-                print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, TOP camera - AUTHORITATIVE)")
+                print(f"🎯 Dynamic wood height updated: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, BOTTOM camera - AUTHORITATIVE)")
                 print(f"🔗 Synchronization check: detected_width_mm={detected_width_mm:.1f}mm, WOOD_PALLET_WIDTH_MM={WOOD_PALLET_WIDTH_MM:.1f}mm, self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.1f}mm")
                 
                 # Validation: Ensure all variables are exactly equal to detected_width_mm
                 self._validate_wood_width_sync(detected_width_mm, camera_name)
             else:
-                # BOTTOM CAMERA: Only store locally, do NOT update global width
-                print(f"📐 Bottom camera wood width detected: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name}) - NOT used for global width")
-                print(f"🔒 Global WOOD_PALLET_WIDTH_MM remains: {WOOD_PALLET_WIDTH_MM:.1f}mm (controlled by TOP camera only)")
+                # TOP CAMERA: Only store locally, do NOT update global width
+                print(f"📐 Top camera wood width detected: {detected_width_mm:.1f}mm (from bbox {w}x{h}px, camera: {camera_name}) - NOT used for global width")
+                print(f"🔒 Global WOOD_PALLET_WIDTH_MM remains: {WOOD_PALLET_WIDTH_MM:.1f}mm (controlled by BOTTOM camera only)")
             
             return detected_width_mm
         
         return 0.0
 
     def _validate_wood_width_sync(self, detected_width_mm: float, camera_name: str):
-        """Validate that all wood width variables are synchronized with detected_width_mm (TOP CAMERA ONLY)"""
+        """Validate that all wood width variables are synchronized with detected_width_mm (BOTTOM CAMERA ONLY)"""
         global WOOD_PALLET_WIDTH_MM
         
-        # Only validate synchronization for top camera since it's the authoritative source
-        if camera_name != 'top':
+        # Only validate synchronization for bottom camera since it's the authoritative source
+        if camera_name != 'bottom':
             return
         
         sync_errors = []
@@ -1274,7 +1274,7 @@ class ColorWoodDetector:
             # Force synchronization
             WOOD_PALLET_WIDTH_MM = detected_width_mm
             
-        # Check self.detected_wood_width_mm synchronization for top camera
+        # Check self.detected_wood_width_mm synchronization for bottom camera
         if abs(self.detected_wood_width_mm[camera_name] - detected_width_mm) > 0.001:
             sync_errors.append(f"self.detected_wood_width_mm[{camera_name}]={self.detected_wood_width_mm[camera_name]:.3f}mm != detected_width_mm={detected_width_mm:.3f}mm")
             # Force synchronization
@@ -1305,11 +1305,11 @@ class ColorWoodDetector:
         global WOOD_PALLET_WIDTH_MM
         
         print(f"\n📊 WOOD WIDTH STATUS REPORT {f'({context})' if context else ''}")
-        print(f"   � AUTHORITATIVE SOURCE: Global WOOD_PALLET_WIDTH_MM: {WOOD_PALLET_WIDTH_MM:.1f}mm")
-        print(f"   📐 Top camera detected: {self.detected_wood_width_mm.get('top', 'N/A')}mm (CONTROLS GLOBAL)")
-        print(f"   � Bottom camera detected: {self.detected_wood_width_mm.get('bottom', 'N/A')}mm (LOCAL ONLY)")
-        print(f"   🔗 Authority chain: TOP camera detected_width_mm → WOOD_PALLET_WIDTH_MM → all grading calculations")
-        print(f"   ⚠️  Bottom camera measurements are for reference only and DO NOT affect global variables\n")
+        print(f"   🎯 AUTHORITATIVE SOURCE: Global WOOD_PALLET_WIDTH_MM: {WOOD_PALLET_WIDTH_MM:.1f}mm")
+        print(f"   📐 Top camera detected: {self.detected_wood_width_mm.get('top', 'N/A')}mm (LOCAL ONLY)")
+        print(f"   ✅ Bottom camera detected: {self.detected_wood_width_mm.get('bottom', 'N/A')}mm (CONTROLS GLOBAL)")
+        print(f"   🔗 Authority chain: BOTTOM camera detected_width_mm → WOOD_PALLET_WIDTH_MM → all grading calculations")
+        print(f"   ⚠️  Top camera measurements are for reference only and DO NOT affect global variables\n")
 
     def calculate_defect_size(self, detection_box, camera_name="top"):
         """Calculate defect size in mm and percentage from detection bounding box - matches testIR.py"""
@@ -3004,16 +3004,26 @@ class App(tk.Tk):
 
         return {'size': knot_data_size, 'number': knot_data_number}
 
-    def determine_surface_grade(self, defect_measurements):
+    def determine_surface_grade(self, defect_measurements, camera_name=None):
         """
         Determine overall surface grade based on worst knot size and knot count.
         defect_measurements: list of tuples [("Sound_Knot", size_mm), ...]
+        camera_name: 'top' or 'bottom' - passed for context but ALWAYS uses bottom camera wood width
         """
         if not defect_measurements:
             return GRADE_G2_0
 
+        # ALWAYS use BOTTOM camera wood width for grading (more consistent/accurate)
+        if self.detected_wood_width_mm.get("bottom", 0) > 0:
+            wood_width_mm = self.detected_wood_width_mm["bottom"]
+            print(f"🎯 Using BOTTOM camera wood width: {wood_width_mm:.1f}mm for grading {camera_name or 'unknown'} camera")
+        else:
+            # Fallback to global if bottom camera width not available
+            wood_width_mm = WOOD_PALLET_WIDTH_MM
+            print(f"⚠️  Using global wood width: {wood_width_mm:.1f}mm for grading (bottom camera not available)")
+
         # Check if wood height has been measured
-        if WOOD_PALLET_WIDTH_MM <= 0:
+        if wood_width_mm <= 0:
             return GRADE_G2_4  # Cannot grade without wood dimensions
 
         # 1. Grade based on the size of the worst individual knot
@@ -3027,8 +3037,8 @@ class App(tk.Tk):
             if defect_type in ["Dead_Knot", "Unsound_Knot"]:
                 dead_or_unsound_count += 1
 
-            # Get individual knot grade
-            knot_grade = self.get_individual_knot_grade(defect_type, defect_size_mm, WOOD_PALLET_WIDTH_MM)
+            # Get individual knot grade using camera-specific wood width
+            knot_grade = self.get_individual_knot_grade(defect_type, defect_size_mm, wood_width_mm)
 
             # Check if this knot's grade is worse than the current worst
             if grade_order.index(knot_grade) > grade_order.index(worst_grade_by_size):
@@ -3420,10 +3430,11 @@ class App(tk.Tk):
             tracker['last_detection_time'] = time.time() if defect_dict else None
             
             if measurements and defect_dict:
-                tracker['surface_grade'] = self.determine_surface_grade(measurements)
+                tracker['surface_grade'] = self.determine_surface_grade(measurements, camera_name=camera_name)
         
         # Continue with the existing detailed logging logic (this is retained)
         if measurements and defect_dict:
+            surface_grade = self.determine_surface_grade(measurements, camera_name=camera_name)
             surface_grade = self.determine_surface_grade(measurements)
             self.log_detection_details(camera_name, defect_dict, measurements, surface_grade)
 
@@ -4009,9 +4020,9 @@ class App(tk.Tk):
         for i, (defect_type, size_mm, percentage) in enumerate(bottom_measurements, 1):
             print(f"   {i}. {defect_type} - Size: {size_mm:.1f}mm")
 
-        # Determine final grades from tracked objects
-        final_top_grade = self.determine_surface_grade(top_measurements)
-        final_bottom_grade = self.determine_surface_grade(bottom_measurements)
+        # Determine final grades from tracked objects with camera-specific wood widths
+        final_top_grade = self.determine_surface_grade(top_measurements, camera_name="top")
+        final_bottom_grade = self.determine_surface_grade(bottom_measurements, camera_name="bottom")
 
         # Combine grades for final decision
         combined_grade = self.determine_final_grade(final_top_grade, final_bottom_grade)
@@ -4067,9 +4078,9 @@ class App(tk.Tk):
         # Combine all defect counts from the session
         all_measurements = [m for d in detections_list for m in d.get("measurements", [])]
 
-        # Use sophisticated grading if measurements available
+        # Use sophisticated grading if measurements available with camera-specific wood width
         if all_measurements:
-            return self.determine_surface_grade(all_measurements)
+            return self.determine_surface_grade(all_measurements, camera_name=camera_name)
         else:
             # Fall back to simple grading if no measurements (should not happen in normal operation)
             combined_defects = {}
@@ -4558,9 +4569,9 @@ class App(tk.Tk):
                             "defects": defect_dict.copy()
                         })
 
-                # Calculate grade for this camera using sophisticated grading
+                # Calculate grade for this camera using sophisticated grading with camera-specific wood width
                 if detections_for_grading:
-                    surface_grade = self.determine_surface_grade(detections_for_grading)
+                    surface_grade = self.determine_surface_grade(detections_for_grading, camera_name=camera_name)
                     grade_info = {
                         'grade': surface_grade,
                         'text': f'{surface_grade} - SS-EN 1611-1 ({camera_name.title()} Camera)',
@@ -4697,11 +4708,11 @@ class App(tk.Tk):
         if hasattr(self, 'live_measurements'):
             if self.live_measurements.get("top"):
                 wood_detected = True
-                top_surface_grade = self.determine_surface_grade(self.live_measurements["top"])
+                top_surface_grade = self.determine_surface_grade(self.live_measurements["top"], camera_name="top")
 
             if self.live_measurements.get("bottom"):
                 wood_detected = True
-                bottom_surface_grade = self.determine_surface_grade(self.live_measurements["bottom"])
+                bottom_surface_grade = self.determine_surface_grade(self.live_measurements["bottom"], camera_name="bottom")
 
         # Fallback to detection-based grading if measurements not available
         if not wood_detected:
