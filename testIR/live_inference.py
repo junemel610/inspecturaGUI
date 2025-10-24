@@ -122,8 +122,8 @@ class ColorWoodDetector:
         self.opening_iterations = 2
         
         # Pixel-to-mm conversion factors (from rgb_wood_detector.py)
-        self.pixel_per_mm_top = 2.915     # Calibrated at 31cm distance
-        self.pixel_per_mm_bottom = 3.35   # Calibrated for bottom camera
+        self.pixel_per_mm_top = 2.96     # Calibrated at 31cm distance
+        self.pixel_per_mm_bottom = 3.5   # Calibrated for bottom camera
         
         # Storage for detection results
         self.wood_detection_results = {}
@@ -138,7 +138,7 @@ class ColorWoodDetector:
             return width_px / self.pixel_per_mm_bottom
     
     def detect_wood_by_color(self, image: np.ndarray, profile_names: List[str] = None) -> Tuple[np.ndarray, List[Dict]]:
-        """Detect wood using color-first approach with edge enhancement"""
+        """Detect wood using color-first approach with edge enhancement (from rgb_wood_detector.py)"""
         try:
             if image is None or image.size == 0:
                 print("❌ Error: Invalid input image for color detection")
@@ -147,23 +147,19 @@ class ColorWoodDetector:
             if profile_names is None:
                 profile_names = list(self.wood_color_profiles.keys())
             
-            # Convert to RGB
-            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            
-            # Apply histogram equalization for better lighting compensation
+            # Step 1: Apply histogram equalization on V channel for better lighting compensation
             hsv_temp = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
             h, s, v = cv2.split(hsv_temp)
             v = cv2.equalizeHist(v)
             hsv_temp = cv2.merge([h, s, v])
             rgb = cv2.cvtColor(hsv_temp, cv2.COLOR_HSV2BGR)
-            rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
             
             combined_mask = np.zeros(rgb.shape[:2], dtype=np.uint8)
             detections = []
             
             print(f"🎨 Using profiles: {profile_names}")
             
-            # Combine masks from selected profiles
+            # Combine masks from selected profiles (using BGR format like rgb_wood_detector.py)
             for profile_name in profile_names:
                 if profile_name in self.wood_color_profiles:
                     profile = self.wood_color_profiles[profile_name]
@@ -174,16 +170,24 @@ class ColorWoodDetector:
                     print(f"  📊 {profile_name}: RGB range {profile['rgb_lower']} - {profile['rgb_upper']}, mask {mask_pixels} pixels ({mask_percentage:.1f}%)")
                     combined_mask = cv2.bitwise_or(combined_mask, mask)
             
-            # Apply edge detection within the color mask
+            # Step 2: Apply edge detection within the color mask to find wood boundaries
             color_mask_blurred = cv2.GaussianBlur(combined_mask, (5, 5), 0)
             color_edges = cv2.Canny(color_mask_blurred, 100, 200)
             
-            # Dilate the edges
+            # Dilate the edges to make them more visible
             kernel_edge = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
             color_edges_dilated = cv2.dilate(color_edges, kernel_edge, iterations=1)
             
             # Combine the original color mask with edge information
             enhanced_mask = cv2.bitwise_or(combined_mask, color_edges_dilated)
+            
+            edge_enhanced_pixels = cv2.countNonZero(enhanced_mask)
+            edge_enhanced_percentage = (edge_enhanced_pixels / total_pixels) * 100
+            print(f"🎨🔍 Color + Edge enhanced mask: {edge_enhanced_pixels} pixels ({edge_enhanced_percentage:.1f}%)")
+            
+            pre_morph_pixels = cv2.countNonZero(enhanced_mask)
+            pre_morph_percentage = (pre_morph_pixels / total_pixels) * 100
+            print(f"🔧 Pre-morph enhanced mask: {pre_morph_pixels} pixels ({pre_morph_percentage:.1f}%)")
             
             # Clean up mask with morphological operations
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size))
@@ -195,6 +199,13 @@ class ColorWoodDetector:
             post_morph_percentage = (post_morph_pixels / total_pixels) * 100
             print(f"🔧 Post-morph enhanced mask: {post_morph_pixels} pixels ({post_morph_percentage:.1f}%)")
             
+            # Additional logging for dominant colors (from rgb_wood_detector.py)
+            rgb_flat = rgb.reshape(-1, 3)
+            r_values = rgb_flat[:, 0]
+            g_values = rgb_flat[:, 1]
+            b_values = rgb_flat[:, 2]
+            print(f"🎨 Dominant RGB in image: R={int(np.mean(r_values))}±{int(np.std(r_values))}, G={int(np.mean(g_values))}, B={int(np.mean(b_values))}")
+            
             return enhanced_mask, detections
             
         except Exception as e:
@@ -202,7 +213,7 @@ class ColorWoodDetector:
             return np.zeros(image.shape[:2], dtype=np.uint8), []
     
     def detect_rectangular_contours(self, mask: np.ndarray, camera: str = 'top') -> List[Dict]:
-        """Detect rectangular contours that could be wood planks"""
+        """Detect rectangular contours that could be wood planks - focusing on center area (from rgb_wood_detector.py)"""
         try:
             if mask is None or mask.size == 0:
                 print("❌ Error: Invalid mask for contour detection")
@@ -210,7 +221,7 @@ class ColorWoodDetector:
             
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             print(f"📐 Found {len(contours)} total contours")
-            
+
             # Get mask dimensions for center focus
             mask_height, mask_width = mask.shape
             center_margin_x = int(mask_width * 0.2)
@@ -221,6 +232,7 @@ class ColorWoodDetector:
                 'y_min': center_margin_y,
                 'y_max': mask_height - center_margin_y
             }
+            print(f"🎯 Center focus region: x=[{center_region['x_min']}-{center_region['x_max']}], y=[{center_region['y_min']}-{center_region['y_max']}]")
             
             wood_candidates = []
             rejected_area = 0
@@ -234,6 +246,7 @@ class ColorWoodDetector:
                     # Filter by area
                     if area < self.min_contour_area or area > self.max_contour_area:
                         rejected_area += 1
+                        print(f"  ❌ Contour {i}: area {area:.0f} out of range [{self.min_contour_area}, {self.max_contour_area}]")
                         continue
                     
                     # Get bounding rectangle
@@ -246,6 +259,7 @@ class ColorWoodDetector:
                     if not (center_region['x_min'] <= contour_center_x <= center_region['x_max'] and 
                             center_region['y_min'] <= contour_center_y <= center_region['y_max']):
                         rejected_center += 1
+                        print(f"  ❌ Contour {i}: center ({contour_center_x}, {contour_center_y}) outside focus region")
                         continue
                     
                     # Filter by minimum size
@@ -254,6 +268,7 @@ class ColorWoodDetector:
                     
                     if h < min_height or w < min_width:
                         rejected_area += 1
+                        print(f"  ❌ Contour {i}: size {w}x{h} too small for {camera} camera (min {min_width}x{min_height})")
                         continue
                     
                     aspect_ratio = max(w, h) / min(w, h)
@@ -261,6 +276,7 @@ class ColorWoodDetector:
                     # Filter by aspect ratio
                     if aspect_ratio < self.min_aspect_ratio or aspect_ratio > self.max_aspect_ratio:
                         rejected_aspect += 1
+                        print(f"  ❌ Contour {i}: aspect {aspect_ratio:.2f} out of range [{self.min_aspect_ratio}, {self.max_aspect_ratio}]")
                         continue
                     
                     # Calculate additional metrics
@@ -286,13 +302,13 @@ class ColorWoodDetector:
                     }
                     
                     wood_candidates.append(wood_candidate)
-                    print(f"  ✅ Contour {i}: area {area:.0f}, aspect {aspect_ratio:.2f}, confidence {confidence:.2f}")
+                    print(f"  ✅ Contour {i}: area {area:.0f}, aspect {aspect_ratio:.2f}, solidity {solidity:.2f}, confidence {confidence:.2f}")
                     
                 except Exception as contour_error:
                     print(f"  ❌ Error processing contour {i}: {contour_error}")
                     continue
             
-            print(f"📊 Contour filtering: {len(contours)} total, {rejected_area} by area, {rejected_aspect} by aspect, {rejected_center} by center, {len(wood_candidates)} candidates")
+            print(f"📊 Contour filtering: {len(contours)} total, {rejected_area} rejected by area, {rejected_aspect} by aspect, {rejected_center} rejected by center, {len(wood_candidates)} candidates")
             
             # Sort by confidence
             wood_candidates.sort(key=lambda x: x['confidence'], reverse=True)
@@ -474,6 +490,118 @@ def get_defect_color(defect_type):
 def get_defect_name(defect_type):
     """Get display name for defect type"""
     return DEFECT_NAMES.get(defect_type, defect_type)
+
+def bbox_inside_roi(bbox, roi, overlap_threshold=0.7):
+    """
+    Check if a bounding box has significant overlap with ROI (>70% by default)
+    This allows large defects near wood edges to be detected
+    
+    Args:
+        bbox: Detection bounding box [x1, y1, x2, y2]
+        roi: ROI tuple (x, y, w, h) from Dynamic Wood ROI
+        overlap_threshold: Minimum overlap ratio to accept (default 0.7 = 70%)
+        
+    Returns:
+        bool: True if bbox has significant overlap with ROI, False otherwise
+    """
+    if roi is None:
+        # If no ROI defined, accept all detections (fallback)
+        return True
+    
+    # Unpack ROI
+    roi_x, roi_y, roi_w, roi_h = roi
+    roi_x2 = roi_x + roi_w
+    roi_y2 = roi_y + roi_h
+    
+    # Unpack detection bbox
+    det_x1, det_y1, det_x2, det_y2 = bbox
+    
+    # Calculate intersection area
+    intersect_x1 = max(det_x1, roi_x)
+    intersect_y1 = max(det_y1, roi_y)
+    intersect_x2 = min(det_x2, roi_x2)
+    intersect_y2 = min(det_y2, roi_y2)
+    
+    # Check if there's any intersection
+    if intersect_x2 <= intersect_x1 or intersect_y2 <= intersect_y1:
+        return False  # No overlap at all
+    
+    # Calculate intersection area
+    intersect_area = (intersect_x2 - intersect_x1) * (intersect_y2 - intersect_y1)
+    
+    # Calculate detection bbox area
+    det_area = (det_x2 - det_x1) * (det_y2 - det_y1)
+    
+    # Calculate overlap ratio
+    if det_area <= 0:
+        return False
+    
+    overlap_ratio = intersect_area / det_area
+    
+    # Accept if significant overlap (default 70%)
+    return overlap_ratio >= overlap_threshold
+
+def filter_overlapping_detections(detections, overlap_threshold=0.3):
+    """
+    Filter overlapping detections using Non-Maximum Suppression (NMS)
+    Keeps only the most confident detection per overlapping area
+    
+    Args:
+        detections: List of detection dictionaries with 'bbox' and 'confidence'
+        overlap_threshold: IoU threshold for considering detections as overlapping
+        
+    Returns:
+        List of filtered detections
+    """
+    if len(detections) <= 1:
+        return detections
+    
+    def calculate_iou(box1, box2):
+        """Calculate Intersection over Union (IoU) of two bounding boxes"""
+        x1_1, y1_1, x2_1, y2_1 = box1
+        x1_2, y1_2, x2_2, y2_2 = box2
+        
+        # Calculate intersection
+        x1_i = max(x1_1, x1_2)
+        y1_i = max(y1_1, y1_2)
+        x2_i = min(x2_1, x2_2)
+        y2_i = min(y2_1, y2_2)
+        
+        if x2_i <= x1_i or y2_i <= y1_i:
+            return 0.0
+        
+        intersection = (x2_i - x1_i) * (y2_i - y1_i)
+        
+        # Calculate areas
+        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+        union = area1 + area2 - intersection
+        
+        return intersection / union if union > 0 else 0.0
+    
+    # Sort detections by confidence (highest first)
+    sorted_detections = sorted(detections, key=lambda x: x.get('confidence', 0.0), reverse=True)
+    
+    filtered_detections = []
+    
+    for detection in sorted_detections:
+        bbox = detection['bbox']
+        
+        # Check if this detection overlaps significantly with any already selected detection
+        is_overlapping = False
+        for selected_detection in filtered_detections:
+            selected_bbox = selected_detection['bbox']
+            iou = calculate_iou(bbox, selected_bbox)
+            
+            if iou > overlap_threshold:
+                is_overlapping = True
+                break
+        
+        # Only add if it doesn't overlap significantly with existing detections
+        if not is_overlapping:
+            filtered_detections.append(detection)
+    
+    return filtered_detections
 
 def resize_to_640(frame):
     """
@@ -760,36 +888,68 @@ class LiveInference:
             bbox = det.get('bbox', [0, 0, 0, 0])
             print(f"   #{i+1}: {label} @ {confidence:.3f} | bbox: [{bbox[0]:.0f}, {bbox[1]:.0f}, {bbox[2]:.0f}, {bbox[3]:.0f}]")
         
+        # Get Dynamic Wood ROI for filtering
+        dynamic_wood_roi = wood_result.get('auto_roi') if wood_result else None
+        
         # Filter detections by confidence and adjust coordinates
         filtered_detections = []
+        rejected_by_roi = 0
+        rejected_by_confidence = 0
+        
         for det in results.results:
             confidence = det.get('confidence', 0.0)
+            label = det.get('label', 'unknown')
             
-            # WORKAROUND: Model outputs 0.000 confidence - accept all detections
-            # TODO: Fix model quantization to restore proper confidence scores
-            if confidence >= MIN_CONFIDENCE or confidence == 0.0:
-                # Adjust bounding box coordinates to account for padding and scaling
-                bbox = det.get('bbox', [0, 0, 0, 0])
-                
-                # Remove padding offset
-                x1 = (bbox[0] - pad_x) / scale
-                y1 = (bbox[1] - pad_y) / scale
-                x2 = (bbox[2] - pad_x) / scale
-                y2 = (bbox[3] - pad_y) / scale
-                
-                # Clip to original frame bounds
-                x1 = max(0, min(x1, original_w))
-                y1 = max(0, min(y1, original_h))
-                x2 = max(0, min(x2, original_w))
-                y2 = max(0, min(y2, original_h))
-                
-                # Only keep detections that are within the valid area (not in padding)
-                if x2 > x1 and y2 > y1:
-                    adjusted_det = det.copy()
-                    adjusted_det['bbox'] = [x1, y1, x2, y2]
-                    filtered_detections.append(adjusted_det)
+            # WORKAROUND: Accept 0.000 confidence (Hailo-8 quantization bug - these ARE valid detections)
+            # For non-zero confidence, apply threshold filtering
+            # Reject detections with low confidence (0 < confidence < MIN_CONFIDENCE)
+            if confidence != 0.0 and confidence < MIN_CONFIDENCE:
+                rejected_by_confidence += 1
+                print(f"   ❌ Rejected (low confidence): {label} @ {confidence:.3f}")
+                continue
+            
+            # Adjust bounding box coordinates to account for padding and scaling
+            bbox = det.get('bbox', [0, 0, 0, 0])
+            
+            # Remove padding offset
+            x1 = (bbox[0] - pad_x) / scale
+            y1 = (bbox[1] - pad_y) / scale
+            x2 = (bbox[2] - pad_x) / scale
+            y2 = (bbox[3] - pad_y) / scale
+            
+            # Clip to original frame bounds
+            x1 = max(0, min(x1, original_w))
+            y1 = max(0, min(y1, original_h))
+            x2 = max(0, min(x2, original_w))
+            y2 = max(0, min(y2, original_h))
+            
+            # Only keep detections that are within the valid area (not in padding)
+            if x2 <= x1 or y2 <= y1:
+                print(f"   ⚠️  Skipping detection in padding area: {label}")
+                continue
+            
+            # NEW: Filter by Dynamic Wood ROI (only keep detections inside wood area)
+            adjusted_bbox = [x1, y1, x2, y2]
+            if bbox_inside_roi(adjusted_bbox, dynamic_wood_roi):
+                adjusted_det = det.copy()
+                adjusted_det['bbox'] = adjusted_bbox
+                filtered_detections.append(adjusted_det)
+            else:
+                rejected_by_roi += 1
+                print(f"   🚫 Rejected (outside Wood ROI): {label} @ [{x1:.0f}, {y1:.0f}, {x2:.0f}, {y2:.0f}]")
         
-        print(f"🔍 Filtered detections: {len(filtered_detections)} (confidence >= {MIN_CONFIDENCE})")
+        print(f"🔍 Filtered detections: {len(filtered_detections)} (0.000 always accepted, others >= {MIN_CONFIDENCE})")
+        if rejected_by_confidence > 0:
+            print(f"   ❌ Rejected by confidence filter: {rejected_by_confidence} detection(s)")
+        if rejected_by_roi > 0:
+            print(f"   🚫 Rejected by Wood ROI filter: {rejected_by_roi} detection(s)")
+        
+        # Apply Non-Maximum Suppression (NMS) to remove overlapping detections
+        print(f"🔄 Before overlap filter: {len(filtered_detections)} detection(s)")
+        final_detections = filter_overlapping_detections(filtered_detections, overlap_threshold=0.3)
+        if len(final_detections) < len(filtered_detections):
+            removed = len(filtered_detections) - len(final_detections)
+            print(f"   ⚠️  Overlap filter removed {removed} detection(s) (IoU > 0.3)")
         
         # STEP 3: Build Visualization Layers
         # Start with original frame
@@ -839,9 +999,9 @@ class LiveInference:
         
         # Layer 3: Draw defect detections (color-coded)
         # Note: Coordinates already adjusted in process_frame, no scaling needed
-        annotated = draw_detections(annotated, filtered_detections)
+        annotated = draw_detections(annotated, final_detections)
         
-        return annotated, len(filtered_detections)
+        return annotated, len(final_detections)
     
     def run(self):
         """Main inference loop"""
@@ -872,6 +1032,9 @@ class LiveInference:
                             annotated_top, self.fps_top, count_top, "Top Camera"
                         )
                         
+                        # Resize to 360p for display (640x360)
+                        display_top = cv2.resize(display_top, (640, 360), interpolation=cv2.INTER_LINEAR)
+                        
                         # Show frame
                         cv2.imshow("Top Camera - Defect Detection", display_top)
                 
@@ -897,6 +1060,9 @@ class LiveInference:
                         display_bottom = add_info_overlay(
                             annotated_bottom, self.fps_bottom, count_bottom, "Bottom Camera"
                         )
+                        
+                        # Resize to 360p for display (640x360)
+                        display_bottom = cv2.resize(display_bottom, (640, 360), interpolation=cv2.INTER_LINEAR)
                         
                         # Show frame
                         cv2.imshow("Bottom Camera - Defect Detection", display_bottom)

@@ -1,0 +1,11 @@
+Wood No. (56) - 100.67567567567568mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-3
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Dead Knot - 52.0mm
+
+Bottom Panel Defects:
+1. Live Knot - 30.3mm
+2. Dead Knot - 46.4mm

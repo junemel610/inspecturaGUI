@@ -961,7 +961,7 @@ BOTTOM_CAMERA_DISTANCE_CM = 27.5
 
 # Actual pixel-to-millimeter factors (measured)
 TOP_CAMERA_PIXEL_TO_MM = 2.96  # Top camera: 2.96 pixels per mm
-BOTTOM_CAMERA_PIXEL_TO_MM = 3.18  # Bottom camera: 3.18 pixels per mm
+BOTTOM_CAMERA_PIXEL_TO_MM = 3.5  # Bottom camera: 3.5 pixels per mm
 
 # Dynamic wood pallet width storage - single variable for current wood piece
 WOOD_PALLET_WIDTH_MM = 0  # Global variable for current detected wood width
@@ -1148,8 +1148,8 @@ class ColorWoodDetector:
         self.opening_iterations = 2
 
         # Pixel to mm conversion parameters for width measurement
-        self.pixel_per_mm_top = 2.915    # Placeholder: calibrate based on top camera distance (31cm)
-        self.pixel_per_mm_bottom = 3.35  # Placeholder: calibrate based on bottom camera distance
+        self.pixel_per_mm_top = 2.96    # Placeholder: calibrate based on top camera distance (31cm)
+        self.pixel_per_mm_bottom = 3.5  # Placeholder: calibrate based on bottom camera distance
 
         # Dynamic wood width storage - matches testIR.py functionality
         self.detected_wood_width_mm = {'top': 0, 'bottom': 0}
@@ -1335,7 +1335,7 @@ class ColorWoodDetector:
 
             # Prevent division by zero
             if pixel_to_mm <= 0:
-                pixel_to_mm = 2.915 if camera_name == "top" else 3.35
+                pixel_to_mm = 2.96 if camera_name == "top" else 3.5
                 print(f"Warning: pixel_to_mm was zero, using default {pixel_to_mm}")
 
             # Convert to millimeters using division (pixels per mm factor)
@@ -2371,7 +2371,7 @@ class App(tk.Tk):
         
         # Detection threshold constants
         self.DETECTION_THRESHOLDS = {
-            "MIN_CONFIDENCE": 0.5,  # Minimum confidence for defect detection
+            "MIN_CONFIDENCE": 0.25,  # Minimum confidence for defect detection (matches live_inference.py)
             "MIN_WOOD_CONFIDENCE": 0.4,  # Minimum confidence for wood presence
             "WOOD_DETECTION_TIMEOUT": 10.0,  # Seconds to wait for wood detection
             "ALIGNMENT_TOLERANCE": 50,  # Pixels tolerance for wood alignment
@@ -2436,8 +2436,9 @@ class App(tk.Tk):
         # --- DeGirum Model and Camera Initialization ---
         # DeGirum Configuration
         self.inference_host_address = "@local"
-        self.zoo_url = "/home/inspectura/Desktop/WoodSortingApplication/models/V2DefectCombined--640x640_quant_hailort_hailo8_1"
-        self.model_name = "V2DefectCombined--640x640_quant_hailort_hailo8_1"
+        self.zoo_url = "/home/inspectura/Desktop/InspecturaGUI/models/NonAugmentDefects--640x640_quant_hailort_hailo8_1"
+        # Model configuration - MUST match live_inference.py
+        self.model_name = "NonAugmentDefects--640x640_quant_hailort_hailo8_1"  
         
         # Load DeGirum model
         try:
@@ -2947,7 +2948,7 @@ class App(tk.Tk):
 
             # Prevent division by zero
             if pixel_to_mm <= 0:
-                pixel_to_mm = 2.915 if camera_name == "top" else 3.35
+                pixel_to_mm = 2.96 if camera_name == "top" else 3.5
                 print(f"Warning: pixel_to_mm was zero, using default {pixel_to_mm}")
 
             # Convert to millimeters using division (pixels per mm factor)
@@ -4604,70 +4605,13 @@ class App(tk.Tk):
                         self.update_dashboard_display(camera_name, {}, [])
                         self.update_live_grading_display()
             
-            # Convert to PIL Image and ensure consistent scaling
+            # Convert to PIL Image
             img = Image.fromarray(cv2image)
             
-            # Cache label dimensions to avoid repeated calculations
-            if not hasattr(self, '_label_dimensions'):
-                self._label_dimensions = {}
-            
-            cache_key = f"{camera_name}_dimensions"
-            if cache_key not in self._label_dimensions:
-                label.update_idletasks()
-                self._label_dimensions[cache_key] = (label.winfo_width(), label.winfo_height())
-            
-            label_width, label_height = self._label_dimensions[cache_key]
-            
-            # Only resize if label has valid dimensions
-            if label_width > 1 and label_height > 1:
-                # Cache display dimensions calculation
-                if f"{cache_key}_display" not in self._label_dimensions:
-                    # Force consistent display size for both cameras (720p aspect ratio)
-                    target_aspect_ratio = 16 / 9  # 1280x720 = 16:9
-                    
-                    # Use minimal margin
-                    margin = 3
-                    available_width = label_width - (2 * margin)
-                    available_height = label_height - (2 * margin)
-                    
-                    # Calculate standardized size based on available space and 16:9 ratio
-                    if available_width / available_height > target_aspect_ratio:
-                        # Available space is wider than 16:9, constrain by height
-                        display_height = available_height
-                        display_width = int(display_height * target_aspect_ratio)
-                    else:
-                        # Available space is taller than 16:9, constrain by width
-                        display_width = available_width
-                        display_height = int(display_width / target_aspect_ratio)
-                    
-                    # Ensure dimensions don't exceed available space
-                    display_width = min(display_width, available_width)
-                    display_height = min(display_height, available_height)
-                    
-                    # Cache calculated dimensions and offsets
-                    x_offset = (label_width - display_width) // 2
-                    y_offset = (label_height - display_height) // 2
-                    
-                    self._label_dimensions[f"{cache_key}_display"] = {
-                        'display_width': display_width,
-                        'display_height': display_height,
-                        'x_offset': x_offset,
-                        'y_offset': y_offset
-                    }
-                
-                # Use cached dimensions
-                display_dims = self._label_dimensions[f"{cache_key}_display"]
-                
-                # Resize the camera image to exactly these dimensions (stretch if needed)
-                # Use LANCZOS for better quality at manageable speed (compromise between NEAREST and BICUBIC)
-                img = img.resize((display_dims['display_width'], display_dims['display_height']), Image.LANCZOS)
-                
-                # Create a black background of the full label size
-                final_img = Image.new('RGB', (label_width, label_height), 'black')
-                
-                # Paste the resized image
-                final_img.paste(img, (display_dims['x_offset'], display_dims['y_offset']))
-                img = final_img
+            # Always resize to 360p (640x360) for consistent display
+            display_width = 640
+            display_height = 360
+            img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)
             
             imgtk = ImageTk.PhotoImage(image=img)
 
@@ -5754,36 +5698,38 @@ class App(tk.Tk):
 
             # Store wood detection results
             self.wood_detection_results[camera_name] = wood_detection_result
+            
+            # Store Dynamic Wood ROI for defect filtering (in full frame coordinates)
+            if wood_detection_result and wood_detection_result.get('auto_roi'):
+                self.dynamic_roi[camera_name] = wood_detection_result['auto_roi']
+                roi_x, roi_y, roi_w, roi_h = wood_detection_result['auto_roi']
+                print(f"📍 Dynamic Wood ROI set [{camera_name}]: ({roi_x}, {roi_y}, {roi_w}, {roi_h}) - FULL FRAME COORDINATES")
+            else:
+                self.dynamic_roi[camera_name] = None
+                print(f"⚠️  No Dynamic Wood ROI available [{camera_name}] - all detections will be rejected")
 
             # The wood width is already updated by ColorWoodDetector.detect_wood_comprehensive()
             # via update_wood_width_dynamic(), so we don't need to recalculate it here
 
-            # Step 2: Apply defect detection ONLY within detected wood area (Green ROI based on wood detection)
-            if wood_detection_result and wood_detection_result.get('wood_detected', False) and wood_detection_result.get('auto_roi'):
-                wood_roi = wood_detection_result['auto_roi']
-                x1, y1, w, h = wood_roi
-                x2, y2 = x1 + w, y1 + h
+            # Step 2: Run defect detection on FULL FRAME (NOT Yellow ROI)
+            # CRITICAL: Model was trained on FULL camera feeds (1280x720), not ROI crops
+            # This matches live_inference.py behavior exactly
+            # We'll use the Dynamic Wood ROI for filtering detections later
+            if wood_detection_result and wood_detection_result.get('wood_detected', False):
+                print(f"Wood detected on {camera_name}, running defect detection on FULL FRAME")
 
-                print(f"Wood detected on {camera_name}, running defect detection on wood ROI: x1={x1}, y1={y1}, x2={x2}, y2={y2}")
-
-                # Crop frame to detected wood area
-                wood_roi_frame = frame[y1:y2, x1:x2]
-
-                # Step 3: Run defect detection on wood ROI-cropped frame
-                result = self.analyze_frame(wood_roi_frame, camera_name, run_defect_model=True)
+                # Step 3: Run defect detection on FULL FRAME (same as live_inference.py)
+                # The model expects full 1280x720 frame, not cropped ROI
+                result = self.analyze_frame(frame, camera_name, run_defect_model=True)
 
                 if len(result) == 3:
-                    annotated_roi, defect_dict, detections_for_grading = result
+                    annotated_frame, defect_dict, detections_for_grading = result
                 else:
-                    annotated_roi, defect_dict = result
+                    annotated_frame, defect_dict = result
                     detections_for_grading = []
 
-                # Step 4: Place annotated wood ROI back onto full frame
-                full_frame_annotated = frame.copy()
-                full_frame_annotated[y1:y2, x1:x2] = annotated_roi
-
-                # Step 5: Add wood detection overlay to show detected wood pieces
-                final_frame = self.draw_wood_detection_overlay(full_frame_annotated, camera_name)
+                # Step 4: Add wood detection overlay to show detected wood pieces
+                final_frame = self.draw_wood_detection_overlay(annotated_frame, camera_name)
 
                 # Step 6: Add ROI overlay to show detection area
                 final_frame = self.draw_roi_overlay(final_frame, camera_name)
@@ -6272,6 +6218,60 @@ class App(tk.Tk):
             self.status_label.insert(1.0, "Status: Manual grade - no wood detected")
             self.status_label.config(state=tk.DISABLED)
 
+    def bbox_inside_roi(self, bbox, roi, overlap_threshold=0.7):
+        """
+        Check if a bounding box has significant overlap with ROI (>70% by default)
+        This allows large defects near wood edges to be detected
+        
+        Args:
+            bbox: Detection bounding box [x1, y1, x2, y2] or tuple
+            roi: ROI tuple (x, y, w, h) from Dynamic Wood ROI
+            overlap_threshold: Minimum overlap ratio to accept (default 0.7 = 70%)
+            
+        Returns:
+            bool: True if bbox has significant overlap with ROI, False otherwise
+        """
+        if roi is None:
+            # If no ROI defined, accept all detections (fallback)
+            return True
+        
+        # Unpack ROI
+        roi_x, roi_y, roi_w, roi_h = roi
+        roi_x2 = roi_x + roi_w
+        roi_y2 = roi_y + roi_h
+        
+        # Unpack detection bbox (handle both list and tuple formats)
+        if len(bbox) == 4:
+            det_x1, det_y1, det_x2, det_y2 = bbox
+        else:
+            # Fallback for unexpected format
+            return True
+        
+        # Calculate intersection area
+        intersect_x1 = max(det_x1, roi_x)
+        intersect_y1 = max(det_y1, roi_y)
+        intersect_x2 = min(det_x2, roi_x2)
+        intersect_y2 = min(det_y2, roi_y2)
+        
+        # Check if there's any intersection
+        if intersect_x2 <= intersect_x1 or intersect_y2 <= intersect_y1:
+            return False  # No overlap at all
+        
+        # Calculate intersection area
+        intersect_area = (intersect_x2 - intersect_x1) * (intersect_y2 - intersect_y1)
+        
+        # Calculate detection bbox area
+        det_area = (det_x2 - det_x1) * (det_y2 - det_y1)
+        
+        # Calculate overlap ratio
+        if det_area <= 0:
+            return False
+        
+        overlap_ratio = intersect_area / det_area
+        
+        # Accept if significant overlap (default 70%)
+        return overlap_ratio >= overlap_threshold
+
     def resize_to_640(self, frame):
         """
         Resize frame to 640x640 WITH PADDING to maintain aspect ratio
@@ -6317,36 +6317,43 @@ class App(tk.Tk):
         try:
             # Get original frame dimensions
             original_h, original_w = frame.shape[:2]
+            print(f"🖼️  Analyzing frame: {original_w}x{original_h}, camera: {camera_name}")
             
             # Resize frame to 640x640 with padding (maintains aspect ratio)
             frame_640, scale, pad_x, pad_y = self.resize_to_640(frame)
+            print(f"📐 Resized to 640x640 with padding: scale={scale:.3f}, pad_x={pad_x}, pad_y={pad_y}")
             
             # Run inference using DeGirum on padded 640x640 frame
             inference_result = self.model(frame_640)
-
-            # Debug: Print all raw detections
+            
+            # Debug: Print all raw detections with area information
             print(f"📊 RAW DETECTIONS [{camera_name}] (total: {len(inference_result.results)}):")
             for i, det in enumerate(inference_result.results):
                 label = det.get('label', 'unknown')
                 confidence = det.get('confidence', 0.0)
                 bbox = det.get('bbox', [0, 0, 0, 0])
-                print(f"   #{i+1}: {label} @ {confidence:.3f} | bbox: [{bbox[0]:.0f}, {bbox[1]:.0f}, {bbox[2]:.0f}, {bbox[3]:.0f}]")
-
+                bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                bbox_width = bbox[2] - bbox[0]
+                bbox_height = bbox[3] - bbox[1]
+                print(f"   #{i+1}: {label} @ {confidence:.3f} | bbox: [{bbox[0]:.0f}, {bbox[1]:.0f}, {bbox[2]:.0f}, {bbox[3]:.0f}] | size: {bbox_width:.0f}x{bbox_height:.0f} (area={bbox_area:.0f}px²)")            # Get Dynamic Wood ROI for filtering detections
+            dynamic_wood_roi = self.dynamic_roi.get(camera_name)
+            
             # Process detections for object tracking
             current_detections = []
             low_confidence_count = 0
+            rejected_by_roi = 0
             
             for det in inference_result.results:
                 model_label = det['label']
                 bbox = det['bbox']
                 confidence = det.get('confidence', 0.7)
 
-                # Check for low confidence detections
-                # WORKAROUND: Accept 0.000 confidence due to Hailo-8 quantization issue
-                # TODO: Fix model quantization to restore proper confidence scores
-                if confidence < self.DETECTION_THRESHOLDS["MIN_CONFIDENCE"] and confidence != 0.0:
+                # WORKAROUND: Accept 0.000 confidence (Hailo-8 quantization bug - these ARE valid detections)
+                # For non-zero confidence, apply threshold filtering
+                # Reject detections with low confidence (0 < confidence < MIN_CONFIDENCE)
+                if confidence != 0.0 and confidence < self.DETECTION_THRESHOLDS["MIN_CONFIDENCE"]:
                     low_confidence_count += 1
-                    print(f"Low confidence detection: {model_label} with confidence {confidence:.2f}")
+                    print(f"   ❌ Rejected (low confidence): {model_label} @ {confidence:.3f}")
                     continue  # Skip low confidence detections
 
                 # Adjust bounding box coordinates from 640x640 padded back to original frame
@@ -6369,6 +6376,34 @@ class App(tk.Tk):
                 
                 # Create adjusted bbox in original frame coordinates
                 adjusted_bbox = [x1, y1, x2, y2]
+                
+                # ✅ NEW: Filter detections by Wood ROI - accept if 70%+ overlap with wood area
+                if not self.bbox_inside_roi(adjusted_bbox, dynamic_wood_roi):
+                    rejected_by_roi += 1
+                    standard_defect_type = self.map_model_output_to_standard(model_label)
+                    # Calculate overlap percentage for debugging
+                    det_w = x2 - x1
+                    det_h = y2 - y1
+                    if dynamic_wood_roi:
+                        roi_x, roi_y, roi_w, roi_h = dynamic_wood_roi
+                        roi_x2, roi_y2 = roi_x + roi_w, roi_y + roi_h
+                        # Calculate intersection
+                        intersect_x1 = max(x1, roi_x)
+                        intersect_y1 = max(y1, roi_y)
+                        intersect_x2 = min(x2, roi_x2)
+                        intersect_y2 = min(y2, roi_y2)
+                        if intersect_x2 > intersect_x1 and intersect_y2 > intersect_y1:
+                            intersect_area = (intersect_x2 - intersect_x1) * (intersect_y2 - intersect_y1)
+                            det_area = det_w * det_h
+                            overlap_pct = (intersect_area / det_area * 100) if det_area > 0 else 0
+                        else:
+                            overlap_pct = 0
+                        roi_str = f"ROI={dynamic_wood_roi}, overlap={overlap_pct:.1f}%"
+                    else:
+                        roi_str = "ROI=None"
+                    print(f"   🚫 Rejected (low Wood ROI overlap): {standard_defect_type} @ [{x1:.0f}, {y1:.0f}, {x2:.0f}, {y2:.0f}] size={det_w:.0f}x{det_h:.0f}, {roi_str}")
+                    continue
+                
                 bbox_info = {'bbox': adjusted_bbox}
 
                 # Calculate defect size in mm and percentage using camera-specific calibration
@@ -6380,7 +6415,11 @@ class App(tk.Tk):
                 # Prepare detection for tracker (bbox, defect_type, size_mm, confidence)
                 current_detections.append((adjusted_bbox, standard_defect_type, size_mm, confidence))
 
-            print(f"🔍 Filtered detections [{camera_name}]: {len(current_detections)} (confidence >= {self.DETECTION_THRESHOLDS['MIN_CONFIDENCE']} or == 0.0)")
+            print(f"🔍 Filtered detections [{camera_name}]: {len(current_detections)} (0.000 always accepted, others >= {self.DETECTION_THRESHOLDS['MIN_CONFIDENCE']})")
+            if low_confidence_count > 0:
+                print(f"   ❌ Rejected by confidence filter: {low_confidence_count} detection(s)")
+            if rejected_by_roi > 0:
+                print(f"   🚫 Rejected by Wood ROI filter: {rejected_by_roi} detection(s)")
 
             # Notify user if low confidence detections were found
             if low_confidence_count > 0:
@@ -6397,7 +6436,11 @@ class App(tk.Tk):
                 self.check_wood_detection_status(frame, camera_name)
 
             # Filter overlapping detections to prevent multiple detections in same area
+            print(f"🔄 Before overlap filter: {len(current_detections)} detection(s)")
             filtered_detections = self.filter_overlapping_detections(current_detections, overlap_threshold=0.3)
+            if len(filtered_detections) < len(current_detections):
+                removed = len(current_detections) - len(filtered_detections)
+                print(f"   ⚠️  Overlap filter removed {removed} detection(s) (IoU > 0.3)")
 
             # Check for plank alignment issues
             if filtered_detections:

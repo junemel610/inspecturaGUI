@@ -1,0 +1,10 @@
+Wood No. (8) - 132.41852487135506mm
+Top Panel Grade: G2-1
+Bottom Panel Grade: G2-1
+Final Grade: G2-1
+
+Top Panel Defects:
+1. Dead Knot - 14.5mm
+
+Bottom Panel Defects:
+1. Dead Knot - 19.1mm

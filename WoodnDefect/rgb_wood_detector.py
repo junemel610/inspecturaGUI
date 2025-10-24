@@ -53,8 +53,8 @@ class ColorWoodDetector:
         self.opening_iterations = 2
 
         # Pixel to mm conversion parameters for width measurement
-        self.pixel_per_mm_top = 2.915     # Placeholder: calibrate based on top camera distance (31cm)
-        self.pixel_per_mm_bottom = 3.35  # Placeholder: calibrate based on bottom camera distance
+        self.pixel_per_mm_top = 2.96    # Placeholder: calibrate based on top camera distance (31cm)
+        self.pixel_per_mm_bottom = 3.5  # Placeholder: calibrate based on bottom camera distance
         
         # Dynamic wood width storage - matches testIR.py functionality
         self.detected_wood_width_mm = {'top': 0, 'bottom': 0}

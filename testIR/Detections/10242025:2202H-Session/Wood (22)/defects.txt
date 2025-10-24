@@ -1,0 +1,18 @@
+Wood No. (22) - 131.41891891891893mm
+Top Panel Grade: G2-3
+Bottom Panel Grade: G2-3
+Final Grade: G2-3
+
+Top Panel Defects:
+1. Dead Knot - 36.0mm
+2. Dead Knot - 38.0mm
+3. Missing Knot - 36.9mm
+
+Bottom Panel Defects:
+1. Dead Knot - 29.6mm
+2. Dead Knot - 40.3mm
+3. Knot with Crack - 30.1mm
+4. Dead Knot - 43.9mm
+5. Dead Knot - 24.1mm
+6. Missing Knot - 33.8mm
+7. Missing Knot - 17.2mm

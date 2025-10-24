@@ -1,0 +1,65 @@
+--- SS-EN 1611-1 Wood Sorting Report ---
+Generated at: 2025-10-24_23-17-38
+
+--- Session Summary ---
+Total Pieces Processed: 64
+Grade G2-0: 1
+Grade G2-1: 0
+Grade G2-2: 3
+Grade G2-3: 38
+Grade G2-4: 22
+
+
+--- Individual Piece Log ---
+
+Piece #50: Grade G2-3
+  - Defect: Dead Knot, Count: 3, Sizes (mm): 48.5, 47.8, 41.8
+
+Piece #51: Grade G2-3
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 51.9, 52.9
+
+Piece #52: Grade G2-3
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 51.4, 52.1
+  - Defect: Missing Knot, Count: 1, Sizes (mm): 44.8
+
+Piece #53: Grade G2-3
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 58.2, 55.1
+
+Piece #54: Grade G2-4
+  - Defect: Crack Knot, Count: 2, Sizes (mm): 54.5, 55.2
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 54.9, 56.2
+
+Piece #55: Grade G2-3
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 50.6, 14.5
+  - Defect: Sound Knot, Count: 1, Sizes (mm): 48.7
+  - Defect: Missing Knot, Count: 1, Sizes (mm): 16.8
+
+Piece #56: Grade G2-3
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 52.0, 46.4
+  - Defect: Sound Knot, Count: 1, Sizes (mm): 30.3
+
+Piece #57: Grade G2-3
+  - Defect: Crack Knot, Count: 2, Sizes (mm): 39.4, 44.7
+
+Piece #58: Grade G2-3
+  - Defect: Dead Knot, Count: 6, Sizes (mm): 26.8, 48.2, 27.5, 6.7, 55.8, 26.9
+
+Piece #59: Grade G2-3
+  - Defect: Dead Knot, Count: 5, Sizes (mm): 59.9, 26.9, 26.9, 55.2, 27.6
+
+Piece #60: Grade G2-3
+  - Defect: Dead Knot, Count: 4, Sizes (mm): 29.1, 59.0, 26.3, 60.0
+  - Defect: Missing Knot, Count: 1, Sizes (mm): 6.1
+
+Piece #61: Grade G2-3
+  - Defect: Dead Knot, Count: 5, Sizes (mm): 58.1, 27.7, 24.8, 51.1, 27.0
+
+Piece #62: Grade G2-3
+  - Defect: Missing Knot, Count: 3, Sizes (mm): 47.8, 14.1, 26.3
+  - Defect: Dead Knot, Count: 3, Sizes (mm): 17.6, 6.9, 11.7
+
+Piece #63: Grade G2-3
+  - Defect: Dead Knot, Count: 1, Sizes (mm): 50.4
+
+Piece #64: Grade G2-3
+  - Defect: Dead Knot, Count: 2, Sizes (mm): 50.6, 48.6
